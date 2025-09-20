@@ -1,0 +1,284 @@
+package com.peppeosmio.lockate.ui.screens.home_page
+
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.AccountBox
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import com.peppeosmio.lockate.R
+import com.peppeosmio.lockate.routes.AnonymousGroupsRoute
+import com.peppeosmio.lockate.routes.GroupsRoute
+import com.peppeosmio.lockate.ui.composables.PermissionsRequester
+import com.peppeosmio.lockate.ui.composables.RoundedSearchAppBar
+import com.peppeosmio.lockate.ui.screens.anonymous_groups.AnonymousGroupsScreen
+import com.peppeosmio.lockate.utils.LockatePermissions
+import kotlinx.coroutines.launch
+import org.koin.compose.viewmodel.koinViewModel
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HomePageScreen(
+    initialConnectionSettingsId: Long,
+    navigateToConnectionSettings: () -> Unit,
+    navigateToCreateAG: (connectionSettingsId: Long) -> Unit,
+    navigateToJoinAG: (connectionSettingsId: Long) -> Unit,
+    navigateToAGDetails: (connectionSettingsId: Long, anonymousGroupId: String, anonymousGroupName: String) -> Unit,
+    startLocationService: () -> Unit,
+    stopLocationService: () -> Unit,
+    viewModel: HomePageViewModel = koinViewModel()
+) {
+    val state by viewModel.state.collectAsState()
+
+    val navController = rememberNavController()
+
+    val drawerState = rememberDrawerState(
+        DrawerValue.Closed
+    )
+    // Current destination for bottom bar selection
+    val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
+    val focusManager = LocalFocusManager.current
+    val coroutineScope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(initialConnectionSettingsId) {
+        viewModel.setConnectionSettingsId(initialConnectionSettingsId)
+    }
+
+    // Redirect to settings if needed, should never happen
+    LaunchedEffect(state.shouldRedirectToCredentialsPage) {
+        if (state.shouldRedirectToCredentialsPage) {
+            navigateToConnectionSettings()
+        }
+    }
+
+    LaunchedEffect(key1 = true) {
+        viewModel.snackbarEvents.collect { snackbarMessage ->
+            val result = snackbarHostState.showSnackbar(
+                message = snackbarMessage.text,
+                snackbarMessage.errorDialogInfo?.let { "More" },
+                withDismissAction = true
+            )
+            when (result) {
+                SnackbarResult.Dismissed -> Unit
+                SnackbarResult.ActionPerformed -> snackbarMessage.errorDialogInfo?.let {
+                    viewModel.showErrorDialog(it)
+                }
+            }
+        }
+    }
+
+    // Error dialog
+    state.dialogErrorDialogInfo?.let { error ->
+        AlertDialog(title = { Text(error.title) }, text = { Text(error.body) }, dismissButton = {
+            TextButton(onClick = { viewModel.hideErrorDialog() }) { Text("Dismiss") }
+        }, confirmButton = {}, onDismissRequest = { viewModel.hideErrorDialog() })
+    }
+
+    if (state.showLogoutDialog) {
+        AlertDialog(
+            title = { Text("Disconnect") },
+            text = { Text("Do you want to disconnect? You will leave all groups and anonymous groups!") },
+            confirmButton = {
+                TextButton(onClick = {
+                    coroutineScope.launch {
+                        viewModel.disconnect()
+                        stopLocationService()
+                        navigateToConnectionSettings()
+                    }
+                }) { Text("Yes, disconnect") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    viewModel.closeLogoutDialog()
+                }) { Text("No, remain connected") }
+            },
+            onDismissRequest = { viewModel.closeLogoutDialog() })
+    }
+
+    if (state.showLoadingOverlay) {
+        Dialog(onDismissRequest = {}) {
+            CircularProgressIndicator()
+        }
+    }
+
+    val multiplePermissionsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions(), onResult = {})
+
+    PermissionsRequester(
+        permissionRequests = LockatePermissions.PERMISSION_REQUESTS,
+        requestPermissions = { permissions ->
+            multiplePermissionsLauncher.launch(permissions.toTypedArray())
+        },
+        checkPermissionGranted = { permission ->
+            viewModel.checkPermissionGranted(permission)
+        },
+        onPermissionsRequested = {
+            startLocationService()
+        })
+
+
+    ModalNavigationDrawer(
+        drawerState = drawerState, drawerContent = {
+            ModalDrawerSheet {
+                Text(
+                    "Lockate",
+                    modifier = Modifier.padding(16.dp),
+                    style = MaterialTheme.typography.titleLarge
+                )
+                HorizontalDivider()
+                NavigationDrawerItem(icon = {
+                    Icon(
+                        painter = painterResource(R.drawable.outline_logout_24),
+                        contentDescription = "logout"
+                    )
+                }, label = { Text("Logout") }, selected = false, onClick = {
+                    coroutineScope.launch {
+                        viewModel.openLogoutDialog()
+                        drawerState.close()
+                    }
+                })
+                NavigationDrawerItem(icon = {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = "Connection settings"
+                    )
+                }, label = { Text("Connection settings") }, selected = false, onClick = {
+                    navigateToConnectionSettings()
+                })
+            }
+        }) {
+        Scaffold(
+            modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+            snackbarHost = {
+                SnackbarHost(hostState = snackbarHostState)
+            },
+            floatingActionButton = {
+                FloatingActionButton(onClick = {
+                    if (state.registeredOnTapFab != null) {
+                        state.registeredOnTapFab!!()
+                    }
+                }) { Icon(Icons.Default.Add, contentDescription = "Add") }
+            },
+            topBar = {
+                RoundedSearchAppBar(
+                    scrollBehavior = scrollBehavior,
+                    leadingIcon = {
+                        if (state.isSearchBarOpen) {
+                            IconButton(onClick = {
+                                focusManager.clearFocus()
+                                viewModel.closeSearchBar()
+                            }) {
+                                Icon(Icons.Default.Close, contentDescription = "Close search")
+                            }
+                        } else {
+                            IconButton(onClick = {
+                                coroutineScope.launch {
+                                    drawerState.open()
+                                }
+                            }) {
+                                Icon(Icons.Default.Menu, contentDescription = "Menu")
+                            }
+
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { }) {
+                            Icon(
+                                Icons.Default.Info, contentDescription = "Search anonymous groups"
+                            )
+                        }
+                    },
+                    onTap = { viewModel.onTapSearchBar() },
+                    searchPlaceholder = { Text("Find anonymous groups") },
+                    query = state.searchText,
+                    onQueryChange = { query ->
+                        viewModel.setSearchText(query)
+                        if (state.registeredOnSearch != null) {
+                            state.registeredOnSearch!!(query)
+                        }
+                    },
+                    isExpanded = state.isSearchBarOpen
+                )
+            },
+            bottomBar = {
+                NavigationBar {
+                    NavigationBarItem(
+                        selected = currentRoute == AnonymousGroupsRoute::class.qualifiedName,
+                        onClick = {
+                            if (currentRoute != AnonymousGroupsRoute::class.qualifiedName) {
+                                navController.navigate(AnonymousGroupsRoute) {
+                                    // Standard bottom-nav behavior
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            }
+                        },
+                        icon = { Icon(Icons.AutoMirrored.Filled.List, null) },
+                        label = { Text("Anonymous Groups") })
+                    NavigationBarItem(selected = false, onClick = {
+                        return@NavigationBarItem
+                    }, icon = { Icon(Icons.Default.AccountBox, null) }, label = { Text("Groups") })
+                }
+            }) { innerPadding ->
+            NavHost(
+                modifier = Modifier.padding(paddingValues = innerPadding),
+                navController = navController,
+                startDestination = AnonymousGroupsRoute,
+                enterTransition = { EnterTransition.None },
+                exitTransition = { ExitTransition.None }) {
+                composable<AnonymousGroupsRoute> {
+                    val connectionSettingsId =
+                        state.connectionSettingsId ?: initialConnectionSettingsId
+                    AnonymousGroupsScreen(
+                        connectionSettingsId = connectionSettingsId,
+                        navigateToCreateAG = {
+                            navigateToCreateAG(connectionSettingsId)
+                        },
+                        navigateToJoinAG = {
+                            navigateToJoinAG(connectionSettingsId)
+                        },
+                        navigateToAGDetails = { anonymousGroupId, anonymousGroupName ->
+                            navigateToAGDetails(
+                                connectionSettingsId, anonymousGroupId, anonymousGroupName
+                            )
+                        },
+                        registerOnFabTap = { onTapFab -> viewModel.registerOnTapFab(onTapFab) },
+                        unregisterOnFabTap = { viewModel.unregisterOnTapFab() },
+                        registerOnSearch = { onSearch -> viewModel.registerOnSearch(onSearch) },
+                        unregisterOnSearch = { viewModel.unregisterOnSearch() },
+                        showErrorSnackbar = { errorInfo ->
+                            coroutineScope.launch {
+                                viewModel.showSnackbar(errorInfo)
+                            }
+                        })
+                }
+                composable<GroupsRoute> {}
+            }
+        }
+    }
+}
