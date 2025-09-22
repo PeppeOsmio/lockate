@@ -28,9 +28,13 @@ class ConnectionSettingsService(
     private val httpClient: HttpClient,
     private val connectionSettingsDao: ConnectionSettingsDao
 ) {
+    @Throws
+    suspend fun isApiAvailable(url: String) {
+        checkRequireApiKey(url)
+    }
 
     @Throws
-    private suspend fun checkRequireApiKey(url: String): Boolean = withContext(Dispatchers.IO) {
+    suspend fun checkRequireApiKey(url: String): Boolean = withContext(Dispatchers.IO) {
         val response = httpClient.get {
             url(Url("${url.trimEnd('/')}/api/api-key/required"))
             headers {

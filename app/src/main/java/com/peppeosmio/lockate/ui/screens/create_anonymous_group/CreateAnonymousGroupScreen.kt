@@ -1,5 +1,6 @@
 package com.peppeosmio.lockate.ui.screens.create_anonymous_group
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -29,6 +30,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.launch
@@ -44,6 +46,7 @@ fun CreateAnonymousGroupScreen(
     val state by viewModel.state.collectAsState()
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    val focusManager = LocalFocusManager.current
 
     LaunchedEffect(key1 = true) {
         viewModel.snackbarEvents.collect { snackbarMessage ->
@@ -87,6 +90,7 @@ fun CreateAnonymousGroupScreen(
         }, actions = {
             IconButton(onClick = {
                 scope.launch {
+                    focusManager.clearFocus()
                     val anonymousGroupId = viewModel.createAnonymousGroup(connectionSettingsId)
                     if (anonymousGroupId != null) {
                         navigateBack()
@@ -94,7 +98,7 @@ fun CreateAnonymousGroupScreen(
                 }
             }) {
                 Icon(
-                    imageVector = Icons.Default.Done, contentDescription = "Back"
+                    imageVector = Icons.Default.Done, contentDescription = "Done"
                 )
             }
         })
@@ -103,8 +107,10 @@ fun CreateAnonymousGroupScreen(
             modifier = Modifier
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp)
-                .fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .fillMaxSize()
+                .clickable(interactionSource = null, indication = null) {
+                    focusManager.clearFocus()
+                }, verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             OutlinedTextField(
                 modifier = Modifier.fillMaxWidth(),

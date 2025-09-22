@@ -119,7 +119,7 @@ fun LockateApp(startLocationService: () -> Unit, stopLocationService: () -> Unit
                     initialConnectionSettingsId = connectionSettingsRoute.initialConnectionSettingsId,
                     navigateToHome = { connectionSettingsId: Long ->
                         appNavController.navigate(HomeRoute(connectionSettingsId)) {
-                            popUpTo(ConnectionSettingsRoute) { inclusive = true }
+                            popUpTo(0) { inclusive = true }
                         }
                     })
             }

@@ -223,6 +223,7 @@ fun HomePageScreen(
                 )
             },
             bottomBar = {
+                return@Scaffold
                 NavigationBar {
                     NavigationBarItem(
                         selected = currentRoute == AnonymousGroupsRoute::class.qualifiedName,

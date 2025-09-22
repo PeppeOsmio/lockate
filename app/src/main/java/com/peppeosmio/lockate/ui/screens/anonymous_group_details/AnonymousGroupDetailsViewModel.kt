@@ -67,7 +67,8 @@ class AnonymousGroupDetailsViewModel(
                 }
             }
         } catch (e: Exception) {
-            _state.update { it.copy(reloadData = true) }
+            e.printStackTrace()
+            _state.update { it.copy(showLoadingIcon = false, reloadData = true) }
         }
     }
 
@@ -276,22 +277,22 @@ class AnonymousGroupDetailsViewModel(
         if (state.value.anonymousGroup == null) {
             return
         }
-        Log.d("", "Streaming locations...")
-        while (true) {
-            val result = ErrorHandler.runAndHandleException {
-                anonymousGroupService.streamLocations(
-                    connectionSettingsId = connectionSettingsId,
-                    anonymousGroupId = state.value.anonymousGroup!!.id
-                ).collect { locationUpdate ->
-                    if (state.value.membersLocation == null) {
-                        return@collect
-                    }
-                    if (locationUpdate.agMemberId !in state.value.membersLocation!!.keys) {
-                        Log.d(
-                            "", "Refetching members (new member ${locationUpdate.agMemberId})"
-                        )
-                        getRemoteMembers(connectionSettingsId)
-                    }
+        val result = ErrorHandler.runAndHandleException {
+            anonymousGroupService.streamLocations(
+                connectionSettingsId = connectionSettingsId,
+                anonymousGroupId = state.value.anonymousGroup!!.id
+            ).collect { locationUpdate ->
+                if (state.value.membersLocation == null) {
+                    return@collect
+                }
+                if (locationUpdate.agMemberId !in state.value.membersLocation!!.keys) {
+                    Log.d(
+                        "", "Refetching members (new member ${locationUpdate.agMemberId})"
+                    )
+                    getRemoteMembers(connectionSettingsId)
+                }
+                val currentLocation = state.value.membersLocation!![locationUpdate.agMemberId]
+                if (currentLocation != locationUpdate.location) {
                     _state.update {
                         it.copy(
                             membersLocation = it.membersLocation!! + (locationUpdate.agMemberId to locationUpdate.location)
@@ -299,15 +300,14 @@ class AnonymousGroupDetailsViewModel(
                     }
                 }
             }
-            if (result.errorDialogInfo != null) {
-                _snackbarEvents.trySend(
-                    SnackbarErrorMessage(
-                        "Connection error", errorDialogInfo = result.errorDialogInfo
-                    )
+        }
+        if (result.errorDialogInfo != null) {
+            _snackbarEvents.trySend(
+                SnackbarErrorMessage(
+                    "Connection error", errorDialogInfo = result.errorDialogInfo
                 )
-                result.errorDialogInfo.exception?.let { throw it }
-            }
-            delay(10000L)
+            )
+            result.errorDialogInfo.exception?.let { throw it }
         }
     }
 

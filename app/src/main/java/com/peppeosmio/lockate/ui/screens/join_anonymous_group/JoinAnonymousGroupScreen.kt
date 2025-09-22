@@ -1,5 +1,6 @@
 package com.peppeosmio.lockate.ui.screens.join_anonymous_group
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -28,6 +29,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.launch
@@ -35,17 +37,22 @@ import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun JoinAnonymousGroupScreen(connectionSettingsId: Long,
-    navigateBack: () -> Unit, viewModel: JoinAnonymousGroupViewModel = koinViewModel()
+fun JoinAnonymousGroupScreen(
+    connectionSettingsId: Long,
+    navigateBack: () -> Unit,
+    viewModel: JoinAnonymousGroupViewModel = koinViewModel()
 ) {
     val state by viewModel.state.collectAsState()
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    val focusManager = LocalFocusManager.current
 
     LaunchedEffect(key1 = true) {
         viewModel.snackbarEvents.collect { snackbarMessage ->
             val result = snackbarHostState.showSnackbar(
-                message = snackbarMessage.text, snackbarMessage.errorDialogInfo?.let { "More" }, withDismissAction = true
+                message = snackbarMessage.text,
+                snackbarMessage.errorDialogInfo?.let { "More" },
+                withDismissAction = true
             )
             when (result) {
                 SnackbarResult.Dismissed -> Unit
@@ -82,6 +89,7 @@ fun JoinAnonymousGroupScreen(connectionSettingsId: Long,
         }, actions = {
             IconButton(onClick = {
                 scope.launch {
+                    focusManager.clearFocus()
                     val anonymousGroupId = viewModel.joinAnonymousGroup(connectionSettingsId)
                     if (anonymousGroupId != null) {
                         navigateBack()
@@ -98,7 +106,10 @@ fun JoinAnonymousGroupScreen(connectionSettingsId: Long,
             modifier = Modifier
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp)
-                .fillMaxSize(),
+                .fillMaxSize()
+                .clickable(interactionSource = null, indication = null) {
+                    focusManager.clearFocus()
+                },
         ) {
             OutlinedTextField(
                 modifier = Modifier.fillMaxWidth(),

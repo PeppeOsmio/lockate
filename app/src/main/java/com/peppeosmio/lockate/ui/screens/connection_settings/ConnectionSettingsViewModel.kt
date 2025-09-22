@@ -67,23 +67,43 @@ class ConnectionSettingsViewModel(
             _snackbarEvents.trySend(SnackbarErrorMessage(text = "Please enter url"))
             return
         }
-        if(state.value.requireApiKey && state.value.apiKey.isBlank()) {
+        if (state.value.requireApiKey && state.value.apiKey.isBlank()) {
             _snackbarEvents.trySend(SnackbarErrorMessage(text = "Please enter api key"))
             return
         }
-
         _state.update { it.copy(showLoadingOverlay = true) }
+        if (!state.value.requireApiKey) {
+            val result = ErrorHandler.runAndHandleException {
+                connectionSettingsService.checkRequireApiKey(state.value.url)
+            }
+            if (result.errorDialogInfo != null) {
+                _snackbarEvents.trySend(
+                    SnackbarErrorMessage(
+                        "Connection error", errorDialogInfo = result.errorDialogInfo
+                    )
+                )
+                result.errorDialogInfo.exception?.printStackTrace()
+                _state.update { it.copy(showLoadingOverlay = false) }
+                return
+            }
+            if (result.value!!) {
+                _snackbarEvents.trySend(SnackbarErrorMessage(text = "Please enter api key"))
+                _state.update { it.copy(showLoadingOverlay = false, requireApiKey = true) }
+                return
+            } else {
+                _state.update { it.copy(showLoadingOverlay = false) }
+            }
+        }
         val result = ErrorHandler.runAndHandleException {
-            val connectionSettings = connectionSettingsService.saveConnectionSettings(
+            connectionSettingsService.saveConnectionSettings(
                 ConnectionSettings(
                     id = null,
                     url = _state.value.url,
-                    apiKey = _state.value.apiKey,
+                    apiKey = if(state.value.requireApiKey) state.value.apiKey else null ,
                     username = null,
                     authToken = null
                 )
             )
-            _navigateToHome.emit(connectionSettings.id!!)
         }
         if (result.errorDialogInfo != null) {
             _snackbarEvents.trySend(
@@ -91,8 +111,12 @@ class ConnectionSettingsViewModel(
                     text = "Connection error", errorDialogInfo = result.errorDialogInfo
                 )
             )
+            _state.update { it.copy(showLoadingOverlay = false) }
+            return
         }
         _state.update { it.copy(showLoadingOverlay = false) }
+        _navigateToHome.emit(result.value!!.id!!)
+
     }
 
     fun hideErrorDialog() {

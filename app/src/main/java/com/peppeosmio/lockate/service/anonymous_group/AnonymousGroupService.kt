@@ -9,7 +9,7 @@ import com.peppeosmio.lockate.data.anonymous_group.remote.AGAdminAuthResponseDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGCreateRequestDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGCreateResponseDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGMemberAuthVerifyResponseDto
-import com.peppeosmio.lockate.data.anonymous_group.remote.AGGetMemberPasswordSrpInfoResponseDto
+import com.peppeosmio.lockate.data.anonymous_group.remote.AGGetMemberPasswordSrpInfoResDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGGetMembersResponseDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGLocationSaveRequestDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGMemberAuthStartRequestDto
@@ -18,6 +18,7 @@ import com.peppeosmio.lockate.data.anonymous_group.remote.AGMemberAuthVerifyRequ
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGLocationUpdateDto
 import com.peppeosmio.lockate.domain.crypto.EncryptedStringDto
 import com.peppeosmio.lockate.data.anonymous_group.database.AnonymousGroupEntity
+import com.peppeosmio.lockate.domain.ConnectionSettings
 import com.peppeosmio.lockate.domain.anonymous_group.AGLocationUpdate
 import com.peppeosmio.lockate.exceptions.AGAdminTokenInvalidException
 import com.peppeosmio.lockate.exceptions.AGAdminUnauthorizedException
@@ -52,6 +53,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -313,7 +315,7 @@ class AnonymousGroupService(
             else -> ErrorHandler.handleGeneric(agGetMemberPasswordSrpInfoResponse)
         }
         val agGetMemberPasswordSrpInfoResponseBody =
-            agGetMemberPasswordSrpInfoResponse.body<AGGetMemberPasswordSrpInfoResponseDto>()
+            agGetMemberPasswordSrpInfoResponse.body<AGGetMemberPasswordSrpInfoResDto>()
         val agName: String
         try {
             agName = cryptoService.aesGcmDecrypt(
@@ -576,90 +578,108 @@ class AnonymousGroupService(
         )
     }
 
-    @OptIn(ExperimentalTime::class)
-    suspend fun sendLocation(onUpdate: ((activeAGCount: Int) -> Unit)?) =
-        withContext(Dispatchers.IO) {
-            var count = 0
-            connectionSettingsService.listConnectionSettings().forEach {
-                count += anonymousGroupDao.listAGToSendLocationOfConnection(it.id!!).size
-            }
-
-            if (onUpdate != null) {
-                onUpdate(count)
-            }
+    private suspend fun getAvailableAGs(connectionSettingsList: List<ConnectionSettings>): Int {
+        var availableAGs = 0
+        connectionSettingsList.forEach {
             try {
-                locationService.getLocationUpdates().collect { location ->
-                    val connectionSettingsList = connectionSettingsService.listConnectionSettings()
-                    connectionSettingsList.forEach { connectionSettings ->
-                        val agsToSendLocation =
-                            anonymousGroupDao.listAGToSendLocationOfConnection(connectionSettings.id!!)
-                                .map { AnonymousGroup.fromEntity(it) }
+                connectionSettingsService.isApiAvailable(it.url)
+                availableAGs += anonymousGroupDao.listAGToSendLocationOfConnection(it.id!!).size
+            } catch (_: Exception) {
+            }
+        }
+        return availableAGs
+    }
 
-                        if (onUpdate != null) {
-                            onUpdate(agsToSendLocation.size)
+    @OptIn(ExperimentalTime::class)
+    suspend fun sendLocation(updateActiveAGCount: (count: Int) -> Unit) =
+        withContext(Dispatchers.IO) {
+            while (true) {
+                var connectionSettingsList = connectionSettingsService.listConnectionSettings()
+                var availableAGs = getAvailableAGs(connectionSettingsList)
+                updateActiveAGCount(availableAGs)
+                if (availableAGs == 0) {
+                    delay(10000L)
+                    continue
+                }
+                try {
+                    locationService.getLocationUpdates().collect { location ->
+                        Log.d("", "Getting location updates...")
+                        connectionSettingsList = connectionSettingsService.listConnectionSettings()
+                        availableAGs = getAvailableAGs(connectionSettingsList)
+                        updateActiveAGCount(availableAGs)
+                        if (availableAGs == 0) {
+                            throw Exception()
                         }
+                        connectionSettingsList.forEach { connectionSettings ->
+                            val agsToSendLocation =
+                                anonymousGroupDao.listAGToSendLocationOfConnection(
+                                    connectionSettings.id!!
+                                ).map { AnonymousGroup.fromEntity(it) }
 
-                        val locationBytes = location.toByteArray()
+                            val locationBytes = location.toByteArray()
 
-                        agsToSendLocation.forEach { anonymousGroup ->
-                            Log.i(
-                                "", "[ ${
-                                    Clock.System.now()
-                                        .toLocalDateTime(TimeZone.currentSystemDefault())
-                                } ] agId: ${anonymousGroup.id}, sending location: $location"
-                            )
-                            launch(Dispatchers.Default) {
-                                val result = ErrorHandler.runAndHandleException {
-                                    val encryptedLocation = cryptoService.aesGcmEncrypt(
-                                        plainTextBytes = locationBytes,
-                                        saltBytes = cryptoService.getSalt(),
-                                        passwordBytes = anonymousGroup.memberPassword.toByteArray(
-                                            StandardCharsets.UTF_8
-                                        ),
-                                    )
-                                    val response = httpClient.post {
-                                        url("${connectionSettings.url}/api/anonymous-groups/${anonymousGroup.id}/locations")
-                                        headers {
-                                            connectionSettings.apiKey?.let { ak ->
-                                                append(
-                                                    "X-API-KEY", ak
-                                                )
-                                            }
-                                            append(
-                                                HttpHeaders.Authorization,
-                                                "AGMember ${anonymousGroup.memberId} ${anonymousGroup.memberToken}"
-                                            )
-                                            append(HttpHeaders.ContentType, "application/json")
-                                        }
-                                        setBody(
-                                            AGLocationSaveRequestDto(
-                                                encryptedLocation = EncryptedStringDto.fromEncryptedString(
-                                                    encryptedLocation
-                                                )
-                                            )
+                            agsToSendLocation.forEach { anonymousGroup ->
+                                Log.i(
+                                    "", "[ ${
+                                        Clock.System.now()
+                                            .toLocalDateTime(TimeZone.currentSystemDefault())
+                                    } ] Sharing location agId: ${anonymousGroup.id}, location: $location"
+                                )
+                                launch(Dispatchers.Default) {
+                                    val result = ErrorHandler.runAndHandleException {
+                                        val encryptedLocation = cryptoService.aesGcmEncrypt(
+                                            plainTextBytes = locationBytes,
+                                            saltBytes = cryptoService.getSalt(),
+                                            passwordBytes = anonymousGroup.memberPassword.toByteArray(
+                                                StandardCharsets.UTF_8
+                                            ),
                                         )
-                                    }
-                                    try {
-                                        when (response.status.value) {
-                                            201 -> Unit
-                                            401, 403 -> ErrorHandler.handleUnauthorized(response)
-                                            404 -> throw RemoteAGNotFoundException()
-                                            else -> ErrorHandler.handleGeneric(response)
+                                        val response = httpClient.post {
+                                            url("${connectionSettings.url}/api/anonymous-groups/${anonymousGroup.id}/locations")
+                                            headers {
+                                                connectionSettings.apiKey?.let { ak ->
+                                                    append(
+                                                        "X-API-KEY", ak
+                                                    )
+                                                }
+                                                append(
+                                                    HttpHeaders.Authorization,
+                                                    "AGMember ${anonymousGroup.memberId} ${anonymousGroup.memberToken}"
+                                                )
+                                                append(HttpHeaders.ContentType, "application/json")
+                                            }
+                                            setBody(
+                                                AGLocationSaveRequestDto(
+                                                    encryptedLocation = EncryptedStringDto.fromEncryptedString(
+                                                        encryptedLocation
+                                                    )
+                                                )
+                                            )
                                         }
-                                    } catch (e: UnauthorizedException) {
-                                        setAGIsMemberFalse(anonymousGroup.id)
-                                        throw AGMemberUnauthorizedException()
-                                    } catch (e: RemoteAGNotFoundException) {
-                                        setAGExistsRemoteFalse(anonymousGroup.id)
-                                        throw e
+                                        try {
+                                            when (response.status.value) {
+                                                201 -> Unit
+                                                401, 403 -> ErrorHandler.handleUnauthorized(response)
+                                                404 -> throw RemoteAGNotFoundException()
+                                                else -> ErrorHandler.handleGeneric(response)
+                                            }
+                                        } catch (e: UnauthorizedException) {
+                                            setAGIsMemberFalse(anonymousGroup.id)
+                                            throw AGMemberUnauthorizedException()
+                                        } catch (e: RemoteAGNotFoundException) {
+                                            setAGExistsRemoteFalse(anonymousGroup.id)
+                                            throw e
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+                    Log.d("", "Stopped getting location updates...")
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    delay(1000L)
                 }
-            } catch (e: SecurityException) {
-                e.printStackTrace()
             }
         }
 
@@ -672,64 +692,59 @@ class AnonymousGroupService(
         val agEntity = anonymousGroupDao.getAnonymousGroupById(anonymousGroupId)
             ?: throw LocalAGNotFoundException()
         callbackFlow {
-            try {
-                httpClient.sse(
-                    "${connectionSettings.url}/api/anonymous-groups/$anonymousGroupId/locations",
-                    request = {
-                        headers {
-                            connectionSettings.apiKey?.let { ak -> append("X-API-KEY", ak) }
-                            append(
-                                HttpHeaders.Authorization,
-                                "AGMember ${agEntity.memberId} ${Base64.encode(agEntity.memberToken)}"
-                            )
-                            append(HttpHeaders.ContentType, "application/json")
-                        }
-                    },
-                    deserialize = { typeInfo, s ->
-                        val serializer = Json.serializersModule.serializer(typeInfo.kotlinType!!)
-                        Json.decodeFromString(deserializer = serializer, string = s)
-                    }) {
-                    incoming.collect { event ->
-                        when (event.event) {
-                            "location" -> {
-                                if (event.data == null) {
-                                    Unit
-                                } else {
-                                    val locationUpdate =
-                                        deserialize<AGLocationUpdateDto>(event.data)
+            httpClient.sse(
+                "${connectionSettings.url}/api/anonymous-groups/$anonymousGroupId/locations",
+                request = {
+                    headers {
+                        connectionSettings.apiKey?.let { ak -> append("X-API-KEY", ak) }
+                        append(
+                            HttpHeaders.Authorization,
+                            "AGMember ${agEntity.memberId} ${Base64.encode(agEntity.memberToken)}"
+                        )
+                        append(HttpHeaders.ContentType, "application/json")
+                    }
+                },
+                deserialize = { typeInfo, s ->
+                    val serializer = Json.serializersModule.serializer(typeInfo.kotlinType!!)
+                    Json.decodeFromString(deserializer = serializer, string = s)
+                }) {
+                incoming.collect { event ->
+                    when (event.event) {
+                        "location" -> {
+                            if (event.data == null) {
+                                Unit
+                            } else {
+                                val locationUpdate = deserialize<AGLocationUpdateDto>(event.data)
 
-                                    if (locationUpdate != null) {
-                                        val decryptedUpdate = locationUpdate.toAGLocationUpdate(
-                                            cryptoService = cryptoService,
-                                            memberPassword = agEntity.memberPassword
-                                        )
-                                        Log.d(
-                                            "", decryptedUpdate.toString()
-                                        )
-                                        anonymousGroupDao.setAGMemberLastLocation(
-                                            agMemberId = decryptedUpdate.agMemberId,
-                                            lastLocationLatitude = decryptedUpdate.location.coordinates.latitude,
-                                            lastLocationLongitude = decryptedUpdate.location.coordinates.longitude,
-                                            lastLocationTimestamp = decryptedUpdate.location.timestamp.toInstant(
-                                                TimeZone.currentSystemDefault()
-                                            ).toEpochMilliseconds()
-                                        )
-                                        Log.d(
-                                            "",
-                                            "Set last location to ${decryptedUpdate.agMemberId}: ${decryptedUpdate.location}"
-                                        )
-                                        send(
-                                            decryptedUpdate
-                                        )
-                                    }
+                                if (locationUpdate != null) {
+                                    val decryptedUpdate = locationUpdate.toAGLocationUpdate(
+                                        cryptoService = cryptoService,
+                                        memberPassword = agEntity.memberPassword
+                                    )
+                                    Log.d(
+                                        "", "Received location $decryptedUpdate"
+                                    )
+                                    anonymousGroupDao.setAGMemberLastLocation(
+                                        agMemberId = decryptedUpdate.agMemberId,
+                                        lastLocationLatitude = decryptedUpdate.location.coordinates.latitude,
+                                        lastLocationLongitude = decryptedUpdate.location.coordinates.longitude,
+                                        lastLocationTimestamp = decryptedUpdate.location.timestamp.toInstant(
+                                            TimeZone.currentSystemDefault()
+                                        ).toEpochMilliseconds()
+                                    )
+                                    Log.d(
+                                        "",
+                                        "Set last location to ${decryptedUpdate.agMemberId}: ${decryptedUpdate.location}"
+                                    )
+                                    send(
+                                        decryptedUpdate
+                                    )
                                 }
-
                             }
+
                         }
                     }
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
             }
             awaitClose {}
         }

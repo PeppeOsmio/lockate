@@ -18,11 +18,10 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
 
-        ksp {
-            arg("room.schemaLocation", "$projectDir/schemas")
-        }
-
+    ksp {
+        arg("room.schemaLocation", "$projectDir/schemas")
     }
 
     // bouncycastle
@@ -92,7 +91,6 @@ dependencies {
 
     implementation(libs.androidx.room.runtime)
     ksp(libs.androidx.room.compiler)
-    implementation(libs.room.runtime)
     implementation(libs.androidx.sqlite.bundled)
 
     implementation(libs.bcprov.jdk18on)

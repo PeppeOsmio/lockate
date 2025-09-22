@@ -96,11 +96,16 @@ class JoinAnonymousGroupViewModel(
         }
         _state.update { it.copy(showLoadingOverlay = false) }
         if (result.errorDialogInfo != null) {
-            _snackbarEvents.trySend(
-                SnackbarErrorMessage(
+            val snackbarErrorMessage = when (result.errorDialogInfo.exception) {
+                is LocalAGExistsException, is UnauthorizedException -> SnackbarErrorMessage(
+                    text = result.errorDialogInfo.body
+                )
+
+                else -> SnackbarErrorMessage(
                     "Can't join anonymous group", errorDialogInfo = result.errorDialogInfo
                 )
-            )
+            }
+            _snackbarEvents.trySend(snackbarErrorMessage)
             return null
         } else {
             return state.value.idText.trim()
