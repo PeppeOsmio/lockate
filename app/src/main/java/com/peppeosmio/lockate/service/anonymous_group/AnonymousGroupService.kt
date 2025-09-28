@@ -578,14 +578,21 @@ class AnonymousGroupService(
         )
     }
 
-    private suspend fun getAvailableAGs(connectionSettingsList: List<ConnectionSettings>): Int {
-        var availableAGs = 0
-        connectionSettingsList.forEach {
+    private suspend fun getAvailableConnections(connectionSettingsList: List<ConnectionSettings>): List<ConnectionSettings> {
+        return connectionSettingsList.filter {
             try {
                 connectionSettingsService.isApiAvailable(it.url)
-                availableAGs += anonymousGroupDao.listAGToSendLocationOfConnection(it.id!!).size
+                true
             } catch (_: Exception) {
+                false
             }
+        }
+    }
+
+    private suspend fun getAvailableAGs(availableConnections: List<ConnectionSettings>): Int {
+        var availableAGs = 0
+        availableConnections.forEach {
+            availableAGs += anonymousGroupDao.listAGToSendLocationOfConnection(it.id!!).size
         }
         return availableAGs
     }
@@ -595,7 +602,8 @@ class AnonymousGroupService(
         withContext(Dispatchers.IO) {
             while (true) {
                 var connectionSettingsList = connectionSettingsService.listConnectionSettings()
-                var availableAGs = getAvailableAGs(connectionSettingsList)
+                var availableConnections = getAvailableConnections(connectionSettingsList)
+                var availableAGs = getAvailableAGs(availableConnections)
                 updateActiveAGCount(availableAGs)
                 if (availableAGs == 0) {
                     delay(10000L)
@@ -605,12 +613,13 @@ class AnonymousGroupService(
                     locationService.getLocationUpdates().collect { location ->
                         Log.d("", "Getting location updates...")
                         connectionSettingsList = connectionSettingsService.listConnectionSettings()
-                        availableAGs = getAvailableAGs(connectionSettingsList)
+                        availableConnections = getAvailableConnections(connectionSettingsList)
+                        availableAGs = getAvailableAGs(availableConnections)
                         updateActiveAGCount(availableAGs)
                         if (availableAGs == 0) {
                             throw Exception()
                         }
-                        connectionSettingsList.forEach { connectionSettings ->
+                        availableConnections.forEach { connectionSettings ->
                             val agsToSendLocation =
                                 anonymousGroupDao.listAGToSendLocationOfConnection(
                                     connectionSettings.id!!

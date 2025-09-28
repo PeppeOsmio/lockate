@@ -43,6 +43,9 @@ class AnonymousGroupDetailsViewModel(
                 coroutineScope {
                     getLocalAG(anonymousGroupId)
                     getLocalMembers()
+                    launch {
+                        streamLocations(connectionSettingsId)
+                    }
                     remoteOperations(connectionSettingsId)
                 }
             }
@@ -53,9 +56,6 @@ class AnonymousGroupDetailsViewModel(
         _state.update { it.copy(reloadData = false) }
         try {
             coroutineScope {
-                launch {
-                    streamLocations(connectionSettingsId)
-                }
                 launch {
                     _state.update { it.copy(showLoadingIcon = false) }
                     joinAll(launch {
@@ -236,17 +236,7 @@ class AnonymousGroupDetailsViewModel(
             return
         }
         _state.update { it.copy(showLoadingOverlay = true) }
-        val result = ErrorHandler.runAndHandleException(customHandler = { e ->
-            when (e) {
-                is UnauthorizedException -> ErrorDialogInfo(
-                    title = "Wrong password",
-                    body = "The admin password you entered is incorrect.",
-                    exception = e
-                )
-
-                else -> throw e
-            }
-        }) {
+        val result = ErrorHandler.runAndHandleException() {
             anonymousGroupService.getAdminToken(
                 connectionSettingsId = connectionSettingsId,
                 anonymousGroupId = currentState.anonymousGroup.id,
@@ -255,11 +245,19 @@ class AnonymousGroupDetailsViewModel(
             true
         }
         if (result.errorDialogInfo != null) {
-            _snackbarEvents.trySend(
-                SnackbarErrorMessage(
-                    text = "Connection error", errorDialogInfo = result.errorDialogInfo
+            if (result.errorDialogInfo.exception is UnauthorizedException) {
+                _snackbarEvents.trySend(
+                    SnackbarErrorMessage(
+                        text = "Incorrect admin password"
+                    )
                 )
-            )
+            } else {
+                _snackbarEvents.trySend(
+                    SnackbarErrorMessage(
+                        text = "Connection error", errorDialogInfo = result.errorDialogInfo
+                    )
+                )
+            }
             _state.update { it.copy(showLoadingOverlay = false) }
         } else {
             _state.update { it.copy(showLoadingOverlay = false, isAdminTokenValid = true) }
@@ -268,46 +266,45 @@ class AnonymousGroupDetailsViewModel(
         getLocalAG(anonymousGroupId = currentState.anonymousGroup.id)
     }
 
+
     fun setAdminPasswordText(text: String) {
         _state.update { it.copy(adminPasswordText = text) }
     }
 
-    @Throws
     private suspend fun streamLocations(connectionSettingsId: Long) {
         if (state.value.anonymousGroup == null) {
             return
         }
-        val result = ErrorHandler.runAndHandleException {
-            anonymousGroupService.streamLocations(
-                connectionSettingsId = connectionSettingsId,
-                anonymousGroupId = state.value.anonymousGroup!!.id
-            ).collect { locationUpdate ->
-                if (state.value.membersLocation == null) {
-                    return@collect
-                }
-                if (locationUpdate.agMemberId !in state.value.membersLocation!!.keys) {
-                    Log.d(
-                        "", "Refetching members (new member ${locationUpdate.agMemberId})"
-                    )
-                    getRemoteMembers(connectionSettingsId)
-                }
-                val currentLocation = state.value.membersLocation!![locationUpdate.agMemberId]
-                if (currentLocation != locationUpdate.location) {
-                    _state.update {
-                        it.copy(
-                            membersLocation = it.membersLocation!! + (locationUpdate.agMemberId to locationUpdate.location)
+        while (true) {
+            val result = ErrorHandler.runAndHandleException {
+                anonymousGroupService.streamLocations(
+                    connectionSettingsId = connectionSettingsId,
+                    anonymousGroupId = state.value.anonymousGroup!!.id
+                ).collect { locationUpdate ->
+                    if (state.value.membersLocation == null) {
+                        return@collect
+                    }
+                    if (locationUpdate.agMemberId !in state.value.membersLocation!!.keys) {
+                        Log.d(
+                            "", "Refetching members (new member ${locationUpdate.agMemberId})"
                         )
+                        getRemoteMembers(connectionSettingsId)
+                    }
+                    val currentLocation = state.value.membersLocation!![locationUpdate.agMemberId]
+                    if (currentLocation != locationUpdate.location) {
+                        _state.update {
+                            it.copy(
+                                membersLocation = it.membersLocation!! + (locationUpdate.agMemberId to locationUpdate.location)
+                            )
+                        }
                     }
                 }
             }
-        }
-        if (result.errorDialogInfo != null) {
-            _snackbarEvents.trySend(
-                SnackbarErrorMessage(
-                    "Connection error", errorDialogInfo = result.errorDialogInfo
-                )
-            )
-            result.errorDialogInfo.exception?.let { throw it }
+            if (result.errorDialogInfo != null) {
+                result.errorDialogInfo.exception?.printStackTrace()
+                Log.d("", "Streaming location failed, retrying in 10 s")
+                delay(10000L)
+            }
         }
     }
 
@@ -342,12 +339,8 @@ class AnonymousGroupDetailsViewModel(
         return true
     }
 
-    fun onOptionsButtonTap() {
+    fun toggleDropdownMenu() {
         _state.update { it.copy(isDropdownMenuOpen = !it.isDropdownMenuOpen) }
-    }
-
-    fun openDropDownMenu() {
-        _state.update { it.copy(isDropdownMenuOpen = true) }
     }
 
     fun closeDropdownMenu() {

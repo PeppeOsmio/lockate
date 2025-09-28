@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
@@ -89,13 +88,13 @@ fun AnonymousGroupDetailsScreen(
     }
 
 
-    LaunchedEffect(key1 = true) {
+    LaunchedEffect(true) {
         viewModel.getInitialDetails(
             anonymousGroupId = anonymousGroupId, connectionSettingsId = connectionSettingsId
         )
     }
 
-    LaunchedEffect(key1 = true) {
+    LaunchedEffect(true) {
         viewModel.snackbarEvents.collect { snackbarMessage ->
             val result = snackbarHostState.showSnackbar(
                 message = snackbarMessage.text,
@@ -111,7 +110,7 @@ fun AnonymousGroupDetailsScreen(
         }
     }
 
-    LaunchedEffect(key1 = true) {
+    LaunchedEffect(true) {
         viewModel.mapLocationEvents.collect { location ->
             mapCameraState.animateTo(
                 finalPosition = CameraPosition(
@@ -190,7 +189,7 @@ fun AnonymousGroupDetailsScreen(
                 Box(
                     modifier = Modifier
                 ) {
-                    IconButton(onClick = { viewModel.onOptionsButtonTap() }) {
+                    IconButton(onClick = { viewModel.toggleDropdownMenu() }) {
                         Icon(Icons.Default.MoreVert, contentDescription = "More options")
                     }
                     DropdownMenu(expanded = state.isDropdownMenuOpen, onDismissRequest = {

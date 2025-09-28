@@ -4,13 +4,13 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.AccountBox
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
@@ -63,7 +63,7 @@ fun HomePageScreen(
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(initialConnectionSettingsId) {
-        viewModel.setConnectionSettingsId(initialConnectionSettingsId)
+        viewModel.setSelectedConnectionSettingsId(initialConnectionSettingsId)
     }
 
     // Redirect to settings if needed, should never happen
@@ -73,7 +73,7 @@ fun HomePageScreen(
         }
     }
 
-    LaunchedEffect(key1 = true) {
+    LaunchedEffect(true) {
         viewModel.snackbarEvents.collect { snackbarMessage ->
             val result = snackbarHostState.showSnackbar(
                 message = snackbarMessage.text,
@@ -103,9 +103,10 @@ fun HomePageScreen(
             confirmButton = {
                 TextButton(onClick = {
                     coroutineScope.launch {
-                        viewModel.disconnect()
-                        stopLocationService()
-                        navigateToConnectionSettings()
+                        if (viewModel.disconnect()) {
+                            stopLocationService()
+                            navigateToConnectionSettings()
+                        }
                     }
                 }) { Text("Yes, disconnect") }
             },
@@ -204,10 +205,63 @@ fun HomePageScreen(
                         }
                     },
                     actions = {
-                        IconButton(onClick = { }) {
-                            Icon(
-                                Icons.Default.Info, contentDescription = "Search anonymous groups"
-                            )
+                        if (state.connectionSettings == null) {
+                            return@RoundedSearchAppBar
+                        }
+                        Box {
+                            IconButton(onClick = {
+                                viewModel.toggleConnectionsMenu()
+                            }) {
+                                Icon(
+                                    painter = painterResource(R.drawable.outline_data_table_24),
+                                    contentDescription = "Connections"
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = state.isConnectionsMenuOpen,
+                                onDismissRequest = {
+                                    viewModel.closeConnectionsMenu()
+                                }) {
+                                Text(
+                                    modifier = Modifier.padding(12.dp),
+                                    text = "Connections",
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                HorizontalDivider()
+                                DropdownMenuItem(
+                                    text = { Text("Add new connection") },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.Add,
+                                            contentDescription = "Add new connection"
+                                        )
+                                    },
+                                    onClick = {
+                                        viewModel.closeConnectionsMenu()
+                                        navigateToConnectionSettings()
+                                    })
+                                state.connectionSettings!!.map {
+                                    val connectionName = if (it.username != null) {
+                                        "${it.username}@${it.url}"
+                                    } else {
+                                        it.url
+                                    }
+                                    DropdownMenuItem(
+                                        text = { Text(connectionName) },
+                                        leadingIcon = {
+                                            Checkbox(
+                                                modifier = Modifier.padding(0.dp),
+                                                checked = state.selectedConnectionSettingsId == it.id!!,
+                                                onCheckedChange = null
+                                            )
+                                        },
+                                        onClick = {
+                                            coroutineScope.launch {
+                                                viewModel.onConnectionSelected(it.id!!)
+                                            }
+                                        })
+                                }
+                            }
                         }
                     },
                     onTap = { viewModel.onTapSearchBar() },
@@ -254,7 +308,7 @@ fun HomePageScreen(
                 exitTransition = { ExitTransition.None }) {
                 composable<AnonymousGroupsRoute> {
                     val connectionSettingsId =
-                        state.connectionSettingsId ?: initialConnectionSettingsId
+                        state.selectedConnectionSettingsId ?: initialConnectionSettingsId
                     AnonymousGroupsScreen(
                         connectionSettingsId = connectionSettingsId,
                         navigateToCreateAG = {

@@ -13,6 +13,7 @@ data class HomePageState(
     val registeredOnSearch: ((query: String) -> Unit)? = null,
     val registeredOnTapFab: (() -> Unit)? = null,
     val dialogErrorDialogInfo: ErrorDialogInfo? = null,
-    val connectionSettingsId: Long? = null,
-    val connectionSettings: List<ConnectionSettings>? = null
+    val selectedConnectionSettingsId: Long? = null,
+    val connectionSettings: List<ConnectionSettings>? = null,
+    val isConnectionsMenuOpen: Boolean = false,
 )

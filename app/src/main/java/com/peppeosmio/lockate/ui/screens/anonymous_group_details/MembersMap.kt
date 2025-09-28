@@ -82,7 +82,7 @@ fun MembersMap(
                 options = geoJsonOptions
             )
 
-            LaunchedEffect(key1 = features) {
+            LaunchedEffect(features) {
                 geoJsonSource.setData(
                     GeoJsonData.Features(FeatureCollection(features = features ?: emptyList()))
                 )

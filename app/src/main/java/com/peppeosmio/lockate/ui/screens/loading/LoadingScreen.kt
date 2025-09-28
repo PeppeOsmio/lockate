@@ -16,7 +16,7 @@ fun LoadingScreen(
     navigateToConnectionSettings: () -> Unit,
     viewModel: LoadingViewModel = koinViewModel()
 ) {
-    LaunchedEffect(key1 = true) {
+    LaunchedEffect(true) {
         viewModel.selectedConnectionSettingsId.collect {
             Log.d("", "Received $it")
             if (it != null) {

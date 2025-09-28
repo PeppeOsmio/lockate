@@ -39,7 +39,7 @@ fun PermissionsRequester(
         )
     }
 
-    LaunchedEffect(key1 = permissionsQueue.size) {
+    LaunchedEffect(permissionsQueue.size) {
         if (permissionsQueue.isNotEmpty()) {
             return@LaunchedEffect
         }

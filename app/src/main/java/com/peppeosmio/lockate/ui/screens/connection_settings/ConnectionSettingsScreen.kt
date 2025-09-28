@@ -57,13 +57,13 @@ fun ConnectionSettingsScreen(
     }
 
     // Navigate on success
-    LaunchedEffect(key1 = true) {
+    LaunchedEffect(true) {
         viewModel.navigateToHome.collect {
             navigateToHome(it)
         }
     }
 
-    LaunchedEffect(key1 = true) {
+    LaunchedEffect(true) {
         viewModel.snackbarEvents.collect { snackbarMessage ->
             val result = snackbarHostState.showSnackbar(
                 message = snackbarMessage.text,

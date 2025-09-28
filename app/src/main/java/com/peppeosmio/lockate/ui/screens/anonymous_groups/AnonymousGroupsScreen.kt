@@ -54,7 +54,7 @@ fun AnonymousGroupsScreen(
     val focusManager = LocalFocusManager.current
     val localClipboard = LocalClipboard.current
 
-    DisposableEffect(key1 = true) {
+    DisposableEffect(true) {
         registerOnFabTap(viewModel::onFabTap)
         registerOnSearch(viewModel::onSearch)
         onDispose {
@@ -67,10 +67,14 @@ fun AnonymousGroupsScreen(
         viewModel.getInitialData(connectionSettingsId)
     }
 
-    LaunchedEffect(key1 = true) {
+    LaunchedEffect(true) {
         viewModel.snackbarEvents.collect { snackbarMessage ->
             showErrorSnackbar(snackbarMessage)
         }
+    }
+
+    LaunchedEffect(connectionSettingsId) {
+        viewModel.getInitialData(connectionSettingsId)
     }
 
     // Add group bottom sheet

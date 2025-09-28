@@ -52,9 +52,17 @@ fun LockateApp(startLocationService: () -> Unit, stopLocationService: () -> Unit
         ) {
             composable<LoadingRoute> {
                 LoadingScreen(navigateToHome = { connectionSettingsId ->
-                    appNavController.navigate(HomeRoute(connectionSettingsId))
+                    appNavController.navigate(HomeRoute(connectionSettingsId)) {
+                        popUpTo<LoadingRoute>() {
+                            inclusive = true
+                        }
+                    }
                 }, navigateToConnectionSettings = {
-                    appNavController.navigate(ConnectionSettingsRoute(initialConnectionSettingsId = null))
+                    appNavController.navigate(ConnectionSettingsRoute(initialConnectionSettingsId = null)) {
+                        popUpTo<LoadingRoute>() {
+                            inclusive = true
+                        }
+                    }
                 })
             }
             composable<HomeRoute> { navBackStackEntry ->
@@ -62,12 +70,7 @@ fun LockateApp(startLocationService: () -> Unit, stopLocationService: () -> Unit
                 HomePageScreen(
                     initialConnectionSettingsId = homeRoute.initialConnectionSettingsId,
                     navigateToConnectionSettings = {
-                        appNavController.navigate(ConnectionSettingsRoute(null)) {
-                            popUpTo(appNavController.graph.findStartDestination().id) {
-                                inclusive = false
-                            }
-                            launchSingleTop = true
-                        }
+                        appNavController.navigate(ConnectionSettingsRoute(null)) {}
                     },
                     navigateToAGDetails = { connectionSettingsId, anonymousGroupId, anonymousGroupName ->
                         appNavController.navigate(

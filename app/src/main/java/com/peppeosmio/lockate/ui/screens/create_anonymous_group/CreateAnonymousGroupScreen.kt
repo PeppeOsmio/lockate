@@ -48,7 +48,7 @@ fun CreateAnonymousGroupScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val focusManager = LocalFocusManager.current
 
-    LaunchedEffect(key1 = true) {
+    LaunchedEffect(true) {
         viewModel.snackbarEvents.collect { snackbarMessage ->
             val result = snackbarHostState.showSnackbar(
                 message = snackbarMessage.text,

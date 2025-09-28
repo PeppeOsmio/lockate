@@ -2,11 +2,11 @@ package com.peppeosmio.lockate.ui.screens.home_page
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.peppeosmio.lockate.exceptions.ConnectionSettingsNotFoundException
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
 import com.peppeosmio.lockate.service.ConnectionSettingsService
 import com.peppeosmio.lockate.service.PermissionsService
 import com.peppeosmio.lockate.utils.ErrorDialogInfo
+import com.peppeosmio.lockate.utils.ErrorHandler
 import com.peppeosmio.lockate.utils.SnackbarErrorMessage
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,7 +30,7 @@ class HomePageViewModel(
     init {
         viewModelScope.launch {
             val connectionSettings = connectionSettingsService.listConnectionSettings()
-            if(connectionSettings.isNotEmpty()) {
+            if (connectionSettings.isNotEmpty()) {
                 _state.update { it.copy(connectionSettings = connectionSettings) }
             } else {
                 _state.update { it.copy(shouldRedirectToCredentialsPage = true) }
@@ -84,15 +84,27 @@ class HomePageViewModel(
         return permissionsService.isPermissionGranted(permission)
     }
 
-    suspend fun disconnect() {
+    suspend fun disconnect(): Boolean {
         closeLogoutDialog()
-        if(state.value.connectionSettingsId == null) {
-            return
+        if (state.value.selectedConnectionSettingsId == null) {
+            return false
         }
         _state.update { it.copy(showLoadingOverlay = true) }
-        anonymousGroupService.leaveAllAG(state.value.connectionSettingsId!!)
-        connectionSettingsService.deleteConnectionSettings(state.value.connectionSettingsId!!)
+        val result = ErrorHandler.runAndHandleException {
+            anonymousGroupService.leaveAllAG(state.value.selectedConnectionSettingsId!!)
+            connectionSettingsService.deleteConnectionSettings(state.value.selectedConnectionSettingsId!!)
+        }
+        if (result.errorDialogInfo != null) {
+            _snackbarEvents.trySend(
+                SnackbarErrorMessage(
+                    text = "Connection error", errorDialogInfo = result.errorDialogInfo
+                )
+            )
+            _state.update { it.copy(showLoadingOverlay = false) }
+            return false
+        }
         _state.update { it.copy(showLoadingOverlay = false) }
+        return true
     }
 
     fun hideErrorDialog() {
@@ -107,7 +119,23 @@ class HomePageViewModel(
         _snackbarEvents.trySend(snackbarErrorMessage)
     }
 
-    fun setConnectionSettingsId(connectionSettingsId: Long) {
-        _state.update { it.copy(connectionSettingsId = connectionSettingsId) }
+    fun setSelectedConnectionSettingsId(connectionSettingsId: Long) {
+        _state.update { it.copy(selectedConnectionSettingsId = connectionSettingsId) }
+    }
+
+    fun toggleConnectionsMenu() {
+        _state.update { it.copy(isConnectionsMenuOpen = !it.isConnectionsMenuOpen) }
+    }
+
+    fun closeConnectionsMenu() {
+        _state.update { it.copy(isConnectionsMenuOpen = false) }
+    }
+
+    suspend fun onConnectionSelected(connectionSettingsId: Long) {
+        if (connectionSettingsId == state.value.selectedConnectionSettingsId) {
+            return
+        }
+        _state.update { it.copy(selectedConnectionSettingsId = connectionSettingsId) }
+        connectionSettingsService.saveSelectedConnectionSettingsId(connectionSettingsId)
     }
 }
