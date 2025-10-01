@@ -17,7 +17,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 
-class LocationAndroidService : Service() {
+class PlatformLocationService : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val anonymousGroupService: AnonymousGroupService by inject<AnonymousGroupService>()
@@ -43,7 +43,7 @@ class LocationAndroidService : Service() {
     @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
     private fun start() {
         isRunning = true
-        val stopIntent = Intent(this, LocationAndroidService::class.java).apply {
+        val stopIntent = Intent(this, PlatformLocationService::class.java).apply {
             action = ACTION_STOP
         }
         val stopPendingIntent = PendingIntent.getService(

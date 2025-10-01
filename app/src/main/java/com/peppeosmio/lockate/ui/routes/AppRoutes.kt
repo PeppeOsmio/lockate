@@ -1,4 +1,4 @@
-package com.peppeosmio.lockate.routes
+package com.peppeosmio.lockate.ui.routes
 
 import kotlinx.serialization.Serializable
 

@@ -1,10 +1,9 @@
 package com.peppeosmio.lockate.ui.screens.anonymous_group_details
 
-import com.peppeosmio.lockate.domain.anonymous_group.AGLocation
+import com.peppeosmio.lockate.domain.anonymous_group.LocationRecord
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.domain.anonymous_group.AnonymousGroup
-import com.peppeosmio.lockate.service.location.Location
-import com.peppeosmio.lockate.utils.ErrorDialogInfo
+import com.peppeosmio.lockate.utils.ErrorInfo
 
 data class AnonymousGroupDetailsState(
     val anonymousGroup: AnonymousGroup? = null,
@@ -13,9 +12,9 @@ data class AnonymousGroupDetailsState(
     val showLoadingOverlay: Boolean = false,
     val showLoadingIcon: Boolean = false,
     val adminPasswordText: String = "",
-    val membersLocation: Map<String, AGLocation>? = null,
+    val membersLocationRecord: Map<String, LocationRecord>? = null,
     val showDeleteAGDialog: Boolean = false,
-    val dialogErrorDialogInfo: ErrorDialogInfo? = null,
+    val dialogErrorInfo: ErrorInfo? = null,
     val reloadData: Boolean = false,
     val isDropdownMenuOpen: Boolean = false
 )

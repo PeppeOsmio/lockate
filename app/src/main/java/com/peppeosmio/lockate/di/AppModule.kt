@@ -6,11 +6,12 @@ import com.google.android.gms.location.LocationServices
 import com.peppeosmio.lockate.AppDatabase
 import com.peppeosmio.lockate.dao.AnonymousGroupDao
 import com.peppeosmio.lockate.dao.ConnectionSettingsDao
+import com.peppeosmio.lockate.platform_service.KeyStoreService
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
 import com.peppeosmio.lockate.service.ConnectionSettingsService
 import com.peppeosmio.lockate.service.PermissionsService
 import com.peppeosmio.lockate.service.crypto.CryptoService
-import com.peppeosmio.lockate.service.location.LocationService
+import com.peppeosmio.lockate.platform_service.LocationService
 import com.peppeosmio.lockate.service.srp.SrpClientService
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.android.Android
@@ -59,11 +60,16 @@ val appModule = module {
         }
     }
 
+    single<KeyStoreService> {
+        KeyStoreService()
+    }
+
     single<ConnectionSettingsService> {
         ConnectionSettingsService(
             context = androidContext(),
-            httpClient = get<HttpClient>(),
-            connectionSettingsDao = get<ConnectionSettingsDao>()
+            httpClient = get(),
+            connectionSettingsDao = get(),
+            keyStoreService = get()
         )
     }
 
@@ -89,14 +95,13 @@ val appModule = module {
 
     single<AnonymousGroupService> {
         AnonymousGroupService(
-            anonymousGroupDao = get<AnonymousGroupDao>(),
-            cryptoService = get<CryptoService>(),
-            connectionSettingsService = get<ConnectionSettingsService>(),
-            httpClient = get<HttpClient>(),
-            srpClientService = get<SrpClientService>(),
-            locationService = get<LocationService>()
+            anonymousGroupDao = get(),
+            cryptoService = get(),
+            connectionSettingsService = get(),
+            httpClient = get(),
+            srpClientService = get(),
+            locationService = get(),
+            keyStoreService = get()
         )
     }
-
-
 }

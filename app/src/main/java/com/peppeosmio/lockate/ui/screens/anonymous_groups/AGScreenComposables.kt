@@ -145,13 +145,13 @@ fun AGActionsBottomSheet(
  */
 @Composable
 fun AnonymousGroupCard(
-    modifier: Modifier = Modifier,
+    modifier: Modifier,
     anonymousGroup: AnonymousGroup,
     onClick: () -> Unit,
     onMoreOptions: () -> Unit
 ) {
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp, horizontal = 16.dp)
             .clickable(onClick = onClick)

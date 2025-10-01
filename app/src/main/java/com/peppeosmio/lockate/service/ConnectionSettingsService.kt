@@ -4,10 +4,12 @@ import android.content.Context
 import android.util.Log
 import androidx.datastore.preferences.core.edit
 import com.peppeosmio.lockate.dao.ConnectionSettingsDao
-import com.peppeosmio.lockate.data.anonymous_group.database.ConnectionSettingsEntity
 import com.peppeosmio.lockate.data.anonymous_group.remote.ApiKeyRequiredResDto
 import com.peppeosmio.lockate.domain.ConnectionSettings
 import com.peppeosmio.lockate.exceptions.ConnectionSettingsNotFoundException
+import com.peppeosmio.lockate.exceptions.InvalidApiKeyException
+import com.peppeosmio.lockate.exceptions.UnauthorizedException
+import com.peppeosmio.lockate.platform_service.KeyStoreService
 import com.peppeosmio.lockate.utils.ErrorHandler
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -15,7 +17,6 @@ import io.ktor.client.request.get
 import io.ktor.client.request.headers
 import io.ktor.client.request.url
 import io.ktor.client.statement.bodyAsText
-import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.Url
 import kotlinx.coroutines.Dispatchers
@@ -26,7 +27,8 @@ import kotlinx.coroutines.withContext
 class ConnectionSettingsService(
     private val context: Context,
     private val httpClient: HttpClient,
-    private val connectionSettingsDao: ConnectionSettingsDao
+    private val connectionSettingsDao: ConnectionSettingsDao,
+    private val keyStoreService: KeyStoreService
 ) {
     @Throws
     suspend fun isApiAvailable(url: String) {
@@ -51,8 +53,8 @@ class ConnectionSettingsService(
         responseBody.required
     }
 
-    @Throws
-    private suspend fun testCredentials(credentials: ConnectionSettings) =
+    @Throws(InvalidApiKeyException::class, UnauthorizedException::class)
+    suspend fun testConnectionSettings(credentials: ConnectionSettings) =
         withContext(Dispatchers.IO) {
             val response = httpClient.get {
                 url(Url("${credentials.url.trimEnd('/')}/api/api-key/test"))

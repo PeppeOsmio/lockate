@@ -1,4 +1,4 @@
-package com.peppeosmio.lockate.service.location
+package com.peppeosmio.lockate.platform_service
 
 import  android.Manifest
 import android.os.Build
@@ -9,6 +9,7 @@ import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.Priority
+import com.peppeosmio.lockate.domain.Coordinates
 import com.peppeosmio.lockate.exceptions.NoPermissionException
 import com.peppeosmio.lockate.service.PermissionsService
 import kotlinx.coroutines.flow.*
@@ -23,7 +24,7 @@ class LocationService(
     private val permissionsService: PermissionsService
 ) {
 
-    private val _locationUpdates = MutableSharedFlow<Location>(
+    private val _coordinatesUpdates = MutableSharedFlow<Coordinates>(
         replay = 0,
         extraBufferCapacity = 1
     )
@@ -50,10 +51,10 @@ class LocationService(
         }
     }
 
-    fun getLocationUpdates(): Flow<Location> = flow {
+    fun getLocationUpdates(): Flow<Coordinates> = flow {
         onCollectorAdded()
         try {
-            emitAll(_locationUpdates)
+            emitAll(_coordinatesUpdates)
         } finally {
             onCollectorRemoved()
         }
@@ -84,7 +85,7 @@ class LocationService(
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 result.lastLocation?.let { loc ->
-                    _locationUpdates.tryEmit(Location(loc.latitude, loc.longitude))
+                    _coordinatesUpdates.tryEmit(Coordinates(loc.latitude, loc.longitude))
                 }
             }
         }
@@ -107,7 +108,7 @@ class LocationService(
         locationCallback = null
     }
 
-    suspend fun getCurrentLocation(): Location? {
+    suspend fun getCurrentLocation(): Coordinates? {
         Log.d("", "Getting current location...")
         checkPermissions()
         return try {
@@ -115,7 +116,7 @@ class LocationService(
                 fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
                     .addOnSuccessListener { coordinates ->
                         val location = coordinates?.let {
-                            Location(it.latitude, it.longitude)
+                            Coordinates(it.latitude, it.longitude)
                         }
                         cont.resume(location) { _, _, _ -> }
                     }

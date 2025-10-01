@@ -4,16 +4,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Card
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -82,7 +78,7 @@ fun MemberRow(
                         member.name
                     }, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold
                 )
-                if (!isMe) {
+                if (!isMe && member.lastLocationRecord != null) {
                     IconButton(onClick = onLocateClick) {
                         Icon(
                             painter = painterResource(R.drawable.outline_location_searching_24),
@@ -103,7 +99,7 @@ fun MemberRow(
             )
             if (!isMe) {
                 Text(
-                    text = "Last seen: ${member.lastLocation?.timestamp?.format(DateTimeUtils.DATE_FORMAT) ?: "never"}",
+                    text = "Last seen: ${member.lastLocationRecord?.timestamp?.format(DateTimeUtils.DATE_FORMAT) ?: "never"}",
                     style = MaterialTheme.typography.bodyMedium
                 )
             }

@@ -22,7 +22,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Lockate"
         android:usesCleartextTraffic="true">
-        <service android:name=".android_service.LocationAndroidService" android:foregroundServiceType="location" />
+        <service android:name=".android_service.PlatformLocationService" android:foregroundServiceType="location" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

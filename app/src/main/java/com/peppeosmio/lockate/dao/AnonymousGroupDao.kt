@@ -77,8 +77,17 @@ interface AnonymousGroupDao {
     @Query("UPDATE anonymous_group SET sendLocation = :sendLocation WHERE id = :anonymousGroupId")
     suspend fun setAGSendLocation(anonymousGroupId: String, sendLocation: Boolean)
 
-    @Query("UPDATE anonymous_group SET adminToken = :adminToken WHERE id = :anonymousGroupId")
-    suspend fun setAGAdminToken(anonymousGroupId: String, adminToken: ByteArray)
+    @Query("""
+        UPDATE anonymous_group 
+        SET adminTokenCipher = :adminTokenCipher, 
+        adminTokenIv = :adminTokenIv
+        WHERE id = :anonymousGroupId
+        """)
+    suspend fun setAGAdminToken(
+        anonymousGroupId: String,
+        adminTokenCipher: ByteArray,
+        adminTokenIv: ByteArray,
+    )
 
     @Query(
         """
@@ -92,16 +101,16 @@ interface AnonymousGroupDao {
     @Query(
         """
         UPDATE anonymous_group_member
-        SET lastLatitude = :lastLocationLatitude, lastLongitude = :lastLocationLongitude,
-        lastSeen = :lastLocationTimestamp
+        SET lastLatitude = :lastLatitude, lastLongitude = :lastLongitude,
+        lastSeen = :lastSeen
         WHERE id = :agMemberId
     """
     )
     suspend fun setAGMemberLastLocation(
         agMemberId: String,
-        lastLocationLatitude: Double,
-        lastLocationLongitude: Double,
-        lastLocationTimestamp: Long
+        lastLatitude: Double,
+        lastLongitude: Double,
+        lastSeen: Long
     ): Int
 
     @Query("DELETE FROM anonymous_group WHERE connectionSettingsId = :connectionSettingsId")

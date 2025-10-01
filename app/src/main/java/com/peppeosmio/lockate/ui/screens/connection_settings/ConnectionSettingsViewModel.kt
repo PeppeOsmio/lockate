@@ -3,21 +3,19 @@ package com.peppeosmio.lockate.ui.screens.connection_settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.peppeosmio.lockate.domain.ConnectionSettings
+import com.peppeosmio.lockate.exceptions.InvalidApiKeyException
 import com.peppeosmio.lockate.service.ConnectionSettingsService
-import com.peppeosmio.lockate.utils.ErrorDialogInfo
+import com.peppeosmio.lockate.utils.ErrorInfo
 import com.peppeosmio.lockate.utils.ErrorHandler
 import com.peppeosmio.lockate.utils.SnackbarErrorMessage
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class ConnectionSettingsViewModel(
     private val connectionSettingsService: ConnectionSettingsService
@@ -40,7 +38,7 @@ class ConnectionSettingsViewModel(
             val result = ErrorHandler.runAndHandleException {
                 connectionSettingsService.getConnectionSettingsById(initialConnectionSettingsId)
             }
-            if (result.errorDialogInfo != null) {
+            if (result.errorInfo != null) {
                 _state.update { it.copy(showLoadingOverlay = false) }
             } else {
                 _state.update {
@@ -76,13 +74,13 @@ class ConnectionSettingsViewModel(
             val result = ErrorHandler.runAndHandleException {
                 connectionSettingsService.checkRequireApiKey(state.value.url)
             }
-            if (result.errorDialogInfo != null) {
+            if (result.errorInfo != null) {
                 _snackbarEvents.trySend(
                     SnackbarErrorMessage(
-                        "Connection error", errorDialogInfo = result.errorDialogInfo
+                        "Connection error", errorInfo = result.errorInfo
                     )
                 )
-                result.errorDialogInfo.exception?.printStackTrace()
+                result.errorInfo.exception?.printStackTrace()
                 _state.update { it.copy(showLoadingOverlay = false) }
                 return
             }
@@ -94,21 +92,44 @@ class ConnectionSettingsViewModel(
                 _state.update { it.copy(showLoadingOverlay = false) }
             }
         }
-        val result = ErrorHandler.runAndHandleException {
-            connectionSettingsService.saveConnectionSettings(
-                ConnectionSettings(
-                    id = null,
-                    url = _state.value.url,
-                    apiKey = if(state.value.requireApiKey) state.value.apiKey else null ,
-                    username = null,
-                    authToken = null
-                )
-            )
-        }
-        if (result.errorDialogInfo != null) {
+        val connectionSettings = ConnectionSettings(
+            id = null,
+            url = _state.value.url,
+            apiKey = if(state.value.requireApiKey) state.value.apiKey else null ,
+            username = null,
+            authToken = null
+        )
+        try {
+            connectionSettingsService.testConnectionSettings(connectionSettings)
+        } catch (e: InvalidApiKeyException) {
+            val errorInfo = ErrorInfo.fromException(e)
             _snackbarEvents.trySend(
                 SnackbarErrorMessage(
-                    text = "Connection error", errorDialogInfo = result.errorDialogInfo
+                    text = "Invalid api key", errorInfo = errorInfo
+                )
+            )
+            _state.update { it.copy(showLoadingOverlay = false) }
+            return
+        }
+        catch (e: Exception) {
+            val errorInfo = ErrorInfo.fromException(e)
+            _snackbarEvents.trySend(
+                SnackbarErrorMessage(
+                    text = "Connection error", errorInfo = errorInfo
+                )
+            )
+            _state.update { it.copy(showLoadingOverlay = false) }
+            return
+        }
+        val result = ErrorHandler.runAndHandleException {
+            connectionSettingsService.saveConnectionSettings(
+                connectionSettings
+            )
+        }
+        if (result.errorInfo != null) {
+            _snackbarEvents.trySend(
+                SnackbarErrorMessage(
+                    text = "Connection error", errorInfo = result.errorInfo
                 )
             )
             _state.update { it.copy(showLoadingOverlay = false) }
@@ -120,10 +141,10 @@ class ConnectionSettingsViewModel(
     }
 
     fun hideErrorDialog() {
-        _state.update { it.copy(errorDialogInfo = null) }
+        _state.update { it.copy(errorInfo = null) }
     }
 
-    fun showErrorDialog(errorDialogInfo: ErrorDialogInfo) {
-        _state.update { it.copy(errorDialogInfo = errorDialogInfo) }
+    fun showErrorDialog(errorInfo: ErrorInfo) {
+        _state.update { it.copy(errorInfo = errorInfo) }
     }
 }

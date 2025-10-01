@@ -6,15 +6,5 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class AGLocationUpdateDto(
-    val location: EncryptedAGLocationDto, val agMemberId: String
-) {
-    suspend fun toAGLocationUpdate(
-        cryptoService: CryptoService, memberPassword: String
-    ): AGLocationUpdate {
-        return AGLocationUpdate(
-            location = location.toDecrypted(
-                cryptoService = cryptoService, memberPassword = memberPassword
-            ), agMemberId = agMemberId
-        )
-    }
-}
+    val location: EncryptedLocationRecordDto, val agMemberId: String
+)

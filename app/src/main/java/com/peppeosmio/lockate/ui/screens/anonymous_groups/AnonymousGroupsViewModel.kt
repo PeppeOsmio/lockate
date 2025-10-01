@@ -1,13 +1,11 @@
 package com.peppeosmio.lockate.ui.screens.anonymous_groups
 
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.peppeosmio.lockate.exceptions.UnauthorizedException
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupEvent
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
 import com.peppeosmio.lockate.utils.ErrorHandler
 import com.peppeosmio.lockate.utils.SnackbarErrorMessage
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,7 +13,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class AnonymousGroupsViewModel(
     private val anonymousGroupService: AnonymousGroupService
@@ -43,15 +40,15 @@ class AnonymousGroupsViewModel(
                 connectionSettingsId
             )
         }
-        if (result.errorDialogInfo != null) {
+        if (result.errorInfo != null) {
             _state.update { it.copy(showLoadingOverlay = false) }
             _snackbarEvents.trySend(
                 SnackbarErrorMessage(
                     text = "Can't get local anonymous groups",
-                    errorDialogInfo = result.errorDialogInfo
+                    errorInfo = result.errorInfo
                 )
             )
-            result.errorDialogInfo.exception?.let { throw it }
+            result.errorInfo.exception?.let { throw it }
         } else {
             _state.update { it.copy(anonymousGroups = result.value, showLoadingOverlay = false) }
         }
@@ -123,13 +120,13 @@ class AnonymousGroupsViewModel(
                     anonymousGroupId = anonymousGroup.id
                 )
             }
-            if (result.errorDialogInfo != null) {
+            if (result.errorInfo != null) {
                 _snackbarEvents.trySend(
                     SnackbarErrorMessage(
-                        text = "Connection error", errorDialogInfo = result.errorDialogInfo
+                        text = "Connection error", errorInfo = result.errorInfo
                     )
                 )
-                result.errorDialogInfo.exception?.let { throw it }
+                result.errorInfo.exception?.let { throw it }
             }
         }
     }
@@ -179,11 +176,11 @@ class AnonymousGroupsViewModel(
             anonymousGroupService.deleteLocalAnonymousGroup(anonymousGroupId)
         }
         _state.update { it.copy(showLoadingOverlay = false) }
-        if (result.errorDialogInfo != null) {
+        if (result.errorInfo != null) {
             _snackbarEvents.trySend(
                 SnackbarErrorMessage(
                     text = "Can't delete local anonymous group $anonymousGroupId",
-                    errorDialogInfo = result.errorDialogInfo
+                    errorInfo = result.errorInfo
                 )
             )
         }
@@ -207,11 +204,11 @@ class AnonymousGroupsViewModel(
                 showLoadingOverlay = false,
             )
         }
-        if (result.errorDialogInfo != null) {
+        if (result.errorInfo != null) {
             _snackbarEvents.trySend(
                 SnackbarErrorMessage(
                     text = "Can't leave anonymous group $anonymousGroupId",
-                    errorDialogInfo = result.errorDialogInfo
+                    errorInfo = result.errorInfo
                 )
             )
         }

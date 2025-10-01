@@ -3,15 +3,13 @@ package com.peppeosmio.lockate.ui.screens.create_anonymous_group
 import androidx.lifecycle.ViewModel
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
 import com.peppeosmio.lockate.utils.ErrorHandler
-import com.peppeosmio.lockate.utils.ErrorDialogInfo
+import com.peppeosmio.lockate.utils.ErrorInfo
 import com.peppeosmio.lockate.utils.SnackbarErrorMessage
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.withContext
 
 class CreateAnonymousGroupViewModel(
     private val anonymousGroupService: AnonymousGroupService
@@ -86,10 +84,10 @@ class CreateAnonymousGroupViewModel(
             ).id
         }
         _state.update { it.copy(showLoadingOverlay = false) }
-        if (result.errorDialogInfo != null) {
+        if (result.errorInfo != null) {
             _snackbarEvents.trySend(
                 SnackbarErrorMessage(
-                    text = "Can't create anonymous group", errorDialogInfo = result.errorDialogInfo
+                    text = "Can't create anonymous group", errorInfo = result.errorInfo
                 )
             )
             return null
@@ -99,10 +97,10 @@ class CreateAnonymousGroupViewModel(
     }
 
     fun hideErrorDialog() {
-        _state.update { it.copy(errorDialogInfo = null) }
+        _state.update { it.copy(errorInfo = null) }
     }
 
-    fun showErrorDialog(errorDialogInfo: ErrorDialogInfo) {
-        _state.update { it.copy(errorDialogInfo = errorDialogInfo) }
+    fun showErrorDialog(errorInfo: ErrorInfo) {
+        _state.update { it.copy(errorInfo = errorInfo) }
     }
 }

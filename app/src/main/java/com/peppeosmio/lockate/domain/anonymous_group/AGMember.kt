@@ -1,7 +1,7 @@
 package com.peppeosmio.lockate.domain.anonymous_group
 
 import com.peppeosmio.lockate.data.anonymous_group.database.AGMemberEntity
-import com.peppeosmio.lockate.service.location.Location
+import com.peppeosmio.lockate.domain.Coordinates
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
@@ -13,7 +13,7 @@ data class AGMember(
     val id: String,
     val name: String,
     val createdAt: LocalDateTime,
-    val lastLocation: AGLocation?
+    val lastLocationRecord: LocationRecord?
 ) {
     @OptIn(ExperimentalTime::class)
     fun toEntity(anonymousGroupId: String): AGMemberEntity {
@@ -21,10 +21,10 @@ data class AGMember(
             id = id,
             name = name,
             createdAt = createdAt.toInstant(TimeZone.currentSystemDefault()).toEpochMilliseconds(),
-            lastSeen = lastLocation?.timestamp?.toInstant(TimeZone.currentSystemDefault())
+            lastSeen = lastLocationRecord?.timestamp?.toInstant(TimeZone.currentSystemDefault())
                 ?.toEpochMilliseconds(),
-            lastLatitude = lastLocation?.coordinates?.latitude,
-            lastLongitude = lastLocation?.coordinates?.longitude,
+            lastLatitude = lastLocationRecord?.coordinates?.latitude,
+            lastLongitude = lastLocationRecord?.coordinates?.longitude,
             anonymousGroupId = anonymousGroupId,
         )
     }
@@ -37,9 +37,9 @@ data class AGMember(
                 name = entity.name,
                 createdAt = Instant.fromEpochMilliseconds(entity.createdAt)
                     .toLocalDateTime(TimeZone.currentSystemDefault()),
-                lastLocation = entity.lastLatitude?.let {
-                    AGLocation(
-                        coordinates = Location(
+                lastLocationRecord = entity.lastLatitude?.let {
+                    LocationRecord(
+                        coordinates = Coordinates(
                             latitude = entity.lastLatitude,
                             longitude = entity.lastLongitude!!
 

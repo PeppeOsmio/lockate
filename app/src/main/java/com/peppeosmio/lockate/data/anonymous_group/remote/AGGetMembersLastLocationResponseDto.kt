@@ -4,5 +4,5 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class AGGetMembersLastLocationResponseDto(
-    val locations: Map<String, EncryptedAGLocationDto>
+    val locations: Map<String, EncryptedLocationRecordDto>
 )

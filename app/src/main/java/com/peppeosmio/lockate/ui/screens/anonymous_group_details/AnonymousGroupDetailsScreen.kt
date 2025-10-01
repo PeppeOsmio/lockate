@@ -28,7 +28,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.alorma.compose.settings.ui.SettingsMenuLink
-import com.peppeosmio.lockate.service.location.Location
+import com.peppeosmio.lockate.domain.Coordinates
 import com.peppeosmio.lockate.ui.composables.SmallCircularProgressIndicator
 import dev.sargunv.maplibrecompose.compose.rememberCameraState
 import dev.sargunv.maplibrecompose.core.CameraPosition
@@ -61,16 +61,16 @@ fun AnonymousGroupDetailsScreen(
     val mapCameraState = rememberCameraState(
         firstPosition = CameraPosition(
             target = Position(
-                latitude = Location.NAPOLI.latitude, longitude = Location.NAPOLI.longitude
+                latitude = Coordinates.NAPOLI.latitude, longitude = Coordinates.NAPOLI.longitude
             ), zoom = 15.0
         )
     )
 
-    val geoJsonFeatures = remember(state.membersLocation) {
-        if (state.membersLocation == null) {
+    val geoJsonFeatures = remember(state.membersLocationRecord) {
+        if (state.membersLocationRecord == null) {
             null
         } else {
-            state.membersLocation!!.map { entry ->
+            state.membersLocationRecord!!.map { entry ->
                 val member = state.members!!.firstOrNull() { member -> member.id == entry.key }
                     ?: return@map null
                 GeoJsonFeature(
@@ -98,12 +98,12 @@ fun AnonymousGroupDetailsScreen(
         viewModel.snackbarEvents.collect { snackbarMessage ->
             val result = snackbarHostState.showSnackbar(
                 message = snackbarMessage.text,
-                snackbarMessage.errorDialogInfo?.let { "More" },
+                snackbarMessage.errorInfo?.let { "More" },
                 withDismissAction = true
             )
             when (result) {
                 SnackbarResult.Dismissed -> Unit
-                SnackbarResult.ActionPerformed -> snackbarMessage.errorDialogInfo?.let {
+                SnackbarResult.ActionPerformed -> snackbarMessage.errorInfo?.let {
                     viewModel.showErrorDialog(it)
                 }
             }
@@ -128,7 +128,7 @@ fun AnonymousGroupDetailsScreen(
         }
     }
 
-    state.dialogErrorDialogInfo?.let {
+    state.dialogErrorInfo?.let {
         AlertDialog(title = { Text(it.title) }, text = { Text(it.body) }, dismissButton = {
             TextButton(onClick = { viewModel.hideErrorDialog() }) { Text("Dismiss") }
         }, confirmButton = {}, onDismissRequest = { viewModel.hideErrorDialog() })

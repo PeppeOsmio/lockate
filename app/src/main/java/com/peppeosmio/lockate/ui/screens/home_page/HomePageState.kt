@@ -1,7 +1,7 @@
 package com.peppeosmio.lockate.ui.screens.home_page
 
 import com.peppeosmio.lockate.domain.ConnectionSettings
-import com.peppeosmio.lockate.utils.ErrorDialogInfo
+import com.peppeosmio.lockate.utils.ErrorInfo
 
 data class HomePageState(
     val showLoadingOverlay: Boolean = false,
@@ -12,7 +12,7 @@ data class HomePageState(
     val searchText: String = "",
     val registeredOnSearch: ((query: String) -> Unit)? = null,
     val registeredOnTapFab: (() -> Unit)? = null,
-    val dialogErrorDialogInfo: ErrorDialogInfo? = null,
+    val dialogErrorInfo: ErrorInfo? = null,
     val selectedConnectionSettingsId: Long? = null,
     val connectionSettings: List<ConnectionSettings>? = null,
     val isConnectionsMenuOpen: Boolean = false,

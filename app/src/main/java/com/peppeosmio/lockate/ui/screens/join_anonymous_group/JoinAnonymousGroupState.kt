@@ -1,6 +1,6 @@
 package com.peppeosmio.lockate.ui.screens.join_anonymous_group
 
-import com.peppeosmio.lockate.utils.ErrorDialogInfo
+import com.peppeosmio.lockate.utils.ErrorInfo
 
 data class JoinAnonymousGroupState(
     val showLoadingOverlay: Boolean = false,
@@ -10,5 +10,5 @@ data class JoinAnonymousGroupState(
     val memberPasswordError: String? = null,
     val memberNameText: String= "",
     val memberNameError: String? = null,
-    val dialogErrorDialogInfo: ErrorDialogInfo? = null,
+    val dialogErrorInfo: ErrorInfo? = null,
 )

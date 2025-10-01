@@ -1,6 +1,5 @@
 package com.peppeosmio.lockate.ui.screens.anonymous_group_details
 
-import android.util.Log
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,7 +10,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -20,7 +18,6 @@ import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import com.peppeosmio.lockate.R
-import com.peppeosmio.lockate.service.location.Location
 import dev.sargunv.maplibrecompose.compose.CameraState
 import dev.sargunv.maplibrecompose.compose.ClickResult
 import dev.sargunv.maplibrecompose.compose.MaplibreMap
@@ -29,22 +26,17 @@ import dev.sargunv.maplibrecompose.compose.layer.SymbolLayer
 import dev.sargunv.maplibrecompose.compose.rememberStyleState
 import dev.sargunv.maplibrecompose.compose.source.rememberGeoJsonSource
 import dev.sargunv.maplibrecompose.core.BaseStyle
-import dev.sargunv.maplibrecompose.core.CameraPosition
 import dev.sargunv.maplibrecompose.core.MapOptions
 import dev.sargunv.maplibrecompose.core.OrnamentOptions
-import dev.sargunv.maplibrecompose.core.RenderOptions
 import dev.sargunv.maplibrecompose.core.source.GeoJsonData
 import dev.sargunv.maplibrecompose.core.source.GeoJsonOptions
 import dev.sargunv.maplibrecompose.expressions.ast.ColorLiteral
 import dev.sargunv.maplibrecompose.expressions.dsl.const
 import dev.sargunv.maplibrecompose.expressions.dsl.convertToString
 import dev.sargunv.maplibrecompose.expressions.dsl.offset
-import dev.sargunv.maplibrecompose.expressions.value.SymbolOverlap
 import dev.sargunv.maplibrecompose.material3.controls.DisappearingCompassButton
 import io.github.dellisd.spatialk.geojson.Feature
 import io.github.dellisd.spatialk.geojson.FeatureCollection
-import io.github.dellisd.spatialk.geojson.Position
-import kotlinx.coroutines.launch
 
 @Composable
 fun MembersMap(

@@ -3,7 +3,7 @@ package com.peppeosmio.lockate.di
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
 import com.peppeosmio.lockate.service.ConnectionSettingsService
 import com.peppeosmio.lockate.service.PermissionsService
-import com.peppeosmio.lockate.service.location.LocationService
+import com.peppeosmio.lockate.platform_service.LocationService
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.AnonymousGroupDetailsViewModel
 import com.peppeosmio.lockate.ui.screens.anonymous_groups.AnonymousGroupsViewModel
 import com.peppeosmio.lockate.ui.screens.connection_settings.ConnectionSettingsViewModel

@@ -15,21 +15,25 @@ import androidx.room.PrimaryKey
 )
 data class AnonymousGroupEntity(
     @PrimaryKey val id: String,
-    // name
     val name: String,
     val createdAt: Long,
     val joinedAt: Long,
-    // member
-    val memberName: String,
-    val memberId: String,
-    val memberToken: ByteArray,
-    val adminToken: ByteArray?,
+
     val isMember: Boolean,
     val existsRemote: Boolean,
     val sendLocation: Boolean,
-    // TODO don't save it here
-    val memberPassword: String,
-    val connectionSettingsId: Long
+    val connectionSettingsId: Long,
+
+    val memberName: String,
+    val memberId: String,
+    val memberTokenCipher: ByteArray,
+    val memberTokenIv: ByteArray,
+
+    val adminTokenCipher: ByteArray?,
+    val adminTokenIv: ByteArray?,
+
+    val keyCipher: ByteArray,
+    val keyIv: ByteArray,
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -42,17 +46,23 @@ data class AnonymousGroupEntity(
         if (isMember != other.isMember) return false
         if (existsRemote != other.existsRemote) return false
         if (sendLocation != other.sendLocation) return false
+        if (connectionSettingsId != other.connectionSettingsId) return false
         if (id != other.id) return false
         if (name != other.name) return false
         if (memberName != other.memberName) return false
         if (memberId != other.memberId) return false
-        if (!memberToken.contentEquals(other.memberToken)) return false
-        if (adminToken != null) {
-            if (other.adminToken == null) return false
-            if (!adminToken.contentEquals(other.adminToken)) return false
-        } else if (other.adminToken != null) return false
-        if (memberPassword != other.memberPassword) return false
-        if (connectionSettingsId != other.connectionSettingsId) return false
+        if (!memberTokenCipher.contentEquals(other.memberTokenCipher)) return false
+        if (!memberTokenIv.contentEquals(other.memberTokenIv)) return false
+        if (adminTokenCipher != null) {
+            if (other.adminTokenCipher == null) return false
+            if (!adminTokenCipher.contentEquals(other.adminTokenCipher)) return false
+        } else if (other.adminTokenCipher != null) return false
+        if (adminTokenIv != null) {
+            if (other.adminTokenIv == null) return false
+            if (!adminTokenIv.contentEquals(other.adminTokenIv)) return false
+        } else if (other.adminTokenIv != null) return false
+        if (!keyCipher.contentEquals(other.keyCipher)) return false
+        if (!keyIv.contentEquals(other.keyIv)) return false
 
         return true
     }
@@ -63,14 +73,17 @@ data class AnonymousGroupEntity(
         result = 31 * result + isMember.hashCode()
         result = 31 * result + existsRemote.hashCode()
         result = 31 * result + sendLocation.hashCode()
+        result = 31 * result + connectionSettingsId.hashCode()
         result = 31 * result + id.hashCode()
         result = 31 * result + name.hashCode()
         result = 31 * result + memberName.hashCode()
         result = 31 * result + memberId.hashCode()
-        result = 31 * result + memberToken.contentHashCode()
-        result = 31 * result + (adminToken?.contentHashCode() ?: 0)
-        result = 31 * result + memberPassword.hashCode()
-        result = 31 * result + connectionSettingsId.hashCode()
+        result = 31 * result + memberTokenCipher.contentHashCode()
+        result = 31 * result + memberTokenIv.contentHashCode()
+        result = 31 * result + (adminTokenCipher?.contentHashCode() ?: 0)
+        result = 31 * result + (adminTokenIv?.contentHashCode() ?: 0)
+        result = 31 * result + keyCipher.contentHashCode()
+        result = 31 * result + keyIv.contentHashCode()
         return result
     }
 }

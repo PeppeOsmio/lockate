@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "c1884b3d819be8aeb97e64d45ac4ae30",
+    "identityHash": "00073c841dffbf3c72e1b06feda14978",
     "entities": [
       {
         "tableName": "connection_settings",
@@ -45,7 +45,7 @@
       },
       {
         "tableName": "anonymous_group",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `joinedAt` INTEGER NOT NULL, `memberName` TEXT NOT NULL, `memberId` TEXT NOT NULL, `memberToken` BLOB NOT NULL, `adminToken` BLOB, `isMember` INTEGER NOT NULL, `existsRemote` INTEGER NOT NULL, `sendLocation` INTEGER NOT NULL, `memberPassword` TEXT NOT NULL, `connectionSettingsId` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`connectionSettingsId`) REFERENCES `connection_settings`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `joinedAt` INTEGER NOT NULL, `isMember` INTEGER NOT NULL, `existsRemote` INTEGER NOT NULL, `sendLocation` INTEGER NOT NULL, `connectionSettingsId` INTEGER NOT NULL, `memberName` TEXT NOT NULL, `memberId` TEXT NOT NULL, `memberTokenCipher` BLOB NOT NULL, `memberTokenIv` BLOB NOT NULL, `adminTokenCipher` BLOB, `adminTokenIv` BLOB, `keyCipher` BLOB NOT NULL, `keyIv` BLOB NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`connectionSettingsId`) REFERENCES `connection_settings`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -72,29 +72,6 @@
             "notNull": true
           },
           {
-            "fieldPath": "memberName",
-            "columnName": "memberName",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "memberId",
-            "columnName": "memberId",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "memberToken",
-            "columnName": "memberToken",
-            "affinity": "BLOB",
-            "notNull": true
-          },
-          {
-            "fieldPath": "adminToken",
-            "columnName": "adminToken",
-            "affinity": "BLOB"
-          },
-          {
             "fieldPath": "isMember",
             "columnName": "isMember",
             "affinity": "INTEGER",
@@ -113,15 +90,55 @@
             "notNull": true
           },
           {
-            "fieldPath": "memberPassword",
-            "columnName": "memberPassword",
+            "fieldPath": "connectionSettingsId",
+            "columnName": "connectionSettingsId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "memberName",
+            "columnName": "memberName",
             "affinity": "TEXT",
             "notNull": true
           },
           {
-            "fieldPath": "connectionSettingsId",
-            "columnName": "connectionSettingsId",
-            "affinity": "INTEGER",
+            "fieldPath": "memberId",
+            "columnName": "memberId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "memberTokenCipher",
+            "columnName": "memberTokenCipher",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "memberTokenIv",
+            "columnName": "memberTokenIv",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "adminTokenCipher",
+            "columnName": "adminTokenCipher",
+            "affinity": "BLOB"
+          },
+          {
+            "fieldPath": "adminTokenIv",
+            "columnName": "adminTokenIv",
+            "affinity": "BLOB"
+          },
+          {
+            "fieldPath": "keyCipher",
+            "columnName": "keyCipher",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "keyIv",
+            "columnName": "keyIv",
+            "affinity": "BLOB",
             "notNull": true
           }
         ],
@@ -234,7 +251,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'c1884b3d819be8aeb97e64d45ac4ae30')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '00073c841dffbf3c72e1b06feda14978')"
     ]
   }
 }

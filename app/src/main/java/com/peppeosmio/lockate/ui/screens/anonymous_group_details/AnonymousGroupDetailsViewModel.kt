@@ -3,14 +3,14 @@ package com.peppeosmio.lockate.ui.screens.anonymous_group_details
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.peppeosmio.lockate.domain.anonymous_group.AGLocation
+import com.peppeosmio.lockate.domain.anonymous_group.LocationRecord
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.exceptions.UnauthorizedException
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
-import com.peppeosmio.lockate.service.location.Location
-import com.peppeosmio.lockate.service.location.LocationService
+import com.peppeosmio.lockate.domain.Coordinates
+import com.peppeosmio.lockate.platform_service.LocationService
 import com.peppeosmio.lockate.utils.ErrorHandler
-import com.peppeosmio.lockate.utils.ErrorDialogInfo
+import com.peppeosmio.lockate.utils.ErrorInfo
 import com.peppeosmio.lockate.utils.SnackbarErrorMessage
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
@@ -30,8 +30,8 @@ class AnonymousGroupDetailsViewModel(
     val state = _state.asStateFlow()
     private val _snackbarEvents = Channel<SnackbarErrorMessage>()
     val snackbarEvents = _snackbarEvents.receiveAsFlow()
-    private val _mapLocationEvents = Channel<Location>()
-    val mapLocationEvents = _mapLocationEvents.receiveAsFlow()
+    private val _mapCoordinatesEvents = Channel<Coordinates>()
+    val mapLocationEvents = _mapCoordinatesEvents.receiveAsFlow()
 
 
     fun getInitialDetails(anonymousGroupId: String, connectionSettingsId: Long) {
@@ -77,20 +77,20 @@ class AnonymousGroupDetailsViewModel(
         val result = ErrorHandler.runAndHandleException {
             locationService.getCurrentLocation()
         }
-        if (result.errorDialogInfo != null) {
+        if (result.errorInfo != null) {
             _snackbarEvents.trySend(
                 SnackbarErrorMessage(
-                    text = "Connection error", errorDialogInfo = result.errorDialogInfo
+                    text = "Connection error", errorInfo = result.errorInfo
                 )
             )
         } else if (result.value == null) {
             _snackbarEvents.trySend(
                 SnackbarErrorMessage(
-                    "Geolocation is disabled", errorDialogInfo = null
+                    "Geolocation is disabled", errorInfo = null
                 )
             )
         } else {
-            _mapLocationEvents.trySend(result.value)
+            _mapCoordinatesEvents.trySend(result.value)
         }
     }
 
@@ -99,14 +99,14 @@ class AnonymousGroupDetailsViewModel(
         val result = ErrorHandler.runAndHandleException {
             anonymousGroupService.getAnonymousGroupById(anonymousGroupId)
         }
-        if (result.errorDialogInfo != null) {
+        if (result.errorInfo != null) {
             _snackbarEvents.trySend(
                 SnackbarErrorMessage(
                     text = "Can't get local anonymous group",
-                    errorDialogInfo = result.errorDialogInfo
+                    errorInfo = result.errorInfo
                 )
             )
-            result.errorDialogInfo.exception?.let { throw it }
+            result.errorInfo.exception?.let { throw it }
         } else {
             _state.update {
                 it.copy(
@@ -116,11 +116,11 @@ class AnonymousGroupDetailsViewModel(
         }
     }
 
-    private fun membersToLocationMap(members: List<AGMember>): Map<String, AGLocation> {
+    private fun membersToLocationMap(members: List<AGMember>): Map<String, LocationRecord> {
         return members.filter { member ->
-            member.lastLocation != null && member.id != state.value.anonymousGroup!!.memberId
+            member.lastLocationRecord != null && member.id != state.value.anonymousGroup!!.memberId
         }.associate { member ->
-            member.id to member.lastLocation!!
+            member.id to member.lastLocationRecord!!
         }
     }
 
@@ -135,20 +135,20 @@ class AnonymousGroupDetailsViewModel(
             anonymousGroupService.getLocalAGMembers(currentState.anonymousGroup.id)
         }
 
-        if (result.errorDialogInfo != null) {
+        if (result.errorInfo != null) {
             _snackbarEvents.trySend(
                 SnackbarErrorMessage(
-                    text = "Can't get local members", errorDialogInfo = result.errorDialogInfo
+                    text = "Can't get local members", errorInfo = result.errorInfo
                 )
             )
-            result.errorDialogInfo.exception?.let { throw it }
+            result.errorInfo.exception?.let { throw it }
             return
         } else {
             Log.d("", "Local members: ${result.value}")
             val map = membersToLocationMap(result.value!!)
             _state.update {
                 it.copy(
-                    members = result.value, membersLocation = map
+                    members = result.value, membersLocationRecord = map
                 )
             }
             Log.d(
@@ -168,20 +168,20 @@ class AnonymousGroupDetailsViewModel(
                 )
             )
         }
-        if (result.errorDialogInfo != null) {
+        if (result.errorInfo != null) {
             _snackbarEvents.trySend(
                 SnackbarErrorMessage(
-                    text = "Connection error", errorDialogInfo = result.errorDialogInfo
+                    text = "Connection error", errorInfo = result.errorInfo
                 )
             )
-            result.errorDialogInfo.exception?.let { throw it }
+            result.errorInfo.exception?.let { throw it }
         } else {
             Log.d("", "Remote members: ${result.value!!.map { it.id }}")
             val map = membersToLocationMap(result.value!!)
             Log.d("", "Remote members to location: $map")
             _state.update {
                 it.copy(
-                    members = result.value, membersLocation = map
+                    members = result.value, membersLocationRecord = map
                 )
             }
         }
@@ -225,8 +225,8 @@ class AnonymousGroupDetailsViewModel(
         _state.update {
             it.copy(isAdminTokenValid = isAdminTokenValid)
         }
-        if (result.errorDialogInfo != null) {
-            result.errorDialogInfo.exception?.let { throw it }
+        if (result.errorInfo != null) {
+            result.errorInfo.exception?.let { throw it }
         }
     }
 
@@ -236,33 +236,30 @@ class AnonymousGroupDetailsViewModel(
             return
         }
         _state.update { it.copy(showLoadingOverlay = true) }
-        val result = ErrorHandler.runAndHandleException() {
+        try {
             anonymousGroupService.getAdminToken(
                 connectionSettingsId = connectionSettingsId,
                 anonymousGroupId = currentState.anonymousGroup.id,
                 adminPassword = currentState.adminPasswordText
             )
-            true
-        }
-        if (result.errorDialogInfo != null) {
-            if (result.errorDialogInfo.exception is UnauthorizedException) {
-                _snackbarEvents.trySend(
+        } catch (e: Exception) {
+            when(e) {
+                is UnauthorizedException -> _snackbarEvents.trySend(
                     SnackbarErrorMessage(
                         text = "Incorrect admin password"
                     )
                 )
-            } else {
-                _snackbarEvents.trySend(
+                else -> _snackbarEvents.trySend(
                     SnackbarErrorMessage(
-                        text = "Connection error", errorDialogInfo = result.errorDialogInfo
+                        text = "Connection error", errorInfo = ErrorInfo.fromException(e)
                     )
                 )
             }
             _state.update { it.copy(showLoadingOverlay = false) }
-        } else {
-            _state.update { it.copy(showLoadingOverlay = false, isAdminTokenValid = true) }
-        }
+            return
 
+        }
+        _state.update { it.copy(showLoadingOverlay = false, isAdminTokenValid = true) }
         getLocalAG(anonymousGroupId = currentState.anonymousGroup.id)
     }
 
@@ -281,27 +278,27 @@ class AnonymousGroupDetailsViewModel(
                     connectionSettingsId = connectionSettingsId,
                     anonymousGroupId = state.value.anonymousGroup!!.id
                 ).collect { locationUpdate ->
-                    if (state.value.membersLocation == null) {
+                    if (state.value.membersLocationRecord == null) {
                         return@collect
                     }
-                    if (locationUpdate.agMemberId !in state.value.membersLocation!!.keys) {
+                    if (locationUpdate.agMemberId !in state.value.membersLocationRecord!!.keys) {
                         Log.d(
                             "", "Refetching members (new member ${locationUpdate.agMemberId})"
                         )
                         getRemoteMembers(connectionSettingsId)
                     }
-                    val currentLocation = state.value.membersLocation!![locationUpdate.agMemberId]
-                    if (currentLocation != locationUpdate.location) {
+                    val currentLocation = state.value.membersLocationRecord!![locationUpdate.agMemberId]
+                    if (currentLocation != locationUpdate.locationRecord) {
                         _state.update {
                             it.copy(
-                                membersLocation = it.membersLocation!! + (locationUpdate.agMemberId to locationUpdate.location)
+                                membersLocationRecord = it.membersLocationRecord!! + (locationUpdate.agMemberId to locationUpdate.locationRecord)
                             )
                         }
                     }
                 }
             }
-            if (result.errorDialogInfo != null) {
-                result.errorDialogInfo.exception?.printStackTrace()
+            if (result.errorInfo != null) {
+                result.errorInfo.exception?.printStackTrace()
                 Log.d("", "Streaming location failed, retrying in 10 s")
                 delay(10000L)
             }
@@ -326,11 +323,11 @@ class AnonymousGroupDetailsViewModel(
                 connectionSettingsId = connectionSettingsId, anonymousGroupId = anonymousGroupId
             )
         }
-        if (result.errorDialogInfo != null) {
+        if (result.errorInfo != null) {
             _state.update { it.copy(showLoadingOverlay = false) }
             _snackbarEvents.trySend(
                 SnackbarErrorMessage(
-                    text = "Connection error", errorDialogInfo = result.errorDialogInfo
+                    text = "Connection error", errorInfo = result.errorInfo
                 )
             )
             return false
@@ -357,10 +354,10 @@ class AnonymousGroupDetailsViewModel(
                 anonymousGroupId = state.value.anonymousGroup!!.id, sendLocation = newSendLocation
             )
         }
-        if (result.errorDialogInfo != null) {
+        if (result.errorInfo != null) {
             _snackbarEvents.trySend(
                 SnackbarErrorMessage(
-                    text = "Can't set trySend location", errorDialogInfo = result.errorDialogInfo
+                    text = "Can't set trySend location", errorInfo = result.errorInfo
                 )
             )
         } else {
@@ -369,11 +366,11 @@ class AnonymousGroupDetailsViewModel(
     }
 
     fun hideErrorDialog() {
-        _state.update { it.copy(dialogErrorDialogInfo = null) }
+        _state.update { it.copy(dialogErrorInfo = null) }
     }
 
-    fun showErrorDialog(errorDialogInfo: ErrorDialogInfo) {
-        _state.update { it.copy(dialogErrorDialogInfo = errorDialogInfo) }
+    fun showErrorDialog(errorInfo: ErrorInfo) {
+        _state.update { it.copy(dialogErrorInfo = errorInfo) }
     }
 
     fun hideReloadDataButton() {
@@ -381,21 +378,21 @@ class AnonymousGroupDetailsViewModel(
     }
 
     suspend fun locateMember(index: Int): Boolean {
-        if (state.value.membersLocation == null || state.value.members == null) {
+        if (state.value.membersLocationRecord == null || state.value.members == null) {
             return false
         }
         val result = ErrorHandler.runAndHandleException {
             val agMember = state.value.members!![index]
-            state.value.membersLocation!![agMember.id]?.let { location ->
+            state.value.membersLocationRecord!![agMember.id]?.let { location ->
                 Log.d("", "Locating member ${agMember.id}: $location")
-                _mapLocationEvents.trySend(location.coordinates)
+                _mapCoordinatesEvents.trySend(location.coordinates)
             }
         }
-        if (result.errorDialogInfo != null) {
+        if (result.errorInfo != null) {
             _snackbarEvents.trySend(
                 SnackbarErrorMessage(
                     text = "Member with index $index does not exist!",
-                    errorDialogInfo = result.errorDialogInfo
+                    errorInfo = result.errorInfo
                 )
             )
             return false

@@ -27,8 +27,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.peppeosmio.lockate.R
-import com.peppeosmio.lockate.routes.AnonymousGroupsRoute
-import com.peppeosmio.lockate.routes.GroupsRoute
+import com.peppeosmio.lockate.ui.routes.AnonymousGroupsRoute
+import com.peppeosmio.lockate.ui.routes.GroupsRoute
 import com.peppeosmio.lockate.ui.composables.PermissionsRequester
 import com.peppeosmio.lockate.ui.composables.RoundedSearchAppBar
 import com.peppeosmio.lockate.ui.screens.anonymous_groups.AnonymousGroupsScreen
@@ -77,12 +77,12 @@ fun HomePageScreen(
         viewModel.snackbarEvents.collect { snackbarMessage ->
             val result = snackbarHostState.showSnackbar(
                 message = snackbarMessage.text,
-                snackbarMessage.errorDialogInfo?.let { "More" },
+                snackbarMessage.errorInfo?.let { "More" },
                 withDismissAction = true
             )
             when (result) {
                 SnackbarResult.Dismissed -> Unit
-                SnackbarResult.ActionPerformed -> snackbarMessage.errorDialogInfo?.let {
+                SnackbarResult.ActionPerformed -> snackbarMessage.errorInfo?.let {
                     viewModel.showErrorDialog(it)
                 }
             }
@@ -90,7 +90,7 @@ fun HomePageScreen(
     }
 
     // Error dialog
-    state.dialogErrorDialogInfo?.let { error ->
+    state.dialogErrorInfo?.let { error ->
         AlertDialog(title = { Text(error.title) }, text = { Text(error.body) }, dismissButton = {
             TextButton(onClick = { viewModel.hideErrorDialog() }) { Text("Dismiss") }
         }, confirmButton = {}, onDismissRequest = { viewModel.hideErrorDialog() })

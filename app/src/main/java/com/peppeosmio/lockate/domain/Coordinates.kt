@@ -1,11 +1,8 @@
-package com.peppeosmio.lockate.service.location
+package com.peppeosmio.lockate.domain
 
-import android.util.Log
 import com.peppeosmio.lockate.utils.DoubleBytesUtils
-import dev.whyoleg.cryptography.bigint.encodeToByteArray
-import dev.whyoleg.cryptography.bigint.toBigInt
 
-data class Location(val latitude: Double, val longitude: Double) {
+data class Coordinates(val latitude: Double, val longitude: Double) {
     fun toByteArray(): ByteArray {
         val latitudeArray = DoubleBytesUtils.doubleToByteArray(latitude)
         val longitudeArray = DoubleBytesUtils.doubleToByteArray(longitude)
@@ -13,6 +10,6 @@ data class Location(val latitude: Double, val longitude: Double) {
     }
 
     companion object {
-        val NAPOLI = Location(latitude = 40.8517746, longitude = 14.2681244)
+        val NAPOLI = Coordinates(latitude = 40.8517746, longitude = 14.2681244)
     }
 }

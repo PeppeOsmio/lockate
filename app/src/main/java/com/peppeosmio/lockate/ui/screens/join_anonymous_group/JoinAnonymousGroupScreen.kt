@@ -51,19 +51,19 @@ fun JoinAnonymousGroupScreen(
         viewModel.snackbarEvents.collect { snackbarMessage ->
             val result = snackbarHostState.showSnackbar(
                 message = snackbarMessage.text,
-                snackbarMessage.errorDialogInfo?.let { "More" },
+                snackbarMessage.errorInfo?.let { "More" },
                 withDismissAction = true
             )
             when (result) {
                 SnackbarResult.Dismissed -> Unit
-                SnackbarResult.ActionPerformed -> snackbarMessage.errorDialogInfo?.let {
+                SnackbarResult.ActionPerformed -> snackbarMessage.errorInfo?.let {
                     viewModel.showErrorDialog(it)
                 }
             }
         }
     }
 
-    state.dialogErrorDialogInfo?.let {
+    state.dialogErrorInfo?.let {
         AlertDialog(title = { Text(it.title) }, text = { Text(it.body) }, dismissButton = {
             TextButton(onClick = { viewModel.hideErrorDialog() }) { Text("Dismiss") }
         }, confirmButton = {}, onDismissRequest = { viewModel.hideErrorDialog() })

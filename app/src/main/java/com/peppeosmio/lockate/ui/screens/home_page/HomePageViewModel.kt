@@ -5,7 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
 import com.peppeosmio.lockate.service.ConnectionSettingsService
 import com.peppeosmio.lockate.service.PermissionsService
-import com.peppeosmio.lockate.utils.ErrorDialogInfo
+import com.peppeosmio.lockate.utils.ErrorInfo
 import com.peppeosmio.lockate.utils.ErrorHandler
 import com.peppeosmio.lockate.utils.SnackbarErrorMessage
 import kotlinx.coroutines.channels.Channel
@@ -94,10 +94,10 @@ class HomePageViewModel(
             anonymousGroupService.leaveAllAG(state.value.selectedConnectionSettingsId!!)
             connectionSettingsService.deleteConnectionSettings(state.value.selectedConnectionSettingsId!!)
         }
-        if (result.errorDialogInfo != null) {
+        if (result.errorInfo != null) {
             _snackbarEvents.trySend(
                 SnackbarErrorMessage(
-                    text = "Connection error", errorDialogInfo = result.errorDialogInfo
+                    text = "Connection error", errorInfo = result.errorInfo
                 )
             )
             _state.update { it.copy(showLoadingOverlay = false) }
@@ -108,11 +108,11 @@ class HomePageViewModel(
     }
 
     fun hideErrorDialog() {
-        _state.update { it.copy(dialogErrorDialogInfo = null) }
+        _state.update { it.copy(dialogErrorInfo = null) }
     }
 
-    fun showErrorDialog(errorDialogInfo: ErrorDialogInfo) {
-        _state.update { it.copy(dialogErrorDialogInfo = errorDialogInfo) }
+    fun showErrorDialog(errorInfo: ErrorInfo) {
+        _state.update { it.copy(dialogErrorInfo = errorInfo) }
     }
 
     fun showSnackbar(snackbarErrorMessage: SnackbarErrorMessage) {

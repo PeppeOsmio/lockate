@@ -5,15 +5,13 @@ import com.peppeosmio.lockate.exceptions.LocalAGExistsException
 import com.peppeosmio.lockate.exceptions.UnauthorizedException
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
 import com.peppeosmio.lockate.utils.ErrorHandler
-import com.peppeosmio.lockate.utils.ErrorDialogInfo
+import com.peppeosmio.lockate.utils.ErrorInfo
 import com.peppeosmio.lockate.utils.SnackbarErrorMessage
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.withContext
 
 class JoinAnonymousGroupViewModel(
     private val anonymousGroupService: AnonymousGroupService
@@ -58,7 +56,7 @@ class JoinAnonymousGroupViewModel(
                 idError = null,
                 memberPasswordError = null,
                 memberNameError = null,
-                dialogErrorDialogInfo = null
+                dialogErrorInfo = null
             )
         }
     }
@@ -71,13 +69,13 @@ class JoinAnonymousGroupViewModel(
         _state.update { it.copy(showLoadingOverlay = true) }
         val result = ErrorHandler.runAndHandleException(customHandler = { e ->
             when (e) {
-                is LocalAGExistsException -> ErrorDialogInfo(
+                is LocalAGExistsException -> ErrorInfo(
                     title = "Already joined",
                     body = "You already joined this anonymous group",
                     exception = e
                 )
 
-                is UnauthorizedException -> ErrorDialogInfo(
+                is UnauthorizedException -> ErrorInfo(
                     title = "Invalid member password",
                     body = "The member password provided is invalid.",
                     exception = e
@@ -95,14 +93,14 @@ class JoinAnonymousGroupViewModel(
             )
         }
         _state.update { it.copy(showLoadingOverlay = false) }
-        if (result.errorDialogInfo != null) {
-            val snackbarErrorMessage = when (result.errorDialogInfo.exception) {
+        if (result.errorInfo != null) {
+            val snackbarErrorMessage = when (result.errorInfo.exception) {
                 is LocalAGExistsException, is UnauthorizedException -> SnackbarErrorMessage(
-                    text = result.errorDialogInfo.body
+                    text = result.errorInfo.body
                 )
 
                 else -> SnackbarErrorMessage(
-                    "Can't join anonymous group", errorDialogInfo = result.errorDialogInfo
+                    "Can't join anonymous group", errorInfo = result.errorInfo
                 )
             }
             _snackbarEvents.trySend(snackbarErrorMessage)
@@ -113,10 +111,10 @@ class JoinAnonymousGroupViewModel(
     }
 
     fun hideErrorDialog() {
-        _state.update { it.copy(dialogErrorDialogInfo = null) }
+        _state.update { it.copy(dialogErrorInfo = null) }
     }
 
-    fun showErrorDialog(errorDialogInfo: ErrorDialogInfo) {
-        _state.update { it.copy(dialogErrorDialogInfo = errorDialogInfo) }
+    fun showErrorDialog(errorInfo: ErrorInfo) {
+        _state.update { it.copy(dialogErrorInfo = errorInfo) }
     }
 }
