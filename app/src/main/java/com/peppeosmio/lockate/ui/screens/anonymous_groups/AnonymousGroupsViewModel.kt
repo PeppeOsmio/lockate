@@ -125,6 +125,9 @@ class AnonymousGroupsViewModel(
                 )
             }
             if (result.errorInfo != null) {
+                if(result.errorInfo.exception is CancellationException) {
+                    return
+                }
                 _snackbarEvents.trySend(
                     SnackbarErrorMessage(
                         text = "Connection error", errorInfo = result.errorInfo
