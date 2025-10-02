@@ -3,7 +3,7 @@ package com.peppeosmio.lockate.ui.screens.anonymous_group_details
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.peppeosmio.lockate.domain.anonymous_group.LocationRecord
+import com.peppeosmio.lockate.domain.LocationRecord
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.exceptions.UnauthorizedException
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
@@ -102,8 +102,7 @@ class AnonymousGroupDetailsViewModel(
         if (result.errorInfo != null) {
             _snackbarEvents.trySend(
                 SnackbarErrorMessage(
-                    text = "Can't get local anonymous group",
-                    errorInfo = result.errorInfo
+                    text = "Can't get local anonymous group", errorInfo = result.errorInfo
                 )
             )
             result.errorInfo.exception?.let { throw it }
@@ -148,7 +147,7 @@ class AnonymousGroupDetailsViewModel(
             val map = membersToLocationMap(result.value!!)
             _state.update {
                 it.copy(
-                    members = result.value, membersLocationRecord = map
+                    members = result.value, membersLocationRecords = map
                 )
             }
             Log.d(
@@ -181,7 +180,7 @@ class AnonymousGroupDetailsViewModel(
             Log.d("", "Remote members to location: $map")
             _state.update {
                 it.copy(
-                    members = result.value, membersLocationRecord = map
+                    members = result.value, membersLocationRecords = map
                 )
             }
         }
@@ -243,12 +242,13 @@ class AnonymousGroupDetailsViewModel(
                 adminPassword = currentState.adminPasswordText
             )
         } catch (e: Exception) {
-            when(e) {
+            when (e) {
                 is UnauthorizedException -> _snackbarEvents.trySend(
                     SnackbarErrorMessage(
                         text = "Incorrect admin password"
                     )
                 )
+
                 else -> _snackbarEvents.trySend(
                     SnackbarErrorMessage(
                         text = "Connection error", errorInfo = ErrorInfo.fromException(e)
@@ -278,20 +278,29 @@ class AnonymousGroupDetailsViewModel(
                     connectionSettingsId = connectionSettingsId,
                     anonymousGroupId = state.value.anonymousGroup!!.id
                 ).collect { locationUpdate ->
-                    if (state.value.membersLocationRecord == null) {
+                    if (state.value.membersLocationRecords == null) {
                         return@collect
                     }
-                    if (locationUpdate.agMemberId !in state.value.membersLocationRecord!!.keys) {
+                    if (locationUpdate.agMemberId !in state.value.membersLocationRecords!!.keys) {
                         Log.d(
                             "", "Refetching members (new member ${locationUpdate.agMemberId})"
                         )
                         getRemoteMembers(connectionSettingsId)
                     }
-                    val currentLocation = state.value.membersLocationRecord!![locationUpdate.agMemberId]
-                    if (currentLocation != locationUpdate.locationRecord) {
+                    val currentLocation =
+                        state.value.membersLocationRecords!![locationUpdate.agMemberId]
+                    if (currentLocation?.id != locationUpdate.locationRecord.id) {
                         _state.update {
+                            val memberIndex =
+                                it.members!!.indexOfFirst { member -> member.id == locationUpdate.agMemberId }
+                            val newMembers = it.members.toMutableList()
+                            if (memberIndex != -1) {
+                                newMembers[memberIndex] =
+                                    newMembers[memberIndex].copy(lastLocationRecord = locationUpdate.locationRecord)
+                            }
                             it.copy(
-                                membersLocationRecord = it.membersLocationRecord!! + (locationUpdate.agMemberId to locationUpdate.locationRecord)
+                                membersLocationRecords = it.membersLocationRecords!! + (locationUpdate.agMemberId to locationUpdate.locationRecord),
+                                members = newMembers
                             )
                         }
                     }
@@ -378,12 +387,12 @@ class AnonymousGroupDetailsViewModel(
     }
 
     suspend fun locateMember(index: Int): Boolean {
-        if (state.value.membersLocationRecord == null || state.value.members == null) {
+        if (state.value.membersLocationRecords == null || state.value.members == null) {
             return false
         }
         val result = ErrorHandler.runAndHandleException {
             val agMember = state.value.members!![index]
-            state.value.membersLocationRecord!![agMember.id]?.let { location ->
+            state.value.membersLocationRecords!![agMember.id]?.let { location ->
                 Log.d("", "Locating member ${agMember.id}: $location")
                 _mapCoordinatesEvents.trySend(location.coordinates)
             }
@@ -391,8 +400,7 @@ class AnonymousGroupDetailsViewModel(
         if (result.errorInfo != null) {
             _snackbarEvents.trySend(
                 SnackbarErrorMessage(
-                    text = "Member with index $index does not exist!",
-                    errorInfo = result.errorInfo
+                    text = "Member with index $index does not exist!", errorInfo = result.errorInfo
                 )
             )
             return false

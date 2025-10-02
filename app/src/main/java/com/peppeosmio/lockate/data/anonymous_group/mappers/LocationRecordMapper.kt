@@ -2,7 +2,7 @@ package com.peppeosmio.lockate.data.anonymous_group.mappers
 
 import com.peppeosmio.lockate.data.anonymous_group.remote.EncryptedLocationRecordDto
 import com.peppeosmio.lockate.domain.Coordinates
-import com.peppeosmio.lockate.domain.anonymous_group.LocationRecord
+import com.peppeosmio.lockate.domain.LocationRecord
 import com.peppeosmio.lockate.exceptions.InvalidByteCoordinatesException
 import com.peppeosmio.lockate.service.crypto.CryptoService
 import com.peppeosmio.lockate.utils.DoubleBytesUtils
@@ -23,6 +23,7 @@ object LocationRecordMapper {
             val longitude =
                 DoubleBytesUtils.byteArrayToDouble(decryptedCoordinates.copyOfRange(8, 16))
             return LocationRecord(
+                id = encryptedLocationRecordDto.id,
                 coordinates = Coordinates(latitude = latitude, longitude = longitude),
                 timestamp = encryptedLocationRecordDto.timestamp
             )
@@ -40,6 +41,7 @@ object LocationRecordMapper {
             key = key,
         )
         return EncryptedLocationRecordDto(
+            id = locationRecord.id,
             encryptedCoordinates = EncryptedDataMapper.toDto(encryptedCoordinates),
             timestamp = locationRecord.timestamp,
         )

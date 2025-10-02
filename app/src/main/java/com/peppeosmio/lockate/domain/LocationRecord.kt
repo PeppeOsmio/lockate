@@ -1,9 +1,9 @@
-package com.peppeosmio.lockate.domain.anonymous_group
+package com.peppeosmio.lockate.domain
 
-import com.peppeosmio.lockate.domain.Coordinates
 import kotlinx.datetime.LocalDateTime
 
 data class LocationRecord(
+    val id: String,
     val coordinates: Coordinates,
     val timestamp: LocalDateTime
 )

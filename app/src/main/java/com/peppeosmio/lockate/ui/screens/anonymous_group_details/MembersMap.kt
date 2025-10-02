@@ -34,15 +34,21 @@ import dev.sargunv.maplibrecompose.expressions.ast.ColorLiteral
 import dev.sargunv.maplibrecompose.expressions.dsl.const
 import dev.sargunv.maplibrecompose.expressions.dsl.convertToString
 import dev.sargunv.maplibrecompose.expressions.dsl.offset
+import dev.sargunv.maplibrecompose.expressions.dsl.Feature
+import dev.sargunv.maplibrecompose.expressions.dsl.condition
+import dev.sargunv.maplibrecompose.expressions.dsl.convertToBoolean
+import dev.sargunv.maplibrecompose.expressions.dsl.eq
+import dev.sargunv.maplibrecompose.expressions.dsl.feature
+import dev.sargunv.maplibrecompose.expressions.dsl.switch
 import dev.sargunv.maplibrecompose.material3.controls.DisappearingCompassButton
-import io.github.dellisd.spatialk.geojson.Feature
+import io.github.dellisd.spatialk.geojson.Feature as GeoJsonFeature
 import io.github.dellisd.spatialk.geojson.FeatureCollection
 
 @Composable
 fun MembersMap(
     modifier: Modifier = Modifier,
     cameraState: CameraState,
-    features: List<Feature>?,
+    features: List<GeoJsonFeature>?,
     onTapMyLocation: () -> Unit
 ) {
     val styleState = rememberStyleState()
@@ -85,7 +91,13 @@ fun MembersMap(
                 id = "membersCircles", source = geoJsonSource, onClick = { features ->
                     println(features.toString())
                     ClickResult.Consume
-                }, radius = const(8.dp), color = ColorLiteral.of(MaterialTheme.colorScheme.primary)
+                }, radius = const(8.dp), color = switch(
+                    condition(
+                        test = feature.get("isOld").convertToBoolean() eq const(true),
+                        output = ColorLiteral.of(MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f)),
+                    ),
+                    fallback = ColorLiteral.of(MaterialTheme.colorScheme.primary),
+                )
             )
 
             SymbolLayer(
@@ -95,8 +107,7 @@ fun MembersMap(
                     println(features.toString())
                     ClickResult.Consume
                 },
-                textField = dev.sargunv.maplibrecompose.expressions.dsl.Feature.get(const("name"))
-                    .convertToString(),
+                textField = Feature.get(const("name")).convertToString(),
                 textSize = const(
                     TextUnit(
                         value = 1.0f, type = TextUnitType.Em

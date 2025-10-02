@@ -1,5 +1,6 @@
 package com.peppeosmio.lockate.ui.screens.anonymous_group_details
 
+import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,8 +21,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -35,15 +38,23 @@ import dev.sargunv.maplibrecompose.core.CameraPosition
 import io.github.dellisd.spatialk.geojson.Feature as GeoJsonFeature
 import io.github.dellisd.spatialk.geojson.Point
 import io.github.dellisd.spatialk.geojson.Position
+import io.ktor.client.plugins.logging.Logging
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toInstant
 import kotlinx.serialization.json.JsonPrimitive
 import org.koin.compose.viewmodel.koinViewModel
+import kotlin.time.Clock
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.ExperimentalTime
 
 enum class AnonymousGroupDetailsTab {
     Map, Members, Admin
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalTime::class)
 @Composable
 fun AnonymousGroupDetailsScreen(
     viewModel: AnonymousGroupDetailsViewModel = koinViewModel(),
@@ -57,6 +68,8 @@ fun AnonymousGroupDetailsScreen(
     val pagerState = rememberPagerState(initialPage = 0) { tabs.size }
     val coroutineScope = rememberCoroutineScope()
 
+    var oldLocations by remember { mutableStateOf(emptySet<String>()) }
+
     val snackbarHostState = remember { SnackbarHostState() }
     val mapCameraState = rememberCameraState(
         firstPosition = CameraPosition(
@@ -66,21 +79,44 @@ fun AnonymousGroupDetailsScreen(
         )
     )
 
-    val geoJsonFeatures = remember(state.membersLocationRecord) {
-        if (state.membersLocationRecord == null) {
+    LaunchedEffect(state.membersLocationRecords) {
+        state.membersLocationRecords?.forEach { memberId, locationRecord ->
+            oldLocations -= memberId
+            val now = Clock.System.now()
+            val locationTimestamp =
+                locationRecord.timestamp.toInstant(TimeZone.currentSystemDefault())
+            if (locationTimestamp > now) {
+                return@forEach
+            }
+            var msToWait = (locationTimestamp.plus(5.minutes) - now).inWholeMilliseconds
+            if (msToWait < 0) {
+                msToWait = 0
+            }
+            launch {
+                delay(msToWait)
+                if (state.membersLocationRecords!![memberId]?.id == locationRecord.id) {
+                    oldLocations += memberId
+                }
+            }
+        }
+    }
+
+    val geoJsonFeatures = remember(state.membersLocationRecords, oldLocations) {
+        if (state.membersLocationRecords == null) {
             null
         } else {
-            state.membersLocationRecord!!.map { entry ->
-                val member = state.members!!.firstOrNull() { member -> member.id == entry.key }
+            state.membersLocationRecords!!.map { (memberId, locationRecord) ->
+                val member = state.members!!.firstOrNull() { member -> member.id == memberId }
                     ?: return@map null
                 GeoJsonFeature(
                     geometry = Point(
                         coordinates = Position(
-                            latitude = entry.value.coordinates.latitude,
-                            longitude = entry.value.coordinates.longitude
+                            latitude = locationRecord.coordinates.latitude,
+                            longitude = locationRecord.coordinates.longitude
                         )
                     ), properties = mapOf(
-                        "name" to JsonPrimitive(member.name)
+                        "name" to JsonPrimitive(member.name),
+                        "isOld" to JsonPrimitive(oldLocations.contains(memberId))
                     )
                 )
             }.filterNotNull()

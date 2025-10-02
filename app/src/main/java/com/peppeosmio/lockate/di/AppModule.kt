@@ -6,6 +6,7 @@ import com.google.android.gms.location.LocationServices
 import com.peppeosmio.lockate.AppDatabase
 import com.peppeosmio.lockate.dao.AnonymousGroupDao
 import com.peppeosmio.lockate.dao.ConnectionSettingsDao
+import com.peppeosmio.lockate.migrations.MIGRATION_1_2
 import com.peppeosmio.lockate.platform_service.KeyStoreService
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
 import com.peppeosmio.lockate.service.ConnectionSettingsService
@@ -29,7 +30,7 @@ val appModule = module {
     single<AppDatabase> {
         Room.databaseBuilder(
             androidContext(), AppDatabase::class.java, "lockate.db"
-        ).build()
+        ).addMigrations(MIGRATION_1_2).build()
     }
 
     // DAO from the database

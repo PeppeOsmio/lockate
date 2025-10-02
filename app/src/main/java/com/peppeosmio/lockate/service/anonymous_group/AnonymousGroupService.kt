@@ -112,7 +112,7 @@ class AnonymousGroupService(
                 ?: throw LocalAGNotFoundException()
             anonymousGroupDao.listAGMembers(anonymousGroupId).map {
                 Log.d("", "found entity: $it")
-                AGMember.fromEntity(it)
+                AGMemberMapper.entityToDomain(it)
             }
         }
 
@@ -246,12 +246,12 @@ class AnonymousGroupService(
         }
 
         val createResponseBody = createResponse.body<AGCreateResponseDto>()
-        val agMember = AGMemberMapper.toDomain(
+        val agMember = AGMemberMapper.dtoToDomain(
             encryptedAGMemberDto = createResponseBody.authenticatedMemberInfo.member,
             cryptoService = cryptoService,
             key = key
         )
-        val agMemberEntity = AGMemberMapper.toEntity(
+        val agMemberEntity = AGMemberMapper.domainToEntity(
             agMember = agMember,
             anonymousGroupId = createResponseBody.anonymousGroup.id,
         )
@@ -398,12 +398,12 @@ class AnonymousGroupService(
             else -> ErrorHandler.handleGeneric(memberAuthVerifyResponse)
         }
         val memberAuthVerifyResBody = memberAuthVerifyResponse.body<AGMemberAuthVerifyResponseDto>()
-        val agMember = AGMemberMapper.toDomain(
+        val agMember = AGMemberMapper.dtoToDomain(
             encryptedAGMemberDto = memberAuthVerifyResBody.authenticatedMemberInfo.member,
             cryptoService = cryptoService,
             key = key
         )
-        val agMemberEntity = AGMemberMapper.toEntity(
+        val agMemberEntity = AGMemberMapper.domainToEntity(
             agMember = agMember, anonymousGroupId = anonymousGroupId
         )
         anonymousGroupDao.createAGWithMembers(
@@ -512,7 +512,7 @@ class AnonymousGroupService(
         val encryptedMembers = response.body<AGGetMembersResponseDto>().members
         val decryptedMembers = encryptedMembers.map {
             async {
-                AGMemberMapper.toDomain(
+                AGMemberMapper.dtoToDomain(
                     encryptedAGMemberDto = it,
                     cryptoService = cryptoService,
                     key = anonymousGroup.key
@@ -522,10 +522,7 @@ class AnonymousGroupService(
         Log.d("", "Decrypted members: ${decryptedMembers.map { it.id }}")
         anonymousGroupDao.setAGMembers(
             anonymousGroupId = anonymousGroupId, agMemberEntities = decryptedMembers.map {
-                val entity = it.toEntity(
-                    anonymousGroupId = anonymousGroupId
-                )
-                entity
+                AGMemberMapper.domainToEntity(agMember = it, anonymousGroupId = anonymousGroupId)
             })
         decryptedMembers
     }
