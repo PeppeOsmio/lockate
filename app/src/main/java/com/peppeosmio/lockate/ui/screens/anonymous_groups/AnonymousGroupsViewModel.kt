@@ -6,6 +6,7 @@ import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupEvent
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
 import com.peppeosmio.lockate.utils.ErrorHandler
 import com.peppeosmio.lockate.utils.SnackbarErrorMessage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,6 +42,9 @@ class AnonymousGroupsViewModel(
             )
         }
         if (result.errorInfo != null) {
+            if(result.errorInfo.exception is CancellationException) {
+                return
+            }
             _state.update { it.copy(showLoadingOverlay = false) }
             _snackbarEvents.trySend(
                 SnackbarErrorMessage(
