@@ -4,7 +4,7 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
-import com.peppeosmio.lockate.android_service.PlatformLocationService
+import com.peppeosmio.lockate.android_service.AndroidLocationService
 import com.peppeosmio.lockate.di.appModule
 import com.peppeosmio.lockate.di.viewModelModule
 import org.koin.android.ext.koin.androidContext
@@ -20,7 +20,7 @@ class LockateApplication : Application() {
                 appModule, viewModelModule
             )
             val channel = NotificationChannel(
-                PlatformLocationService.NOTIFICATION_CHANNEL_ID,
+                AndroidLocationService.NOTIFICATION_CHANNEL_ID,
                 "Location",
                 NotificationManager.IMPORTANCE_LOW
             )

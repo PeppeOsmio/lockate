@@ -635,6 +635,8 @@ class AnonymousGroupService(
                 var availableConnections = getAvailableConnections(connectionSettingsList)
                 var availableAGs = getAvailableAGs(availableConnections)
                 updateActiveAGCount(availableAGs)
+                Log.i("", "Available connections: ${availableConnections.size}")
+                Log.i("", "Available AGs: $availableAGs")
                 if (availableAGs == 0) {
                     delay(10000L)
                     continue
@@ -646,8 +648,10 @@ class AnonymousGroupService(
                         availableConnections = getAvailableConnections(connectionSettingsList)
                         availableAGs = getAvailableAGs(availableConnections)
                         updateActiveAGCount(availableAGs)
+                        Log.i("", "Available connections: ${availableConnections.size}")
+                        Log.i("", "Available AGs: $availableAGs")
                         if (availableAGs == 0) {
-                            throw Exception()
+                            throw Exception("No available anonymous groups, exiting getLocationUpdates()")
                         }
                         availableConnections.forEach { connectionSettings ->
                             val agsToSendLocation =
@@ -705,13 +709,16 @@ class AnonymousGroupService(
                                             404 -> throw RemoteAGNotFoundException()
                                             else -> ErrorHandler.handleGeneric(response)
                                         }
-                                    } catch (e: UnauthorizedException) {
-                                        e.printStackTrace()
-                                        setAGIsMemberFalse(anonymousGroup.id)
-                                    } catch (e: RemoteAGNotFoundException) {
-                                        e.printStackTrace()
-                                        setAGExistsRemoteFalse(anonymousGroup.id)
                                     } catch (e: Exception) {
+                                        when (e) {
+                                            is UnauthorizedException -> setAGIsMemberFalse(
+                                                anonymousGroup.id
+                                            )
+
+                                            is RemoteAGNotFoundException -> setAGExistsRemoteFalse(
+                                                anonymousGroup.id
+                                            )
+                                        }
                                         e.printStackTrace()
                                     }
                                 }
