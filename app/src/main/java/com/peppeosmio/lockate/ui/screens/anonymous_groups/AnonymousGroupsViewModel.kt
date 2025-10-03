@@ -72,7 +72,6 @@ class AnonymousGroupsViewModel(
 
     private suspend fun collectAGEvents() {
         anonymousGroupService.events.collect { event ->
-            Log.d("", "event: $event")
             when (event) {
                 is AnonymousGroupEvent.NewAnonymousGroupEvent -> {
                     val currentState = state.value
