@@ -12,7 +12,7 @@ data object LoadingRoute : Route
 data class ConnectionSettingsRoute(val initialConnectionSettingsId: Long?) : Route
 
 @Serializable
-data class HomeRoute(val initialConnectionSettingsId: Long) : Route
+data object HomeRoute : Route
 
 @Serializable
 data class CreateAnonymousGroupRoute(val connectionSettingsId: Long) : Route

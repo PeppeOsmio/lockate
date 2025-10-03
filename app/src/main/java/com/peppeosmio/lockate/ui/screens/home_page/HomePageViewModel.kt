@@ -2,6 +2,7 @@ package com.peppeosmio.lockate.ui.screens.home_page
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.peppeosmio.lockate.exceptions.ConnectionSettingsNotFoundException
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
 import com.peppeosmio.lockate.service.ConnectionSettingsService
 import com.peppeosmio.lockate.service.PermissionsService
@@ -31,9 +32,15 @@ class HomePageViewModel(
         viewModelScope.launch {
             val connectionSettings = connectionSettingsService.listConnectionSettings()
             if (connectionSettings.isNotEmpty()) {
-                _state.update { it.copy(connectionSettings = connectionSettings) }
+                _state.update { it.copy(connectionSettings = connectionSettings.associateBy { connectionSettings -> connectionSettings.id!! }) }
             } else {
                 _state.update { it.copy(shouldRedirectToCredentialsPage = true) }
+            }
+            try {
+                val selectedConnectionSettings = connectionSettingsService.getSelectedConnectionSettings()
+                _state.update { it.copy(selectedConnectionSettingsId = selectedConnectionSettings.id) }
+            } catch (e: ConnectionSettingsNotFoundException) {
+                _snackbarEvents.trySend(SnackbarErrorMessage(text = "No connection settings found!"))
             }
         }
     }

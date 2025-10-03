@@ -3,6 +3,7 @@ package com.peppeosmio.lockate.ui.screens.anonymous_group_details
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.exceptions.UnauthorizedException
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
@@ -31,6 +32,8 @@ class AnonymousGroupDetailsViewModel(
     val snackbarEvents = _snackbarEvents.receiveAsFlow()
     private val _mapCoordinatesEvents = Channel<Coordinates>()
     val mapLocationEvents = _mapCoordinatesEvents.receiveAsFlow()
+    private val _navigateBackEvents = Channel<Unit>()
+    val navigateBackEvents = _navigateBackEvents.receiveAsFlow()
 
 
     fun getInitialDetails(anonymousGroupId: String, connectionSettingsId: Long) {
@@ -51,45 +54,49 @@ class AnonymousGroupDetailsViewModel(
         }
     }
 
-    suspend fun remoteOperations(connectionSettingsId: Long) {
-        _state.update { it.copy(reloadData = false) }
-        try {
-            coroutineScope {
-                launch {
-                    _state.update { it.copy(showLoadingIcon = false) }
-                    joinAll(launch {
-                        getRemoteMembers(connectionSettingsId)
-                    }, launch {
-                        verifyAdminAuth(connectionSettingsId)
-                    })
-                    _state.update { it.copy(showLoadingIcon = false) }
+    fun remoteOperations(connectionSettingsId: Long) {
+        viewModelScope.launch {
+            _state.update { it.copy(reloadData = false) }
+            try {
+                coroutineScope {
+                    launch {
+                        _state.update { it.copy(showLoadingIcon = false) }
+                        joinAll(launch {
+                            getRemoteMembers(connectionSettingsId)
+                        }, launch {
+                            verifyAdminAuth(connectionSettingsId)
+                        })
+                        _state.update { it.copy(showLoadingIcon = false) }
+                    }
                 }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _state.update { it.copy(showLoadingIcon = false, reloadData = true) }
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            _state.update { it.copy(showLoadingIcon = false, reloadData = true) }
         }
     }
 
     @Throws
-    suspend fun getCurrentLocation() {
-        val result = ErrorHandler.runAndHandleException {
-            locationService.getCurrentLocation()
-        }
-        if (result.errorInfo != null) {
-            _snackbarEvents.trySend(
-                SnackbarErrorMessage(
-                    text = "Connection error", errorInfo = result.errorInfo
+    fun getCurrentLocation() {
+        viewModelScope.launch {
+            val result = ErrorHandler.runAndHandleException {
+                locationService.getCurrentLocation()
+            }
+            if (result.errorInfo != null) {
+                _snackbarEvents.trySend(
+                    SnackbarErrorMessage(
+                        text = "Connection error", errorInfo = result.errorInfo
+                    )
                 )
-            )
-        } else if (result.value == null) {
-            _snackbarEvents.trySend(
-                SnackbarErrorMessage(
-                    "Geolocation is disabled", errorInfo = null
+            } else if (result.value == null) {
+                _snackbarEvents.trySend(
+                    SnackbarErrorMessage(
+                        "Geolocation is disabled", errorInfo = null
+                    )
                 )
-            )
-        } else {
-            _mapCoordinatesEvents.trySend(result.value)
+            } else {
+                _mapCoordinatesEvents.trySend(result.value)
+            }
         }
     }
 
@@ -212,38 +219,40 @@ class AnonymousGroupDetailsViewModel(
         }
     }
 
-    suspend fun authAdmin(connectionSettingsId: Long) {
-        val currentState = state.value
-        if (currentState.anonymousGroup == null || currentState.adminPasswordText.isBlank()) {
-            return
-        }
-        _state.update { it.copy(showLoadingOverlay = true) }
-        try {
-            anonymousGroupService.getAdminToken(
-                connectionSettingsId = connectionSettingsId,
-                anonymousGroupId = currentState.anonymousGroup.id,
-                adminPassword = currentState.adminPasswordText
-            )
-        } catch (e: Exception) {
-            when (e) {
-                is UnauthorizedException -> _snackbarEvents.trySend(
-                    SnackbarErrorMessage(
-                        text = "Incorrect admin password"
-                    )
-                )
-
-                else -> _snackbarEvents.trySend(
-                    SnackbarErrorMessage(
-                        text = "Connection error", errorInfo = ErrorInfo.fromException(e)
-                    )
-                )
+    fun authAdmin(connectionSettingsId: Long) {
+        viewModelScope.launch {
+            val currentState = state.value
+            if (currentState.anonymousGroup == null || currentState.adminPasswordText.isBlank()) {
+                return@launch
             }
-            _state.update { it.copy(showLoadingOverlay = false) }
-            return
+            _state.update { it.copy(showLoadingOverlay = true) }
+            try {
+                anonymousGroupService.getAdminToken(
+                    connectionSettingsId = connectionSettingsId,
+                    anonymousGroupId = currentState.anonymousGroup.id,
+                    adminPassword = currentState.adminPasswordText
+                )
+            } catch (e: Exception) {
+                when (e) {
+                    is UnauthorizedException -> _snackbarEvents.trySend(
+                        SnackbarErrorMessage(
+                            text = "Incorrect admin password"
+                        )
+                    )
 
+                    else -> _snackbarEvents.trySend(
+                        SnackbarErrorMessage(
+                            text = "Connection error", errorInfo = ErrorInfo.fromException(e)
+                        )
+                    )
+                }
+                _state.update { it.copy(showLoadingOverlay = false) }
+                return@launch
+
+            }
+            _state.update { it.copy(showLoadingOverlay = false, isAdminTokenValid = true) }
+            getLocalAG(anonymousGroupId = currentState.anonymousGroup.id)
         }
-        _state.update { it.copy(showLoadingOverlay = false, isAdminTokenValid = true) }
-        getLocalAG(anonymousGroupId = currentState.anonymousGroup.id)
     }
 
 
@@ -301,26 +310,26 @@ class AnonymousGroupDetailsViewModel(
     }
 
     @Throws
-    suspend fun deleteAnonymousGroup(
+    fun deleteAnonymousGroup(
         connectionSettingsId: Long, anonymousGroupId: String
-    ): Boolean {
-        _state.update { it.copy(showLoadingOverlay = true) }
-        val result = ErrorHandler.runAndHandleException {
-            anonymousGroupService.deleteAnonymousGroup(
-                connectionSettingsId = connectionSettingsId, anonymousGroupId = anonymousGroupId
-            )
-        }
-        if (result.errorInfo != null) {
-            _state.update { it.copy(showLoadingOverlay = false) }
-            _snackbarEvents.trySend(
-                SnackbarErrorMessage(
-                    text = "Connection error", errorInfo = result.errorInfo
+    ) {
+        viewModelScope.launch {
+            _state.update { it.copy(showLoadingOverlay = true) }
+            try {
+                anonymousGroupService.deleteAnonymousGroup(
+                    connectionSettingsId = connectionSettingsId, anonymousGroupId = anonymousGroupId
                 )
-            )
-            return false
+                _state.update { it.copy(showLoadingOverlay = false) }
+                _navigateBackEvents.trySend(Unit)
+            } catch (e: Exception) {
+                _state.update { it.copy(showLoadingOverlay = false) }
+                _snackbarEvents.trySend(
+                    SnackbarErrorMessage(
+                        text = "Connection error", errorInfo = ErrorInfo.fromException(e)
+                    )
+                )
+            }
         }
-        _state.update { it.copy(showLoadingOverlay = false) }
-        return true
     }
 
     fun toggleDropdownMenu() {
@@ -331,24 +340,25 @@ class AnonymousGroupDetailsViewModel(
         _state.update { it.copy(isDropdownMenuOpen = false) }
     }
 
-    suspend fun toggleAGShareLocation() {
-        if (state.value.anonymousGroup == null) {
-            return
-        }
-        val newSendLocation = !state.value.anonymousGroup!!.sendLocation
-        val result = ErrorHandler.runAndHandleException {
-            anonymousGroupService.setAGShareLocation(
-                anonymousGroupId = state.value.anonymousGroup!!.id, sendLocation = newSendLocation
-            )
-        }
-        if (result.errorInfo != null) {
-            _snackbarEvents.trySend(
-                SnackbarErrorMessage(
-                    text = "Can't set trySend location", errorInfo = result.errorInfo
+    fun toggleAGShareLocation() {
+        viewModelScope.launch {
+            if (state.value.anonymousGroup == null) {
+                return@launch
+            }
+            val newSendLocation = !state.value.anonymousGroup!!.sendLocation
+            try {
+                anonymousGroupService.setAGShareLocation(
+                    anonymousGroupId = state.value.anonymousGroup!!.id,
+                    sendLocation = newSendLocation
                 )
-            )
-        } else {
-            _state.update { it.copy(anonymousGroup = it.anonymousGroup!!.copy(sendLocation = newSendLocation)) }
+                _state.update { it.copy(anonymousGroup = it.anonymousGroup!!.copy(sendLocation = newSendLocation)) }
+            } catch (e: Exception) {
+                _snackbarEvents.trySend(
+                    SnackbarErrorMessage(
+                        text = "Can't set location", errorInfo = ErrorInfo.fromException(e)
+                    )
+                )
+            }
         }
     }
 

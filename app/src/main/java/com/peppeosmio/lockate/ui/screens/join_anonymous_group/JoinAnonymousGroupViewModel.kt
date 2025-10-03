@@ -1,6 +1,8 @@
 package com.peppeosmio.lockate.ui.screens.join_anonymous_group
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.peppeosmio.lockate.exceptions.LocalAGExistsException
 import com.peppeosmio.lockate.exceptions.UnauthorizedException
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
@@ -12,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 class JoinAnonymousGroupViewModel(
     private val anonymousGroupService: AnonymousGroupService
@@ -20,6 +23,8 @@ class JoinAnonymousGroupViewModel(
     val state = _state.asStateFlow()
     private val _snackbarEvents = Channel<SnackbarErrorMessage>()
     val snackbarEvents = _snackbarEvents.receiveAsFlow()
+    private val _navigateBackEvents = Channel<Unit>()
+    val navigateBackEvents = _navigateBackEvents.receiveAsFlow()
 
     fun setIdText(text: String) {
         _state.update { it.copy(idText = text) }
@@ -61,52 +66,39 @@ class JoinAnonymousGroupViewModel(
         }
     }
 
-    suspend fun joinAnonymousGroup(connectionSettingsId: Long): String? {
-        if (!canConfirm()) {
-            return null
-        }
-        clearTextErrors()
-        _state.update { it.copy(showLoadingOverlay = true) }
-        val result = ErrorHandler.runAndHandleException(customHandler = { e ->
-            when (e) {
-                is LocalAGExistsException -> ErrorInfo(
-                    title = "Already joined",
-                    body = "You already joined this anonymous group",
-                    exception = e
-                )
-
-                is UnauthorizedException -> ErrorInfo(
-                    title = "Invalid member password",
-                    body = "The member password provided is invalid.",
-                    exception = e
-                )
-
-
-                else -> throw e
+    fun joinAnonymousGroup(connectionSettingsId: Long) {
+        viewModelScope.launch {
+            if (!canConfirm()) {
+                return@launch
             }
-        }) {
-            anonymousGroupService.authMember(
-                connectionSettingsId = connectionSettingsId,
-                anonymousGroupId = state.value.idText.trim(),
-                memberName = state.value.memberNameText.trim(),
-                memberPassword = state.value.memberPasswordText.trim()
-            )
-        }
-        _state.update { it.copy(showLoadingOverlay = false) }
-        if (result.errorInfo != null) {
-            val snackbarErrorMessage = when (result.errorInfo.exception) {
-                is LocalAGExistsException, is UnauthorizedException -> SnackbarErrorMessage(
-                    text = result.errorInfo.body
+            clearTextErrors()
+            _state.update { it.copy(showLoadingOverlay = true) }
+            try {
+                anonymousGroupService.authMember(
+                    connectionSettingsId = connectionSettingsId,
+                    anonymousGroupId = state.value.idText.trim(),
+                    memberName = state.value.memberNameText.trim(),
+                    memberPassword = state.value.memberPasswordText.trim()
                 )
+                _state.update { it.copy(showLoadingOverlay = false) }
+                _navigateBackEvents.trySend(Unit)
+            } catch (e: Exception) {
+                val snackbarErrorMessage = when (e) {
+                    is LocalAGExistsException -> SnackbarErrorMessage(
+                        "You already joined this anonymous group"
+                    )
 
-                else -> SnackbarErrorMessage(
-                    "Can't join anonymous group", errorInfo = result.errorInfo
-                )
+                    is UnauthorizedException -> SnackbarErrorMessage(
+                        "The member password provided is invalid."
+                    )
+
+                    else -> SnackbarErrorMessage(
+                        text = "Can't join anonymous group", errorInfo = ErrorInfo.fromException(e)
+                    )
+                }
+                _state.update { it.copy(showLoadingOverlay = false) }
+                _snackbarEvents.trySend(snackbarErrorMessage)
             }
-            _snackbarEvents.trySend(snackbarErrorMessage)
-            return null
-        } else {
-            return state.value.idText.trim()
         }
     }
 

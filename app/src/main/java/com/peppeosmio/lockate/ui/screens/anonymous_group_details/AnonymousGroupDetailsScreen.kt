@@ -101,6 +101,12 @@ fun AnonymousGroupDetailsScreen(
         }
     }
 
+    LaunchedEffect(true) {
+        viewModel.navigateBackEvents.collect {
+            navigateBack()
+        }
+    }
+
     val geoJsonFeatures = remember(state.members, oldLocations, state.anonymousGroup) {
         if (state.anonymousGroup == null) {
             null
@@ -182,16 +188,10 @@ fun AnonymousGroupDetailsScreen(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    coroutineScope.launch {
-                        val deleted = viewModel.deleteAnonymousGroup(
-                            connectionSettingsId = connectionSettingsId,
-                            anonymousGroupId = anonymousGroupId
-                        )
-                        viewModel.hideDeleteAGDialog()
-                        if (deleted) {
-                            navigateBack()
-                        }
-                    }
+                    viewModel.deleteAnonymousGroup(
+                        connectionSettingsId = connectionSettingsId,
+                        anonymousGroupId = anonymousGroupId
+                    )
                 }) { Text("Yes, delete") }
             },
             onDismissRequest = { viewModel.hideErrorDialog() })
@@ -241,9 +241,7 @@ fun AnonymousGroupDetailsScreen(
                                 onCheckedChange = null
                             )
                         }, text = { Text("Share location") }, onClick = {
-                            coroutineScope.launch {
-                                viewModel.toggleAGShareLocation()
-                            }
+                            viewModel.toggleAGShareLocation()
                         })
                         DropdownMenuItem(leadingIcon = {
                             Icon(

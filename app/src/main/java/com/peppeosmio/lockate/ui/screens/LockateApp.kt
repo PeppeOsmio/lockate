@@ -51,8 +51,8 @@ fun LockateApp(startLocationService: () -> Unit, stopLocationService: () -> Unit
             },
         ) {
             composable<LoadingRoute> {
-                LoadingScreen(navigateToHome = { connectionSettingsId ->
-                    appNavController.navigate(HomeRoute(connectionSettingsId)) {
+                LoadingScreen(navigateToHome = {
+                    appNavController.navigate(HomeRoute) {
                         popUpTo<LoadingRoute>() {
                             inclusive = true
                         }
@@ -65,13 +65,11 @@ fun LockateApp(startLocationService: () -> Unit, stopLocationService: () -> Unit
                     }
                 })
             }
-            composable<HomeRoute> { navBackStackEntry ->
-                val homeRoute: HomeRoute = navBackStackEntry.toRoute()
+            composable<HomeRoute> {
                 HomePageScreen(
-                    initialConnectionSettingsId = homeRoute.initialConnectionSettingsId,
                     navigateToConnectionSettings = {
-                        appNavController.navigate(ConnectionSettingsRoute(null)) {}
-                    },
+                    appNavController.navigate(ConnectionSettingsRoute(null)) {}
+                },
                     navigateToAGDetails = { connectionSettingsId, anonymousGroupId, anonymousGroupName ->
                         appNavController.navigate(
                             AnonymousGroupDetailsRoute(
@@ -120,8 +118,8 @@ fun LockateApp(startLocationService: () -> Unit, stopLocationService: () -> Unit
                 val connectionSettingsRoute = navBackStackEntry.toRoute<ConnectionSettingsRoute>()
                 ConnectionSettingsScreen(
                     initialConnectionSettingsId = connectionSettingsRoute.initialConnectionSettingsId,
-                    navigateToHome = { connectionSettingsId: Long ->
-                        appNavController.navigate(HomeRoute(connectionSettingsId)) {
+                    navigateToHome = {
+                        appNavController.navigate(HomeRoute) {
                             popUpTo(0) { inclusive = true }
                         }
                     })

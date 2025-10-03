@@ -14,6 +14,6 @@ data class HomePageState(
     val registeredOnTapFab: (() -> Unit)? = null,
     val dialogErrorInfo: ErrorInfo? = null,
     val selectedConnectionSettingsId: Long? = null,
-    val connectionSettings: List<ConnectionSettings>? = null,
+    val connectionSettings: Map<Long, ConnectionSettings>? = null,
     val isConnectionsMenuOpen: Boolean = false,
 )

@@ -12,19 +12,12 @@ import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
 fun LoadingScreen(
-    navigateToHome: (connectionSettingsId: Long) -> Unit,
+    navigateToHome: () -> Unit,
     navigateToConnectionSettings: () -> Unit,
     viewModel: LoadingViewModel = koinViewModel()
 ) {
     LaunchedEffect(true) {
-        viewModel.selectedConnectionSettingsId.collect {
-            Log.d("", "Received $it")
-            if (it != null) {
-                navigateToHome(it)
-            } else {
-                navigateToConnectionSettings()
-            }
-        }
+        navigateToHome()
     }
 
     Box(

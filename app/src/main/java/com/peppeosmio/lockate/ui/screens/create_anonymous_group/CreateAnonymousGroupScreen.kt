@@ -44,7 +44,6 @@ fun CreateAnonymousGroupScreen(
     viewModel: CreateAnonymousGroupViewModel = koinViewModel()
 ) {
     val state by viewModel.state.collectAsState()
-    val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val focusManager = LocalFocusManager.current
 
@@ -61,6 +60,12 @@ fun CreateAnonymousGroupScreen(
                     viewModel.showErrorDialog(it)
                 }
             }
+        }
+    }
+
+    LaunchedEffect(true) {
+        viewModel.navigateBackEvents.collect {
+            navigateBack()
         }
     }
 
@@ -89,13 +94,8 @@ fun CreateAnonymousGroupScreen(
             }
         }, actions = {
             IconButton(onClick = {
-                scope.launch {
-                    focusManager.clearFocus()
-                    val anonymousGroupId = viewModel.createAnonymousGroup(connectionSettingsId)
-                    if (anonymousGroupId != null) {
-                        navigateBack()
-                    }
-                }
+                focusManager.clearFocus()
+                viewModel.createAnonymousGroup(connectionSettingsId)
             }) {
                 Icon(
                     imageVector = Icons.Default.Done, contentDescription = "Done"

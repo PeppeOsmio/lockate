@@ -63,6 +63,12 @@ fun JoinAnonymousGroupScreen(
         }
     }
 
+    LaunchedEffect(true) {
+        viewModel.navigateBackEvents.collect {
+            navigateBack()
+        }
+    }
+
     state.dialogErrorInfo?.let {
         AlertDialog(title = { Text(it.title) }, text = { Text(it.body) }, dismissButton = {
             TextButton(onClick = { viewModel.hideErrorDialog() }) { Text("Dismiss") }
@@ -88,13 +94,8 @@ fun JoinAnonymousGroupScreen(
             }
         }, actions = {
             IconButton(onClick = {
-                scope.launch {
-                    focusManager.clearFocus()
-                    val anonymousGroupId = viewModel.joinAnonymousGroup(connectionSettingsId)
-                    if (anonymousGroupId != null) {
-                        navigateBack()
-                    }
-                }
+                focusManager.clearFocus()
+                viewModel.joinAnonymousGroup(connectionSettingsId)
             }) {
                 Icon(
                     imageVector = Icons.Default.Done, contentDescription = "Done"

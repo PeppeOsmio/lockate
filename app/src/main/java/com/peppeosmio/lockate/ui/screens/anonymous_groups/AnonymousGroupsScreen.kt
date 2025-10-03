@@ -48,11 +48,11 @@ fun AnonymousGroupsScreen(
 ) {
     val state by viewModel.state.collectAsState()
 
-    val scope = rememberCoroutineScope()
     val addSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val agSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val focusManager = LocalFocusManager.current
     val localClipboard = LocalClipboard.current
+    val coroutineScope = rememberCoroutineScope()
 
     DisposableEffect(true) {
         registerOnFabTap(viewModel::onFabTap)
@@ -80,18 +80,18 @@ fun AnonymousGroupsScreen(
     // Add group bottom sheet
     if (state.showAddBottomSheet) {
         AddAGBottomSheet(sheetState = addSheetState, onDismiss = {
-            scope.launch {
+            coroutineScope.launch {
                 viewModel.closeAddBottomSheet()
                 addSheetState.hide()
             }
         }, onTapCreate = {
-            scope.launch {
+            coroutineScope.launch {
                 viewModel.closeAddBottomSheet()
                 addSheetState.hide()
                 navigateToCreateAG()
             }
         }, onTapJoin = {
-            scope.launch {
+            coroutineScope.launch {
                 viewModel.closeAddBottomSheet()
                 addSheetState.hide()
                 navigateToJoinAG()
@@ -106,20 +106,20 @@ fun AnonymousGroupsScreen(
             onDismiss = { viewModel.unselectAnonymousGroup() },
             anonymousGroup = state.anonymousGroups!![state.selectedAGIndex!!],
             onTapLeave = {
-                scope.launch {
+                coroutineScope.launch {
                     viewModel.openSureLeaveDialog()
                     agSheetState.hide()
                 }
             },
             onTapRemove = {
-                scope.launch {
+                coroutineScope.launch {
                     viewModel.removeAnonymousGroup()
                     viewModel.unselectAnonymousGroup()
                     agSheetState.hide()
                 }
             },
             onTapCopy = {
-                scope.launch {
+                coroutineScope.launch {
                     localClipboard.setClipEntry(
                         ClipEntry(
                             ClipData.newPlainText(
@@ -141,10 +141,7 @@ fun AnonymousGroupsScreen(
             text = { Text("Are you sure you want to leave ${agWithMembersCount.name}?") },
             confirmButton = {
                 TextButton(onClick = {
-                    scope.launch {
-                        viewModel.leaveAnonymousGroup(connectionSettingsId)
-                        viewModel.unselectAnonymousGroup()
-                    }
+                    viewModel.leaveAnonymousGroup(connectionSettingsId)
                 }) { Text("Yes, leave") }
             },
             dismissButton = {

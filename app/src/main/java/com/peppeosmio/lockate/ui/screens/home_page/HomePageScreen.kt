@@ -5,6 +5,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
@@ -39,7 +41,6 @@ import org.koin.compose.viewmodel.koinViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomePageScreen(
-    initialConnectionSettingsId: Long,
     navigateToConnectionSettings: () -> Unit,
     navigateToCreateAG: (connectionSettingsId: Long) -> Unit,
     navigateToJoinAG: (connectionSettingsId: Long) -> Unit,
@@ -61,10 +62,6 @@ fun HomePageScreen(
     val focusManager = LocalFocusManager.current
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
-
-    LaunchedEffect(initialConnectionSettingsId) {
-        viewModel.setSelectedConnectionSettingsId(initialConnectionSettingsId)
-    }
 
     // Redirect to settings if needed, should never happen
     LaunchedEffect(state.shouldRedirectToCredentialsPage) {
@@ -240,24 +237,24 @@ fun HomePageScreen(
                                         viewModel.closeConnectionsMenu()
                                         navigateToConnectionSettings()
                                     })
-                                state.connectionSettings!!.map {
-                                    val connectionName = if (it.username != null) {
-                                        "${it.username}@${it.url}"
+                                state.connectionSettings!!.map { (connectionSettingsId, connectionSettings) ->
+                                    val connectionName = if (connectionSettings.username != null) {
+                                        "${connectionSettings.username}@${connectionSettings.url}"
                                     } else {
-                                        it.url
+                                        connectionSettings.url
                                     }
                                     DropdownMenuItem(
                                         text = { Text(connectionName) },
                                         leadingIcon = {
                                             Checkbox(
                                                 modifier = Modifier.padding(0.dp),
-                                                checked = state.selectedConnectionSettingsId == it.id!!,
+                                                checked = state.selectedConnectionSettingsId == connectionSettingsId,
                                                 onCheckedChange = null
                                             )
                                         },
                                         onClick = {
                                             coroutineScope.launch {
-                                                viewModel.onConnectionSelected(it.id!!)
+                                                viewModel.onConnectionSelected(connectionSettingsId)
                                             }
                                         })
                                 }
@@ -300,39 +297,45 @@ fun HomePageScreen(
                     }, icon = { Icon(Icons.Default.AccountBox, null) }, label = { Text("Groups") })
                 }
             }) { innerPadding ->
-            NavHost(
-                modifier = Modifier.padding(paddingValues = innerPadding),
-                navController = navController,
-                startDestination = AnonymousGroupsRoute,
-                enterTransition = { EnterTransition.None },
-                exitTransition = { ExitTransition.None }) {
-                composable<AnonymousGroupsRoute> {
-                    val connectionSettingsId =
-                        state.selectedConnectionSettingsId ?: initialConnectionSettingsId
-                    AnonymousGroupsScreen(
-                        connectionSettingsId = connectionSettingsId,
-                        navigateToCreateAG = {
-                            navigateToCreateAG(connectionSettingsId)
-                        },
-                        navigateToJoinAG = {
-                            navigateToJoinAG(connectionSettingsId)
-                        },
-                        navigateToAGDetails = { anonymousGroupId, anonymousGroupName ->
-                            navigateToAGDetails(
-                                connectionSettingsId, anonymousGroupId, anonymousGroupName
-                            )
-                        },
-                        registerOnFabTap = { onTapFab -> viewModel.registerOnTapFab(onTapFab) },
-                        unregisterOnFabTap = { viewModel.unregisterOnTapFab() },
-                        registerOnSearch = { onSearch -> viewModel.registerOnSearch(onSearch) },
-                        unregisterOnSearch = { viewModel.unregisterOnSearch() },
-                        showErrorSnackbar = { errorInfo ->
-                            coroutineScope.launch {
-                                viewModel.showSnackbar(errorInfo)
-                            }
-                        })
+            if (state.connectionSettings == null || state.selectedConnectionSettingsId == null) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    CircularProgressIndicator()
                 }
-                composable<GroupsRoute> {}
+            } else {
+                NavHost(
+                    modifier = Modifier.padding(paddingValues = innerPadding),
+                    navController = navController,
+                    startDestination = AnonymousGroupsRoute,
+                    enterTransition = { EnterTransition.None },
+                    exitTransition = { ExitTransition.None }) {
+                    composable<AnonymousGroupsRoute> {
+                        AnonymousGroupsScreen(
+                            connectionSettingsId = state.selectedConnectionSettingsId!!,
+                            navigateToCreateAG = {
+                                navigateToCreateAG(state.selectedConnectionSettingsId!!)
+                            },
+                            navigateToJoinAG = {
+                                navigateToJoinAG(state.selectedConnectionSettingsId!!)
+                            },
+                            navigateToAGDetails = { anonymousGroupId, anonymousGroupName ->
+                                navigateToAGDetails(
+                                    state.selectedConnectionSettingsId!!,
+                                    anonymousGroupId,
+                                    anonymousGroupName
+                                )
+                            },
+                            registerOnFabTap = { onTapFab -> viewModel.registerOnTapFab(onTapFab) },
+                            unregisterOnFabTap = { viewModel.unregisterOnTapFab() },
+                            registerOnSearch = { onSearch -> viewModel.registerOnSearch(onSearch) },
+                            unregisterOnSearch = { viewModel.unregisterOnSearch() },
+                            showErrorSnackbar = { errorInfo ->
+                                coroutineScope.launch {
+                                    viewModel.showSnackbar(errorInfo)
+                                }
+                            })
+                    }
+                    composable<GroupsRoute> {}
+                }
             }
         }
     }

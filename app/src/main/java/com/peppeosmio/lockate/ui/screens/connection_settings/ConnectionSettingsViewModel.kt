@@ -2,6 +2,7 @@ package com.peppeosmio.lockate.ui.screens.connection_settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.peppeosmio.lockate.domain.ConnectionSettings
 import com.peppeosmio.lockate.exceptions.InvalidApiKeyException
 import com.peppeosmio.lockate.service.ConnectionSettingsService
@@ -26,8 +27,8 @@ class ConnectionSettingsViewModel(
     private val _snackbarEvents = Channel<SnackbarErrorMessage>()
     val snackbarEvents = _snackbarEvents.receiveAsFlow()
 
-    private val _navigateToHome = MutableSharedFlow<Long>()
-    val navigateToHome = _navigateToHome.asSharedFlow()
+    private val _navigateHomeEvents = Channel<Unit>()
+    val navigateHomeEvents = _navigateHomeEvents.receiveAsFlow()
 
     fun getInitialData(initialConnectionSettingsId: Long?) {
         if (initialConnectionSettingsId == null) {
@@ -60,84 +61,85 @@ class ConnectionSettingsViewModel(
         _state.update { it.copy(apiKey = apiKey) }
     }
 
-    suspend fun onConnectClicked() {
-        if (state.value.url.isBlank()) {
-            _snackbarEvents.trySend(SnackbarErrorMessage(text = "Please enter url"))
-            return
-        }
-        if (state.value.requireApiKey && state.value.apiKey.isBlank()) {
-            _snackbarEvents.trySend(SnackbarErrorMessage(text = "Please enter api key"))
-            return
-        }
-        _state.update { it.copy(showLoadingOverlay = true) }
-        if (!state.value.requireApiKey) {
+    fun onConnectClicked() {
+        viewModelScope.launch {
+            if (state.value.url.isBlank()) {
+                _snackbarEvents.trySend(SnackbarErrorMessage(text = "Please enter url"))
+                return@launch
+            }
+            if (state.value.requireApiKey && state.value.apiKey.isBlank()) {
+                _snackbarEvents.trySend(SnackbarErrorMessage(text = "Please enter api key"))
+                return@launch
+            }
+            _state.update { it.copy(showLoadingOverlay = true) }
+            if (!state.value.requireApiKey) {
+                val result = ErrorHandler.runAndHandleException {
+                    connectionSettingsService.checkRequireApiKey(state.value.url)
+                }
+                if (result.errorInfo != null) {
+                    _snackbarEvents.trySend(
+                        SnackbarErrorMessage(
+                            "Connection error", errorInfo = result.errorInfo
+                        )
+                    )
+                    result.errorInfo.exception?.printStackTrace()
+                    _state.update { it.copy(showLoadingOverlay = false) }
+                    return@launch
+                }
+                if (result.value!!) {
+                    _snackbarEvents.trySend(SnackbarErrorMessage(text = "Please enter api key"))
+                    _state.update { it.copy(showLoadingOverlay = false, requireApiKey = true) }
+                    return@launch
+                } else {
+                    _state.update { it.copy(showLoadingOverlay = false) }
+                }
+            }
+            val connectionSettings = ConnectionSettings(
+                id = null,
+                url = _state.value.url,
+                apiKey = if(state.value.requireApiKey) state.value.apiKey else null ,
+                username = null,
+                authToken = null
+            )
+            try {
+                connectionSettingsService.testConnectionSettings(connectionSettings)
+            } catch (e: InvalidApiKeyException) {
+                val errorInfo = ErrorInfo.fromException(e)
+                _snackbarEvents.trySend(
+                    SnackbarErrorMessage(
+                        text = "Invalid api key", errorInfo = errorInfo
+                    )
+                )
+                _state.update { it.copy(showLoadingOverlay = false) }
+                return@launch
+            }
+            catch (e: Exception) {
+                val errorInfo = ErrorInfo.fromException(e)
+                _snackbarEvents.trySend(
+                    SnackbarErrorMessage(
+                        text = "Connection error", errorInfo = errorInfo
+                    )
+                )
+                _state.update { it.copy(showLoadingOverlay = false) }
+                return@launch
+            }
             val result = ErrorHandler.runAndHandleException {
-                connectionSettingsService.checkRequireApiKey(state.value.url)
+                connectionSettingsService.saveConnectionSettings(
+                    connectionSettings
+                )
             }
             if (result.errorInfo != null) {
                 _snackbarEvents.trySend(
                     SnackbarErrorMessage(
-                        "Connection error", errorInfo = result.errorInfo
+                        text = "Connection error", errorInfo = result.errorInfo
                     )
                 )
-                result.errorInfo.exception?.printStackTrace()
                 _state.update { it.copy(showLoadingOverlay = false) }
-                return
+                return@launch
             }
-            if (result.value!!) {
-                _snackbarEvents.trySend(SnackbarErrorMessage(text = "Please enter api key"))
-                _state.update { it.copy(showLoadingOverlay = false, requireApiKey = true) }
-                return
-            } else {
-                _state.update { it.copy(showLoadingOverlay = false) }
-            }
-        }
-        val connectionSettings = ConnectionSettings(
-            id = null,
-            url = _state.value.url,
-            apiKey = if(state.value.requireApiKey) state.value.apiKey else null ,
-            username = null,
-            authToken = null
-        )
-        try {
-            connectionSettingsService.testConnectionSettings(connectionSettings)
-        } catch (e: InvalidApiKeyException) {
-            val errorInfo = ErrorInfo.fromException(e)
-            _snackbarEvents.trySend(
-                SnackbarErrorMessage(
-                    text = "Invalid api key", errorInfo = errorInfo
-                )
-            )
             _state.update { it.copy(showLoadingOverlay = false) }
-            return
+            _navigateHomeEvents.trySend(Unit)
         }
-        catch (e: Exception) {
-            val errorInfo = ErrorInfo.fromException(e)
-            _snackbarEvents.trySend(
-                SnackbarErrorMessage(
-                    text = "Connection error", errorInfo = errorInfo
-                )
-            )
-            _state.update { it.copy(showLoadingOverlay = false) }
-            return
-        }
-        val result = ErrorHandler.runAndHandleException {
-            connectionSettingsService.saveConnectionSettings(
-                connectionSettings
-            )
-        }
-        if (result.errorInfo != null) {
-            _snackbarEvents.trySend(
-                SnackbarErrorMessage(
-                    text = "Connection error", errorInfo = result.errorInfo
-                )
-            )
-            _state.update { it.copy(showLoadingOverlay = false) }
-            return
-        }
-        _state.update { it.copy(showLoadingOverlay = false) }
-        _navigateToHome.emit(result.value!!.id!!)
-
     }
 
     fun hideErrorDialog() {

@@ -37,7 +37,7 @@ import org.koin.compose.viewmodel.koinViewModel
 @Composable
 fun ConnectionSettingsScreen(
     initialConnectionSettingsId: Long?,
-    navigateToHome: (connectionSettingsId: Long) -> Unit,
+    navigateToHome: () -> Unit,
     viewModel: ConnectionSettingsViewModel = koinViewModel()
 ) {
     val state by viewModel.state.collectAsState()
@@ -51,8 +51,8 @@ fun ConnectionSettingsScreen(
 
     // Navigate on success
     LaunchedEffect(true) {
-        viewModel.navigateToHome.collect {
-            navigateToHome(it)
+        viewModel.navigateHomeEvents.collect {
+            navigateToHome()
         }
     }
 

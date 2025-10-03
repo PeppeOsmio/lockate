@@ -86,7 +86,6 @@ fun MembersMap(
                 )
             }
 
-
             CircleLayer(
                 id = "membersCircles", source = geoJsonSource, onClick = { features ->
                     println(features.toString())

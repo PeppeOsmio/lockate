@@ -1,14 +1,19 @@
 package com.peppeosmio.lockate.ui.screens.anonymous_groups
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.peppeosmio.lockate.exceptions.UnauthorizedException
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupEvent
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
 import com.peppeosmio.lockate.utils.ErrorHandler
+import com.peppeosmio.lockate.utils.ErrorInfo
 import com.peppeosmio.lockate.utils.SnackbarErrorMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -24,12 +29,19 @@ class AnonymousGroupsViewModel(
     private val _snackbarEvents = Channel<SnackbarErrorMessage>()
     val snackbarEvents = _snackbarEvents.receiveAsFlow()
 
-    suspend fun getInitialData(connectionSettingsId: Long) = coroutineScope {
-        launch { collectAGEvents() }
-        runCatching {
-            coroutineScope {
-                getAnonymousGroups(connectionSettingsId)
-                verifyAGsMemberAuth(connectionSettingsId)
+    init {
+        viewModelScope.launch {
+            collectAGEvents()
+        }
+    }
+
+    fun getInitialData(connectionSettingsId: Long) {
+        viewModelScope.launch {
+            runCatching {
+                coroutineScope {
+                    getAnonymousGroups(connectionSettingsId)
+                    verifyAGsMemberAuth(connectionSettingsId)
+                }
             }
         }
     }
@@ -42,14 +54,13 @@ class AnonymousGroupsViewModel(
             )
         }
         if (result.errorInfo != null) {
-            if(result.errorInfo.exception is CancellationException) {
+            if (result.errorInfo.exception is CancellationException) {
                 return
             }
             _state.update { it.copy(showLoadingOverlay = false) }
             _snackbarEvents.trySend(
                 SnackbarErrorMessage(
-                    text = "Can't get local anonymous groups",
-                    errorInfo = result.errorInfo
+                    text = "Can't get local anonymous groups", errorInfo = result.errorInfo
                 )
             )
             result.errorInfo.exception?.let { throw it }
@@ -61,6 +72,7 @@ class AnonymousGroupsViewModel(
 
     private suspend fun collectAGEvents() {
         anonymousGroupService.events.collect { event ->
+            Log.d("", "event: $event")
             when (event) {
                 is AnonymousGroupEvent.NewAnonymousGroupEvent -> {
                     val currentState = state.value
@@ -125,7 +137,7 @@ class AnonymousGroupsViewModel(
                 )
             }
             if (result.errorInfo != null) {
-                if(result.errorInfo.exception is CancellationException) {
+                if (result.errorInfo.exception is CancellationException) {
                     return
                 }
                 _snackbarEvents.trySend(
@@ -172,52 +184,55 @@ class AnonymousGroupsViewModel(
         _state.update { it.copy(showSureLeaveDialog = false) }
     }
 
-    suspend fun removeAnonymousGroup() {
-        val currentState = state.value
-        if (currentState.anonymousGroups == null || currentState.selectedAGIndex == null) {
-            return
-        }
-        _state.update { it.copy(showLoadingOverlay = true) }
-        val anonymousGroupId = currentState.anonymousGroups[currentState.selectedAGIndex].id
-        val result = ErrorHandler.runAndHandleException {
-            anonymousGroupService.deleteLocalAnonymousGroup(anonymousGroupId)
-        }
-        _state.update { it.copy(showLoadingOverlay = false) }
-        if (result.errorInfo != null) {
-            _snackbarEvents.trySend(
-                SnackbarErrorMessage(
-                    text = "Can't delete local anonymous group $anonymousGroupId",
-                    errorInfo = result.errorInfo
+    fun removeAnonymousGroup() {
+        viewModelScope.launch {
+            val currentState = state.value
+            if (currentState.anonymousGroups == null || currentState.selectedAGIndex == null) {
+                return@launch
+            }
+            _state.update { it.copy(showLoadingOverlay = true) }
+            val anonymousGroupId = currentState.anonymousGroups[currentState.selectedAGIndex].id
+            val result = ErrorHandler.runAndHandleException {
+                anonymousGroupService.deleteLocalAnonymousGroup(anonymousGroupId)
+            }
+            _state.update { it.copy(showLoadingOverlay = false) }
+            if (result.errorInfo != null) {
+                _snackbarEvents.trySend(
+                    SnackbarErrorMessage(
+                        text = "Can't delete local anonymous group $anonymousGroupId",
+                        errorInfo = result.errorInfo
+                    )
                 )
-            )
+            }
         }
     }
 
-    suspend fun leaveAnonymousGroup(connectionSettingsId: Long) {
-        val currentState = state.value
-        if (currentState.selectedAGIndex == null) {
-            _state.update { it.copy(showLoadingOverlay = false, showSureLeaveDialog = false) }
-        }
-        _state.update { it.copy(showLoadingOverlay = true, showSureLeaveDialog = false) }
-        val anonymousGroupId = currentState.anonymousGroups!![currentState.selectedAGIndex!!].id
-        val result = ErrorHandler.runAndHandleException {
-            anonymousGroupService.leaveAnonymousGroup(
-                connectionSettingsId = connectionSettingsId, anonymousGroupId = anonymousGroupId
-            )
-        }
-        _state.update {
-            it.copy(
-                selectedAGIndex = null,
-                showLoadingOverlay = false,
-            )
-        }
-        if (result.errorInfo != null) {
-            _snackbarEvents.trySend(
-                SnackbarErrorMessage(
-                    text = "Can't leave anonymous group $anonymousGroupId",
-                    errorInfo = result.errorInfo
+    fun leaveAnonymousGroup(connectionSettingsId: Long) {
+        viewModelScope.launch {
+            val currentState = state.value
+            if (currentState.selectedAGIndex == null) {
+                _state.update { it.copy(showLoadingOverlay = false, showSureLeaveDialog = false) }
+            }
+            _state.update { it.copy(showLoadingOverlay = true, showSureLeaveDialog = false) }
+            val anonymousGroupId = currentState.anonymousGroups!![currentState.selectedAGIndex!!].id
+            try {
+                anonymousGroupService.leaveAnonymousGroup(
+                    connectionSettingsId = connectionSettingsId, anonymousGroupId = anonymousGroupId
                 )
-            )
+            } catch (e: Exception) {
+                _snackbarEvents.trySend(
+                    SnackbarErrorMessage(
+                        text = "Can't leave anonymous group $anonymousGroupId",
+                        errorInfo = ErrorInfo.fromException(e)
+                    )
+                )
+            }
+            _state.update {
+                it.copy(
+                    selectedAGIndex = null,
+                    showLoadingOverlay = false,
+                )
+            }
         }
     }
 }
