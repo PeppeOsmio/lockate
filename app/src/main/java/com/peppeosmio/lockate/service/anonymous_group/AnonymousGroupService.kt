@@ -666,7 +666,7 @@ class AnonymousGroupService(
                                 Log.i(
                                     "", "[ ${
                                         Clock.System.now()
-                                            .toLocalDateTime(TimeZone.currentSystemDefault())
+                                            .toLocalDateTime(TimeZone.UTC)
                                     } ] Sharing location agId: ${anonymousGroup.id}, location: $location"
                                 )
                                 launch(Dispatchers.Default) {
@@ -780,7 +780,7 @@ class AnonymousGroupService(
                                         lastLatitude = agLocation.locationRecord.coordinates.latitude,
                                         lastLongitude = agLocation.locationRecord.coordinates.longitude,
                                         lastSeen = agLocation.locationRecord.timestamp.toInstant(
-                                            TimeZone.currentSystemDefault()
+                                            TimeZone.UTC
                                         ).toEpochMilliseconds()
                                     )
                                     Log.d(

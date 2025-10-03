@@ -25,9 +25,9 @@ object AnonymousGroupMapper {
         return AnonymousGroupEntity(
             id = anonymousGroup.id,
             name = anonymousGroup.name,
-            createdAt = anonymousGroup.createdAt.toInstant(TimeZone.currentSystemDefault())
+            createdAt = anonymousGroup.createdAt.toInstant(TimeZone.UTC)
                 .toEpochMilliseconds(),
-            joinedAt = anonymousGroup.joinedAt.toInstant(TimeZone.currentSystemDefault())
+            joinedAt = anonymousGroup.joinedAt.toInstant(TimeZone.UTC)
                 .toEpochMilliseconds(),
 
             isMember = anonymousGroup.isMember,
@@ -74,9 +74,9 @@ object AnonymousGroupMapper {
             id = entity.id,
             name = entity.name,
             createdAt = Instant.fromEpochMilliseconds(entity.createdAt)
-                .toLocalDateTime(TimeZone.currentSystemDefault()),
+                .toLocalDateTime(TimeZone.UTC),
             joinedAt = Instant.fromEpochMilliseconds(entity.joinedAt)
-                .toLocalDateTime(TimeZone.currentSystemDefault()),
+                .toLocalDateTime(TimeZone.UTC),
             memberName = entity.memberName,
             memberId = entity.memberId,
             memberToken = memberToken,

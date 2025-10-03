@@ -87,7 +87,7 @@ fun AnonymousGroupDetailsScreen(
             }
             val now = Clock.System.now()
             val locationTimestamp =
-                member.lastLocationRecord.timestamp.toInstant(TimeZone.currentSystemDefault())
+                member.lastLocationRecord.timestamp.toInstant(TimeZone.UTC)
             var msToWait = (locationTimestamp.plus(1.minutes) - now).inWholeMilliseconds
             if (msToWait < 0) {
                 msToWait = 0

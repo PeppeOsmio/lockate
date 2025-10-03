@@ -21,7 +21,7 @@ object AGMemberMapper {
             id = entity.id,
             name = entity.name,
             createdAt = Instant.fromEpochMilliseconds(entity.createdAt)
-                .toLocalDateTime(TimeZone.currentSystemDefault()),
+                .toLocalDateTime(TimeZone.UTC),
             lastLocationRecord = entity.lastLocationRecordId?.let {
                 LocationRecord(
                     id=entity.lastLocationRecordId,
@@ -31,7 +31,7 @@ object AGMemberMapper {
 
                     ),
                     timestamp = Instant.fromEpochMilliseconds(entity.lastSeen!!)
-                        .toLocalDateTime(TimeZone.currentSystemDefault())
+                        .toLocalDateTime(TimeZone.UTC)
                 )
             })
     }
@@ -43,12 +43,12 @@ object AGMemberMapper {
         return AGMemberEntity(
             agMember.id,
             name = agMember.name,
-            createdAt = agMember.createdAt.toInstant(TimeZone.currentSystemDefault())
+            createdAt = agMember.createdAt.toInstant(TimeZone.UTC)
                 .toEpochMilliseconds(),
             lastLocationRecordId = agMember.lastLocationRecord?.id,
             lastLatitude = agMember.lastLocationRecord?.coordinates?.latitude,
             lastLongitude = agMember.lastLocationRecord?.coordinates?.longitude,
-            lastSeen = agMember.lastLocationRecord?.timestamp?.toInstant(TimeZone.currentSystemDefault())
+            lastSeen = agMember.lastLocationRecord?.timestamp?.toInstant(TimeZone.UTC)
                 ?.toEpochMilliseconds(),
             anonymousGroupId = anonymousGroupId,
         )

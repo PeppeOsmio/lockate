@@ -270,6 +270,7 @@ class AnonymousGroupDetailsViewModel(
                     connectionSettingsId = connectionSettingsId,
                     anonymousGroupId = state.value.anonymousGroup!!.id
                 ).collect { locationUpdate ->
+                    Log.d("", "Received location: $locationUpdate")
                     if (state.value.members == null) {
                         return@collect
                     }

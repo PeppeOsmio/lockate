@@ -50,6 +50,15 @@ android {
     buildFeatures {
         compose = true
     }
+
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a" ) // or "armeabi-v7a", "x86", etc.
+            isUniversalApk = true // if true, also builds a fat APK with all ABIs
+        }
+    }
 }
 
 dependencies {
