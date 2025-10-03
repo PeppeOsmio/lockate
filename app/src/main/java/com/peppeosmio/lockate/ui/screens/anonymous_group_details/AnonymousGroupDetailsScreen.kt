@@ -1,6 +1,5 @@
 package com.peppeosmio.lockate.ui.screens.anonymous_group_details
 
-import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,7 +37,7 @@ import dev.sargunv.maplibrecompose.core.CameraPosition
 import io.github.dellisd.spatialk.geojson.Feature as GeoJsonFeature
 import io.github.dellisd.spatialk.geojson.Point
 import io.github.dellisd.spatialk.geojson.Position
-import io.ktor.client.plugins.logging.Logging
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
@@ -46,7 +45,6 @@ import kotlinx.datetime.toInstant
 import kotlinx.serialization.json.JsonPrimitive
 import org.koin.compose.viewmodel.koinViewModel
 import kotlin.time.Clock
-import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
 
@@ -69,6 +67,7 @@ fun AnonymousGroupDetailsScreen(
     val coroutineScope = rememberCoroutineScope()
 
     var oldLocations by remember { mutableStateOf(emptySet<String>()) }
+    val oldLocationsJobs = remember { emptyMap<String, Job>() }.toMutableMap()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val mapCameraState = rememberCameraState(
@@ -79,47 +78,51 @@ fun AnonymousGroupDetailsScreen(
         )
     )
 
-    LaunchedEffect(state.membersLocationRecords) {
-        state.membersLocationRecords?.forEach { memberId, locationRecord ->
-            oldLocations -= memberId
-            val now = Clock.System.now()
-            val locationTimestamp =
-                locationRecord.timestamp.toInstant(TimeZone.currentSystemDefault())
-            if (locationTimestamp > now) {
+    LaunchedEffect(state.members) {
+        state.members?.forEach { (memberId, member) ->
+            oldLocations -= member.id
+            oldLocationsJobs[member.id]?.cancel()
+            if (member.lastLocationRecord == null) {
                 return@forEach
             }
-            var msToWait = (locationTimestamp.plus(5.minutes) - now).inWholeMilliseconds
+            val now = Clock.System.now()
+            val locationTimestamp =
+                member.lastLocationRecord.timestamp.toInstant(TimeZone.currentSystemDefault())
+            var msToWait = (locationTimestamp.plus(1.minutes) - now).inWholeMilliseconds
             if (msToWait < 0) {
                 msToWait = 0
             }
-            launch {
+            oldLocationsJobs += member.id to launch {
                 delay(msToWait)
-                if (state.membersLocationRecords!![memberId]?.id == locationRecord.id) {
+                if (state.members!![memberId]?.lastLocationRecord?.id == member.lastLocationRecord.id) {
                     oldLocations += memberId
                 }
             }
         }
     }
 
-    val geoJsonFeatures = remember(state.membersLocationRecords, oldLocations) {
-        if (state.membersLocationRecords == null) {
+    val geoJsonFeatures = remember(state.members, oldLocations, state.anonymousGroup) {
+        if (state.anonymousGroup == null) {
             null
         } else {
-            state.membersLocationRecords!!.map { (memberId, locationRecord) ->
-                val member = state.members!!.firstOrNull() { member -> member.id == memberId }
-                    ?: return@map null
-                GeoJsonFeature(
-                    geometry = Point(
-                        coordinates = Position(
-                            latitude = locationRecord.coordinates.latitude,
-                            longitude = locationRecord.coordinates.longitude
+            state.members?.map { (memberId, member) ->
+                if (state.anonymousGroup!!.memberId == memberId) {
+                    null
+                } else {
+                    val locationRecord = member.lastLocationRecord ?: return@map null
+                    GeoJsonFeature(
+                        geometry = Point(
+                            coordinates = Position(
+                                latitude = locationRecord.coordinates.latitude,
+                                longitude = locationRecord.coordinates.longitude
+                            )
+                        ), properties = mapOf(
+                            "name" to JsonPrimitive(member.name),
+                            "isOld" to JsonPrimitive(oldLocations.contains(memberId))
                         )
-                    ), properties = mapOf(
-                        "name" to JsonPrimitive(member.name),
-                        "isOld" to JsonPrimitive(oldLocations.contains(memberId))
                     )
-                )
-            }.filterNotNull()
+                }
+            }?.filterNotNull()
         }
     }
 
@@ -308,11 +311,11 @@ fun AnonymousGroupDetailsScreen(
                             }
                         } else {
                             AGMembersList(
-                                members = state.members!!,
+                                members = state.members!!.map { (_, member) -> member },
                                 authenticatedMemberId = state.anonymousGroup!!.memberId,
-                                onLocateClick = { index ->
+                                onLocateClick = { memberId ->
                                     coroutineScope.launch {
-                                        val success = viewModel.locateMember(index)
+                                        val success = viewModel.findMember(memberId)
                                         if (success) {
                                             pagerState.animateScrollToPage(AnonymousGroupDetailsTab.Map.ordinal)
                                         }

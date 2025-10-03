@@ -30,7 +30,7 @@ fun AGMembersList(
     authenticatedMemberId: String,
     members: List<AGMember>,
     modifier: Modifier = Modifier,
-    onLocateClick: (index: Int) -> Unit
+    onLocateClick: (memberId: String) -> Unit
 ) {
     Box {
         LazyColumn(
@@ -39,13 +39,13 @@ fun AGMembersList(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            itemsIndexed(members, key = { _, member -> member.id }) { i, member ->
+            itemsIndexed(members, key = { _, member -> member.id }) { _, member ->
                 MemberRow(
                     modifier = Modifier.animateItem(),
                     member = member,
                     isMe = authenticatedMemberId == member.id,
                     onLocateClick = {
-                        onLocateClick(i)
+                        onLocateClick(member.id)
                     })
             }
         }
@@ -97,12 +97,10 @@ fun MemberRow(
                     )
                 }", style = MaterialTheme.typography.bodyMedium
             )
-            if (!isMe) {
-                Text(
-                    text = "Last seen: ${member.lastLocationRecord?.timestamp?.format(DateTimeUtils.DATE_FORMAT) ?: "never"}",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
+            Text(
+                text = "Last seen: ${member.lastLocationRecord?.timestamp?.format(DateTimeUtils.DATE_FORMAT) ?: "never"}",
+                style = MaterialTheme.typography.bodyMedium
+            )
         }
     }
 }

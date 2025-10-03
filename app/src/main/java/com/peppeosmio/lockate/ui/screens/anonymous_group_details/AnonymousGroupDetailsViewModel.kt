@@ -3,7 +3,6 @@ package com.peppeosmio.lockate.ui.screens.anonymous_group_details
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.peppeosmio.lockate.domain.LocationRecord
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.exceptions.UnauthorizedException
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
@@ -115,13 +114,6 @@ class AnonymousGroupDetailsViewModel(
         }
     }
 
-    private fun membersToLocationMap(members: List<AGMember>): Map<String, LocationRecord> {
-        return members.filter { member ->
-            member.lastLocationRecord != null && member.id != state.value.anonymousGroup!!.memberId
-        }.associate { member ->
-            member.id to member.lastLocationRecord!!
-        }
-    }
 
     @Throws
     private suspend fun getLocalMembers() {
@@ -130,59 +122,50 @@ class AnonymousGroupDetailsViewModel(
             return
         }
         Log.d("", "Fetching local members...")
-        val result = ErrorHandler.runAndHandleException {
-            anonymousGroupService.getLocalAGMembers(currentState.anonymousGroup.id)
-        }
-
-        if (result.errorInfo != null) {
-            _snackbarEvents.trySend(
-                SnackbarErrorMessage(
-                    text = "Can't get local members", errorInfo = result.errorInfo
-                )
-            )
-            result.errorInfo.exception?.let { throw it }
-            return
-        } else {
-            Log.d("", "Local members: ${result.value}")
-            val map = membersToLocationMap(result.value!!)
+        try {
+            val members =
+                handleMembersWithSameName(anonymousGroupService.getLocalAGMembers(currentState.anonymousGroup.id))
+            Log.d("", "Local members: $members")
+            val membersMap = members.associateBy { it.id }
             _state.update {
                 it.copy(
-                    members = result.value, membersLocationRecords = map
+                    members = membersMap
                 )
             }
-            Log.d(
-                "", "Found ${result.value.size} members and ${map.size} locations"
-            )
             return
+        } catch (e: Exception) {
+            _snackbarEvents.trySend(
+                SnackbarErrorMessage(
+                    text = "Can't get local members", errorInfo = ErrorInfo.fromException(e)
+                )
+            )
+            throw e
         }
     }
 
     @Throws
     private suspend fun getRemoteMembers(connectionSettingsId: Long) {
-        val result = ErrorHandler.runAndHandleException {
-            handleMembersWithSameName(
+        try {
+            val members = handleMembersWithSameName(
                 anonymousGroupService.getRemoteAGMembers(
                     anonymousGroupId = state.value.anonymousGroup!!.id,
                     connectionSettingsId = connectionSettingsId
                 )
             )
-        }
-        if (result.errorInfo != null) {
-            _snackbarEvents.trySend(
-                SnackbarErrorMessage(
-                    text = "Connection error", errorInfo = result.errorInfo
-                )
-            )
-            result.errorInfo.exception?.let { throw it }
-        } else {
-            Log.d("", "Remote members: ${result.value!!.map { it.id }}")
-            val map = membersToLocationMap(result.value!!)
-            Log.d("", "Remote members to location: $map")
+            Log.d("", "Remote members: ${members.map { it.id }}")
+            val membersMap = members.associateBy { it.id }
             _state.update {
                 it.copy(
-                    members = result.value, membersLocationRecords = map
+                    members = membersMap
                 )
             }
+        } catch (e: Exception) {
+            _snackbarEvents.trySend(
+                SnackbarErrorMessage(
+                    text = "Connection error", errorInfo = ErrorInfo.fromException(e)
+                )
+            )
+            throw e
         }
     }
 
@@ -278,28 +261,23 @@ class AnonymousGroupDetailsViewModel(
                     connectionSettingsId = connectionSettingsId,
                     anonymousGroupId = state.value.anonymousGroup!!.id
                 ).collect { locationUpdate ->
-                    if (state.value.membersLocationRecords == null) {
+                    if (state.value.members == null) {
                         return@collect
                     }
-                    if (locationUpdate.agMemberId !in state.value.membersLocationRecords!!.keys) {
+                    if (locationUpdate.agMemberId !in state.value.members!!.keys) {
                         Log.d(
                             "", "Refetching members (new member ${locationUpdate.agMemberId})"
                         )
                         getRemoteMembers(connectionSettingsId)
                     }
-                    val currentLocation =
-                        state.value.membersLocationRecords!![locationUpdate.agMemberId]
-                    if (currentLocation?.id != locationUpdate.locationRecord.id) {
+                    val member = state.value.members!![locationUpdate.agMemberId]
+                    if (member != null) {
                         _state.update {
-                            val memberIndex =
-                                it.members!!.indexOfFirst { member -> member.id == locationUpdate.agMemberId }
-                            val newMembers = it.members.toMutableList()
-                            if (memberIndex != -1) {
-                                newMembers[memberIndex] =
-                                    newMembers[memberIndex].copy(lastLocationRecord = locationUpdate.locationRecord)
-                            }
+                            val newMembers =
+                                it.members!! + (locationUpdate.agMemberId to member.copy(
+                                    lastLocationRecord = locationUpdate.locationRecord
+                                ))
                             it.copy(
-                                membersLocationRecords = it.membersLocationRecords!! + (locationUpdate.agMemberId to locationUpdate.locationRecord),
                                 members = newMembers
                             )
                         }
@@ -386,26 +364,27 @@ class AnonymousGroupDetailsViewModel(
         _state.update { it.copy(reloadData = false) }
     }
 
-    suspend fun locateMember(index: Int): Boolean {
-        if (state.value.membersLocationRecords == null || state.value.members == null) {
+    fun findMember(agMemberId: String): Boolean {
+        if (state.value.members == null) {
             return false
         }
-        val result = ErrorHandler.runAndHandleException {
-            val agMember = state.value.members!![index]
-            state.value.membersLocationRecords!![agMember.id]?.let { location ->
-                Log.d("", "Locating member ${agMember.id}: $location")
-                _mapCoordinatesEvents.trySend(location.coordinates)
+        try {
+            state.value.members!![agMemberId]?.let { member ->
+                if (member.lastLocationRecord == null) {
+                    return@let
+                }
+                Log.d("", "Locating member ${agMemberId}: ${member.lastLocationRecord}")
+                _mapCoordinatesEvents.trySend(member.lastLocationRecord.coordinates)
             }
-        }
-        if (result.errorInfo != null) {
+            return true
+        } catch (e: Exception) {
             _snackbarEvents.trySend(
                 SnackbarErrorMessage(
-                    text = "Member with index $index does not exist!", errorInfo = result.errorInfo
+                    text = "Member with id $agMemberId does not exist!",
+                    errorInfo = ErrorInfo.fromException(e)
                 )
             )
             return false
-        } else {
-            return true
         }
     }
 }
