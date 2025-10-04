@@ -56,6 +56,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -605,15 +606,19 @@ class AnonymousGroupService(
         )
     }
 
-    private suspend fun getAvailableConnections(connectionSettingsList: List<ConnectionSettings>): List<ConnectionSettings> {
-        return connectionSettingsList.filter {
-            try {
-                connectionSettingsService.isApiAvailable(it.url)
-                true
-            } catch (_: Exception) {
-                false
+    private suspend fun getAvailableConnections(
+        connectionSettingsList: List<ConnectionSettings>,
+    ): List<ConnectionSettings> = coroutineScope {
+        connectionSettingsList.map { settings ->
+            async {
+                try {
+                    connectionSettingsService.isApiAvailable(settings.url)
+                    settings
+                } catch (_: Exception) {
+                    null
+                }
             }
-        }
+        }.awaitAll().filterNotNull()
     }
 
     private suspend fun getAvailableAGs(availableConnections: List<ConnectionSettings>): Int {
@@ -650,26 +655,25 @@ class AnonymousGroupService(
                         if (availableAGs == 0) {
                             throw Exception("No available anonymous groups, exiting getLocationUpdates()")
                         }
-                        availableConnections.forEach { connectionSettings ->
-                            val agsToSendLocation =
-                                anonymousGroupDao.listAGToSendLocationOfConnection(
-                                    connectionSettings.id!!
-                                ).map {
-                                    AnonymousGroupMapper.toDomain(
-                                        entity = it, keyStoreService = keyStoreService
+                        availableConnections.map { connectionSettings ->
+                            async {
+                                val agsToSendLocation =
+                                    anonymousGroupDao.listAGToSendLocationOfConnection(
+                                        connectionSettings.id!!
+                                    ).map {
+                                        AnonymousGroupMapper.toDomain(
+                                            entity = it, keyStoreService = keyStoreService
+                                        )
+                                    }
+
+                                val locationBytes = location.toByteArray()
+
+                                agsToSendLocation.forEach { anonymousGroup ->
+                                    Log.i(
+                                        "", "[ ${
+                                            Clock.System.now().toLocalDateTime(TimeZone.UTC)
+                                        } ] Sharing location agId: ${anonymousGroup.id}, location: $location"
                                     )
-                                }
-
-                            val locationBytes = location.toByteArray()
-
-                            agsToSendLocation.forEach { anonymousGroup ->
-                                Log.i(
-                                    "", "[ ${
-                                        Clock.System.now()
-                                            .toLocalDateTime(TimeZone.UTC)
-                                    } ] Sharing location agId: ${anonymousGroup.id}, location: $location"
-                                )
-                                launch(Dispatchers.Default) {
                                     try {
                                         val encryptedLocation = cryptoService.encrypt(
                                             data = locationBytes, key = anonymousGroup.key
@@ -720,7 +724,7 @@ class AnonymousGroupService(
                                     }
                                 }
                             }
-                        }
+                        }.awaitAll()
                     }
                     Log.d("", "Stopped getting location updates...")
                 } catch (e: Exception) {

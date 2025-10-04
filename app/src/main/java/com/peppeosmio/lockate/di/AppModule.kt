@@ -51,13 +51,13 @@ val appModule = module {
                 json()
             }
 
-            install(Logging) {
-                logger = object : Logger {
-                    override fun log(message: String) {
-                        Log.d("HttpLogging", message)
-                    }
-                }
-            }
+//            install(Logging) {
+//                logger = object : Logger {
+//                    override fun log(message: String) {
+//                        Log.d("HttpLogging", message)
+//                    }
+//                }
+//            }
         }
     }
 
