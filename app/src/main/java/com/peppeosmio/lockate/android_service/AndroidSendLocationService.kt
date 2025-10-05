@@ -6,6 +6,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.os.IBinder
+import android.util.Log
 import androidx.annotation.RequiresPermission
 import androidx.core.app.NotificationCompat
 import com.peppeosmio.lockate.R
@@ -17,7 +18,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 
-class AndroidLocationService : Service() {
+class AndroidSendLocationService : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val anonymousGroupService: AnonymousGroupService by inject<AnonymousGroupService>()
@@ -43,7 +44,7 @@ class AndroidLocationService : Service() {
     @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
     private fun start() {
         isRunning = true
-        val stopIntent = Intent(this, AndroidLocationService::class.java).apply {
+        val stopIntent = Intent(this, AndroidSendLocationService::class.java).apply {
             action = ACTION_STOP
         }
         val stopPendingIntent = PendingIntent.getService(
@@ -65,15 +66,20 @@ class AndroidLocationService : Service() {
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
 
         serviceScope.launch {
-            anonymousGroupService.sendLocation { activeAGCount ->
-                val updatedNotification = notification.setContentText(
-                    when (activeAGCount) {
-                        0 -> "Not sharing location"
-                        1 -> "Sharing location with 1 group"
-                        else -> "Sharing location with $activeAGCount groups"
-                    }
-                )
-                notificationManager.notify(1, updatedNotification.build())
+            try {
+                anonymousGroupService.sendLocation { activeAGCount ->
+                    val updatedNotification = notification.setContentText(
+                        when (activeAGCount) {
+                            0 -> "Not sharing location"
+                            1 -> "Sharing location with 1 group"
+                            else -> "Sharing location with $activeAGCount groups"
+                        }
+                    )
+                    notificationManager.notify(1, updatedNotification.build())
+                }
+            } catch (e: Exception){
+                Log.d("", "GOT HIM")
+                e.printStackTrace()
             }
         }
 

@@ -112,7 +112,6 @@ class AnonymousGroupService(
             anonymousGroupDao.getAnonymousGroupById(anonymousGroupId)
                 ?: throw LocalAGNotFoundException()
             anonymousGroupDao.listAGMembers(anonymousGroupId).map {
-                Log.d("", "found entity: $it")
                 AGMemberMapper.entityToDomain(it)
             }
         }

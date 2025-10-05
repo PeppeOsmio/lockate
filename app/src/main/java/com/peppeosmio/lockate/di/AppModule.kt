@@ -88,9 +88,11 @@ val appModule = module {
 
     single<LocationService> {
         LocationService(
+            context = androidContext(),
             fusedLocationClient = LocationServices.getFusedLocationProviderClient(
                 androidContext()
-            ), permissionsService = get<PermissionsService>()
+            ),
+            permissionsService = get<PermissionsService>()
         )
     }
 

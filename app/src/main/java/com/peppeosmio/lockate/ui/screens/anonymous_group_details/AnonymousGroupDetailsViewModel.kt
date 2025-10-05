@@ -3,11 +3,12 @@ package com.peppeosmio.lockate.ui.screens.anonymous_group_details
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.exceptions.UnauthorizedException
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
 import com.peppeosmio.lockate.domain.Coordinates
+import com.peppeosmio.lockate.exceptions.LocationDisabledException
+import com.peppeosmio.lockate.exceptions.NoPermissionException
 import com.peppeosmio.lockate.platform_service.LocationService
 import com.peppeosmio.lockate.utils.ErrorHandler
 import com.peppeosmio.lockate.utils.ErrorInfo
@@ -21,6 +22,8 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+import kotlin.concurrent.atomics.AtomicBoolean
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
 
 class AnonymousGroupDetailsViewModel(
     private val anonymousGroupService: AnonymousGroupService,
@@ -30,15 +33,17 @@ class AnonymousGroupDetailsViewModel(
     val state = _state.asStateFlow()
     private val _snackbarEvents = Channel<SnackbarErrorMessage>()
     val snackbarEvents = _snackbarEvents.receiveAsFlow()
-    private val _mapCoordinatesEvents = Channel<Coordinates>()
-    val mapLocationEvents = _mapCoordinatesEvents.receiveAsFlow()
+    private val _cameraPositionEvents = Channel<Coordinates>()
+    val cameraPositionEvents = _cameraPositionEvents.receiveAsFlow()
     private val _navigateBackEvents = Channel<Unit>()
     val navigateBackEvents = _navigateBackEvents.receiveAsFlow()
 
+    @OptIn(ExperimentalAtomicApi::class)
+    val isStreamingLocation = AtomicBoolean(false)
 
     fun getInitialDetails(anonymousGroupId: String, connectionSettingsId: Long) {
         viewModelScope.launch {
-            runCatching { getCurrentLocation() }
+            runCatching { getAndMoveToMyLocation() }
         }
         viewModelScope.launch {
             runCatching {
@@ -76,26 +81,60 @@ class AnonymousGroupDetailsViewModel(
         }
     }
 
-    @Throws
-    fun getCurrentLocation() {
+    @OptIn(ExperimentalAtomicApi::class)
+    private fun streamMyLocation() {
         viewModelScope.launch {
-            val result = ErrorHandler.runAndHandleException {
-                locationService.getCurrentLocation()
+            try {
+                if(!isStreamingLocation.compareAndSet(expectedValue = false, newValue = true)) {
+                    return@launch
+                }
+                Log.d("", "Streaming my position")
+                locationService.getLocationUpdates().collect { coordinates ->
+                    if (state.value.myCoordinates == null) {
+                        _cameraPositionEvents.trySend(coordinates)
+                    }
+                    _state.update { it.copy(myCoordinates = coordinates) }
+                }
+                isStreamingLocation.store(false)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                isStreamingLocation.store(false)
             }
-            if (result.errorInfo != null) {
-                _snackbarEvents.trySend(
-                    SnackbarErrorMessage(
-                        text = "Connection error", errorInfo = result.errorInfo
-                    )
-                )
-            } else if (result.value == null) {
+        }
+    }
+
+    @Throws
+    private suspend fun getAndMoveToMyLocation() {
+        Log.d("", "Getting my position")
+        val coordinates = locationService.getCurrentLocation() ?: return
+        _state.update { it.copy(myCoordinates = coordinates) }
+        _cameraPositionEvents.trySend(coordinates)
+        streamMyLocation()
+    }
+
+    fun onTapMyLocation() {
+        viewModelScope.launch {
+            try {
+                getAndMoveToMyLocation()
+            } catch (e: LocationDisabledException) {
                 _snackbarEvents.trySend(
                     SnackbarErrorMessage(
                         "Geolocation is disabled", errorInfo = null
                     )
                 )
-            } else {
-                _mapCoordinatesEvents.trySend(result.value)
+            } catch (e: NoPermissionException) {
+                _snackbarEvents.trySend(
+                    SnackbarErrorMessage(
+                        "No location permissions"
+                    )
+                )
+            }
+            catch (e: Exception) {
+                _snackbarEvents.trySend(
+                    SnackbarErrorMessage(
+                        "Can't get location", errorInfo = ErrorInfo.fromException(e)
+                    )
+                )
             }
         }
     }
@@ -375,9 +414,16 @@ class AnonymousGroupDetailsViewModel(
         _state.update { it.copy(reloadData = false) }
     }
 
-    fun findMember(agMemberId: String): Boolean {
+    fun moveToMe() {
+        if (state.value.myCoordinates == null) {
+            return
+        }
+        _cameraPositionEvents.trySend(state.value.myCoordinates!!)
+    }
+
+    fun moveToMember(agMemberId: String) {
         if (state.value.members == null) {
-            return false
+            return
         }
         try {
             state.value.members!![agMemberId]?.let { member ->
@@ -385,9 +431,9 @@ class AnonymousGroupDetailsViewModel(
                     return@let
                 }
                 Log.d("", "Locating member ${agMemberId}: ${member.lastLocationRecord}")
-                _mapCoordinatesEvents.trySend(member.lastLocationRecord.coordinates)
+                _cameraPositionEvents.trySend(member.lastLocationRecord.coordinates)
             }
-            return true
+            return
         } catch (e: Exception) {
             _snackbarEvents.trySend(
                 SnackbarErrorMessage(
@@ -395,7 +441,7 @@ class AnonymousGroupDetailsViewModel(
                     errorInfo = ErrorInfo.fromException(e)
                 )
             )
-            return false
+            return
         }
     }
 }

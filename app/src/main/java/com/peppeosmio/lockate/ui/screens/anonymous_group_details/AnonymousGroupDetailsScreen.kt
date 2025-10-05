@@ -1,5 +1,6 @@
 package com.peppeosmio.lockate.ui.screens.anonymous_group_details
 
+import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,15 +35,12 @@ import com.peppeosmio.lockate.domain.Coordinates
 import com.peppeosmio.lockate.ui.composables.SmallCircularProgressIndicator
 import dev.sargunv.maplibrecompose.compose.rememberCameraState
 import dev.sargunv.maplibrecompose.core.CameraPosition
-import io.github.dellisd.spatialk.geojson.Feature as GeoJsonFeature
-import io.github.dellisd.spatialk.geojson.Point
 import io.github.dellisd.spatialk.geojson.Position
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
-import kotlinx.serialization.json.JsonPrimitive
 import org.koin.compose.viewmodel.koinViewModel
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
@@ -68,6 +66,8 @@ fun AnonymousGroupDetailsScreen(
 
     var oldLocations by remember { mutableStateOf(emptySet<String>()) }
     val oldLocationsJobs = remember { emptyMap<String, Job>() }.toMutableMap()
+    var isMyLocationOld by remember { mutableStateOf(false) }
+    var isMyLocationOldJob = remember<Job?> { null }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val mapCameraState = rememberCameraState(
@@ -78,6 +78,45 @@ fun AnonymousGroupDetailsScreen(
         )
     )
 
+    LaunchedEffect(true) {
+        viewModel.navigateBackEvents.collect {
+            navigateBack()
+        }
+    }
+
+    val membersPoints = remember(state.members, oldLocations, state.anonymousGroup) {
+        if (state.anonymousGroup == null) {
+            null
+        } else {
+            state.members?.map { (memberId, member) ->
+                if (state.anonymousGroup!!.memberId == memberId) {
+                    null
+                } else {
+                    val locationRecord = member.lastLocationRecord ?: return@map null
+                    MapPoint(
+                        coordinates = locationRecord.coordinates,
+                        name = member.name,
+                        isOld = oldLocations.contains(memberId)
+                    )
+                }
+            }?.filterNotNull()
+        }
+    }
+
+    val myPoint = remember(state.anonymousGroup, state.members, state.myCoordinates, isMyLocationOld) {
+        if (state.members == null || state.anonymousGroup == null || state.myCoordinates == null) {
+            return@remember null
+        }
+        val me = state.members!![state.anonymousGroup!!.memberId]
+        if (me == null) {
+            Log.e("", "Can't find own user in members list! id=${state.anonymousGroup!!.memberId}")
+            return@remember null
+        }
+        MapPoint(
+            coordinates = state.myCoordinates!!, name = "You", isOld = isMyLocationOld
+        )
+    }
+
     LaunchedEffect(state.members) {
         state.members?.forEach { (memberId, member) ->
             oldLocations -= member.id
@@ -86,8 +125,7 @@ fun AnonymousGroupDetailsScreen(
                 return@forEach
             }
             val now = Clock.System.now()
-            val locationTimestamp =
-                member.lastLocationRecord.timestamp.toInstant(TimeZone.UTC)
+            val locationTimestamp = member.lastLocationRecord.timestamp.toInstant(TimeZone.UTC)
             var msToWait = (locationTimestamp.plus(1.minutes) - now).inWholeMilliseconds
             if (msToWait < 0) {
                 msToWait = 0
@@ -101,34 +139,14 @@ fun AnonymousGroupDetailsScreen(
         }
     }
 
-    LaunchedEffect(true) {
-        viewModel.navigateBackEvents.collect {
-            navigateBack()
-        }
-    }
-
-    val geoJsonFeatures = remember(state.members, oldLocations, state.anonymousGroup) {
-        if (state.anonymousGroup == null) {
-            null
-        } else {
-            state.members?.map { (memberId, member) ->
-                if (state.anonymousGroup!!.memberId == memberId) {
-                    null
-                } else {
-                    val locationRecord = member.lastLocationRecord ?: return@map null
-                    GeoJsonFeature(
-                        geometry = Point(
-                            coordinates = Position(
-                                latitude = locationRecord.coordinates.latitude,
-                                longitude = locationRecord.coordinates.longitude
-                            )
-                        ), properties = mapOf(
-                            "name" to JsonPrimitive(member.name),
-                            "isOld" to JsonPrimitive(oldLocations.contains(memberId))
-                        )
-                    )
-                }
-            }?.filterNotNull()
+    LaunchedEffect(state.myCoordinates) {
+        state.myCoordinates?.let {
+            isMyLocationOldJob?.cancel()
+            isMyLocationOld = false
+            isMyLocationOldJob = launch {
+                delay(60000L)
+                isMyLocationOld = true
+            }
         }
     }
 
@@ -156,7 +174,7 @@ fun AnonymousGroupDetailsScreen(
     }
 
     LaunchedEffect(true) {
-        viewModel.mapLocationEvents.collect { location ->
+        viewModel.cameraPositionEvents.collect { location ->
             mapCameraState.animateTo(
                 finalPosition = CameraPosition(
                     target = Position(
@@ -290,11 +308,10 @@ fun AnonymousGroupDetailsScreen(
                         MembersMap(
                             modifier = Modifier.fillMaxSize(),
                             cameraState = mapCameraState,
-                            features = geoJsonFeatures,
+                            membersPoints = membersPoints,
+                            myPoint = myPoint,
                             onTapMyLocation = {
-                                coroutineScope.launch {
-                                    viewModel.getCurrentLocation()
-                                }
+                                viewModel.onTapMyLocation()
                             })
                     }
 
@@ -312,11 +329,9 @@ fun AnonymousGroupDetailsScreen(
                                 members = state.members!!.map { (_, member) -> member },
                                 authenticatedMemberId = state.anonymousGroup!!.memberId,
                                 onLocateClick = { memberId ->
+                                    viewModel.moveToMember(memberId)
                                     coroutineScope.launch {
-                                        val success = viewModel.findMember(memberId)
-                                        if (success) {
-                                            pagerState.animateScrollToPage(AnonymousGroupDetailsTab.Map.ordinal)
-                                        }
+                                        pagerState.animateScrollToPage(AnonymousGroupDetailsTab.Map.ordinal)
                                     }
                                 })
                         }

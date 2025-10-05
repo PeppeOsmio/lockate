@@ -18,13 +18,10 @@ object LocationRecordMapper {
             key = key
         )
         try {
-            val latitude =
-                DoubleBytesUtils.byteArrayToDouble(decryptedCoordinates.copyOfRange(0, 8))
-            val longitude =
-                DoubleBytesUtils.byteArrayToDouble(decryptedCoordinates.copyOfRange(8, 16))
+
             return LocationRecord(
                 id = encryptedLocationRecordDto.id,
-                coordinates = Coordinates(latitude = latitude, longitude = longitude),
+                coordinates = Coordinates.fromByteArray(decryptedCoordinates),
                 timestamp = encryptedLocationRecordDto.timestamp
             )
         } catch (e: IllegalArgumentException) {
