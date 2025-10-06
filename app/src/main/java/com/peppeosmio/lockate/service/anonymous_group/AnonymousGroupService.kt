@@ -222,7 +222,7 @@ class AnonymousGroupService(
         )
 
         val createResponse = httpClient.post {
-            url("${connectionSettings.url}/api/anonymous-groups/")
+            url("${connectionSettings.url}/api/anonymous-groups")
             headers {
                 connectionSettings.apiKey?.let { ak -> append("X-API-KEY", ak) }
                 append(HttpHeaders.ContentType, "application/json")
