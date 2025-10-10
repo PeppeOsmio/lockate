@@ -59,10 +59,14 @@ fun MemberRow(
     Card(
         modifier = modifier.fillMaxWidth(),
     ) {
+        val showFindButton = isMe || member.lastLocationRecord != null
         Column(
             modifier = Modifier
                 .padding(
-                    top = if (isMe) 12.dp else 6.dp, bottom = 12.dp, start = 12.dp, end = 6.dp
+                    top = if (showFindButton) 6.dp else 12.dp,
+                    bottom = 12.dp,
+                    start = 12.dp,
+                    end = 6.dp
                 )
                 .fillMaxWidth()
         ) {
@@ -73,12 +77,12 @@ fun MemberRow(
             ) {
                 Text(
                     modifier = Modifier.weight(1f), text = if (isMe) {
-                        "(You) ${member.name}"
+                        "(You) - ${member.name}"
                     } else {
                         member.name
                     }, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold
                 )
-                if (!isMe && member.lastLocationRecord != null) {
+                if (showFindButton) {
                     IconButton(onClick = onLocateClick) {
                         Icon(
                             painter = painterResource(R.drawable.outline_location_searching_24),
@@ -91,15 +95,20 @@ fun MemberRow(
                 text = "Id: ${member.id}", style = MaterialTheme.typography.bodyMedium
             )
             Text(
-                text = "Joined: ${
-                    member.createdAt.format(
-                        DateTimeUtils.DATE_FORMAT
-                    )
+                text = "Last seen: ${
+                    member.lastLocationRecord?.timestamp?.let {
+                        DateTimeUtils.utcToCurrentTimeZone(
+                            it
+                        )
+                    }?.format(DateTimeUtils.DATE_FORMAT) ?: "never"
                 }", style = MaterialTheme.typography.bodyMedium
             )
             Text(
-                text = "Last seen: ${member.lastLocationRecord?.timestamp?.format(DateTimeUtils.DATE_FORMAT) ?: "never"}",
-                style = MaterialTheme.typography.bodyMedium
+                text = "Joined: ${
+                    DateTimeUtils.utcToCurrentTimeZone(member.createdAt).format(
+                        DateTimeUtils.DATE_FORMAT
+                    )
+                }", style = MaterialTheme.typography.bodyMedium
             )
         }
     }

@@ -87,10 +87,11 @@ dependencies {
 
     // https://ktor.io/docs/client-dependencies.html#engine-dependency
     implementation(libs.io.ktor.ktor.client.core)
-    implementation(libs.ktor.client.android)
+    implementation(libs.ktor.client.okhttp)
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.ktor.client.logging)
     implementation(libs.ktor.serialization.kotlinx.json)
+    implementation(libs.ktor.client.websockets)
 
     implementation(project.dependencies.platform("io.insert-koin:koin-bom:4.1.0"))
     implementation(libs.insert.koin.koin.core)
@@ -108,11 +109,9 @@ dependencies {
     implementation(libs.cryptography.core)
     implementation(libs.cryptography.provider.optimal)
 
-
     implementation(libs.androidx.runtime.livedata)
 
     implementation(libs.play.services.location)
-    implementation(libs.okio)
 
     implementation(libs.maplibre.compose)
     implementation(libs.maplibre.composeMaterial3)

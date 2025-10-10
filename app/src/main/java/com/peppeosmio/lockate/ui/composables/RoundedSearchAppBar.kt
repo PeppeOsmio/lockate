@@ -1,9 +1,7 @@
 package com.peppeosmio.lockate.ui.composables
 
 import androidx.compose.animation.animateColor
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDp
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.updateTransition
 import androidx.compose.foundation.background
@@ -34,7 +32,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import kotlin.math.exp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -54,9 +51,9 @@ fun RoundedSearchAppBar(
     val animationDuration = 167
 
     val scrollFraction = scrollBehavior?.state?.contentOffset ?: 0f
-    val shouldElevate = scrollFraction < 0f
+    val isElevated = scrollFraction < 0f
     val elevateTransition =
-        updateTransition(targetState = shouldElevate, label = "ElevateTransitionAnimation")
+        updateTransition(targetState = isElevated, label = "ElevateTransitionAnimation")
     val elevationDp by elevateTransition.animateDp(
         transitionSpec = { tween(animationDuration) }, label = "AppBarElevationAnimation"
     ) {

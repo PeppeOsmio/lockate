@@ -33,6 +33,7 @@ import androidx.compose.ui.window.Dialog
 import com.alorma.compose.settings.ui.SettingsMenuLink
 import com.peppeosmio.lockate.domain.Coordinates
 import com.peppeosmio.lockate.ui.composables.SmallCircularProgressIndicator
+import com.peppeosmio.lockate.utils.LoadingState
 import dev.sargunv.maplibrecompose.compose.rememberCameraState
 import dev.sargunv.maplibrecompose.core.CameraPosition
 import io.github.dellisd.spatialk.geojson.Position
@@ -132,7 +133,7 @@ fun AnonymousGroupDetailsScreen(
             }
             oldLocationsJobs += member.id to launch {
                 delay(msToWait)
-                if (state.members!![memberId]?.lastLocationRecord?.id == member.lastLocationRecord.id) {
+                if (state.members!![memberId]?.lastLocationRecord?.timestamp == member.lastLocationRecord.timestamp) {
                     oldLocations += memberId
                 }
             }
@@ -231,16 +232,20 @@ fun AnonymousGroupDetailsScreen(
                 )
             }
         }, actions = {
-            if (state.reloadData) {
-                IconButton(onClick = {
-                    coroutineScope.launch {
-                        viewModel.remoteOperations(connectionSettingsId = connectionSettingsId)
+            when(state.remoteDataLoadingState) {
+                LoadingState.Failed -> {
+                    IconButton(onClick = {
+                        coroutineScope.launch {
+                            viewModel.remoteOperations(connectionSettingsId = connectionSettingsId)
+                        }
+                    }) {
+                        Icon(imageVector = Icons.Default.Refresh, contentDescription = "Reconnect")
                     }
-                }) {
-                    Icon(imageVector = Icons.Default.Refresh, contentDescription = "Reconnect")
                 }
-            } else if (state.showLoadingIcon) {
-                SmallCircularProgressIndicator(modifier = Modifier.padding(8.dp))
+                LoadingState.IsLoading -> {
+                    SmallCircularProgressIndicator(modifier = Modifier.padding(8.dp))
+                }
+                else -> Unit
             }
             if (state.anonymousGroup != null) {
                 Box(

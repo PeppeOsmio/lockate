@@ -100,6 +100,15 @@ interface AnonymousGroupDao {
 
     @Query(
         """
+        SELECT * FROM anonymous_group 
+        WHERE sendLocation = 1 AND isMember = 1 AND existsRemote = 1
+        ORDER BY createdAt DESC, id DESC
+    """
+    )
+    suspend fun listAGsToSendLocation(): List<AnonymousGroupEntity>
+
+    @Query(
+        """
         UPDATE anonymous_group_member
         SET lastLatitude = :lastLatitude, lastLongitude = :lastLongitude,
         lastSeen = :lastSeen

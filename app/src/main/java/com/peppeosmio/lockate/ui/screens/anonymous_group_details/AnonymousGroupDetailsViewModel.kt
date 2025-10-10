@@ -10,9 +10,12 @@ import com.peppeosmio.lockate.domain.Coordinates
 import com.peppeosmio.lockate.exceptions.LocationDisabledException
 import com.peppeosmio.lockate.exceptions.NoPermissionException
 import com.peppeosmio.lockate.platform_service.LocationService
+import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupEvent
 import com.peppeosmio.lockate.utils.ErrorHandler
 import com.peppeosmio.lockate.utils.ErrorInfo
+import com.peppeosmio.lockate.utils.LoadingState
 import com.peppeosmio.lockate.utils.SnackbarErrorMessage
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -22,8 +25,9 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
-import kotlin.concurrent.atomics.AtomicBoolean
-import kotlin.concurrent.atomics.ExperimentalAtomicApi
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
+import kotlin.time.ExperimentalTime
 
 class AnonymousGroupDetailsViewModel(
     private val anonymousGroupService: AnonymousGroupService,
@@ -37,57 +41,94 @@ class AnonymousGroupDetailsViewModel(
     val cameraPositionEvents = _cameraPositionEvents.receiveAsFlow()
     private val _navigateBackEvents = Channel<Unit>()
     val navigateBackEvents = _navigateBackEvents.receiveAsFlow()
-
-    @OptIn(ExperimentalAtomicApi::class)
-    val isStreamingLocation = AtomicBoolean(false)
+    private var listenForUserLocationJob : Job? = null
 
     fun getInitialDetails(anonymousGroupId: String, connectionSettingsId: Long) {
         viewModelScope.launch {
             runCatching { getAndMoveToMyLocation() }
         }
         viewModelScope.launch {
+            collectAGEvents()
+        }
+        viewModelScope.launch {
             runCatching {
-                coroutineScope {
-                    getLocalAG(anonymousGroupId)
-                    getLocalMembers()
-                    launch {
-                        streamLocations(connectionSettingsId)
+                getLocalAG(anonymousGroupId)
+                getLocalMembers()
+                remoteOperations(connectionSettingsId)
+            }
+        }
+    }
+
+    @OptIn(ExperimentalTime::class)
+    private suspend fun collectAGEvents() {
+        anonymousGroupService.events.collect { event ->
+            when (event) {
+                is AnonymousGroupEvent.AGLocationSentEvent -> {
+                    if (state.value.members == null || state.value.anonymousGroup == null) {
+                        return@collect
                     }
-                    remoteOperations(connectionSettingsId)
+                    if (event.anonymousGroupId != state.value.anonymousGroup!!.id) {
+                        return@collect
+                    }
+                    val me = state.value.members!![state.value.anonymousGroup!!.memberId]
+                        ?: return@collect
+                    if (me.lastLocationRecord == null) {
+                        return@collect
+                    }
+                    _state.update {
+                        val newMap = (it.members ?: emptyMap()).toMutableMap()
+                        newMap += me.id to me.copy(
+                            lastLocationRecord = me.lastLocationRecord.copy(
+                                timestamp = event.timestamp.toLocalDateTime(
+                                    TimeZone.UTC
+                                )
+                            )
+                        )
+                        it.copy(
+                            members = newMap
+                        )
+                    }
                 }
+
+                else -> Unit
             }
         }
     }
 
     fun remoteOperations(connectionSettingsId: Long) {
         viewModelScope.launch {
-            _state.update { it.copy(reloadData = false) }
             try {
                 coroutineScope {
-                    launch {
-                        _state.update { it.copy(showLoadingIcon = false) }
-                        joinAll(launch {
-                            getRemoteMembers(connectionSettingsId)
-                        }, launch {
-                            verifyAdminAuth(connectionSettingsId)
-                        })
-                        _state.update { it.copy(showLoadingIcon = false) }
+                    _state.update { it.copy(remoteDataLoadingState = LoadingState.IsLoading) }
+                    joinAll(launch {
+                        getRemoteMembers(connectionSettingsId)
+                    }, launch {
+                        verifyAdminAuth(connectionSettingsId)
+                    })
+                    _state.update { it.copy(remoteDataLoadingState = LoadingState.Success) }
+                    while(true) {
+                        try {
+                            streamLocations(connectionSettingsId)
+                        } catch (e: Exception) {
+                            Log.e("", "Streaming location for $connectionSettingsId failed, retrying in 10 s")
+                            delay(10000L)
+                        }
                     }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                _state.update { it.copy(showLoadingIcon = false, reloadData = true) }
+                _state.update { it.copy(remoteDataLoadingState = LoadingState.Failed) }
             }
         }
     }
 
-    @OptIn(ExperimentalAtomicApi::class)
-    private fun streamMyLocation() {
-        viewModelScope.launch {
+    /**
+     * Listens for the user's location, if called multiple times the previous job is canceled
+     */
+    private fun listenForUserLocation() {
+        listenForUserLocationJob?.cancel()
+        listenForUserLocationJob = viewModelScope.launch {
             try {
-                if(!isStreamingLocation.compareAndSet(expectedValue = false, newValue = true)) {
-                    return@launch
-                }
                 Log.d("", "Streaming my position")
                 locationService.getLocationUpdates().collect { coordinates ->
                     if (state.value.myCoordinates == null) {
@@ -95,21 +136,34 @@ class AnonymousGroupDetailsViewModel(
                     }
                     _state.update { it.copy(myCoordinates = coordinates) }
                 }
-                isStreamingLocation.store(false)
             } catch (e: Exception) {
                 e.printStackTrace()
-                isStreamingLocation.store(false)
             }
         }
     }
 
+    /**
+     * Get the newest current location if possible otherwise move to the old one if available.
+     * If there is an exception propagate it.
+     */
     @Throws
     private suspend fun getAndMoveToMyLocation() {
-        Log.d("", "Getting my position")
-        val coordinates = locationService.getCurrentLocation() ?: return
-        _state.update { it.copy(myCoordinates = coordinates) }
-        _cameraPositionEvents.trySend(coordinates)
-        streamMyLocation()
+        Log.d("", "Getting my location")
+        try {
+            val coordinates = locationService.getCurrentLocation()
+            if(coordinates != null) {
+                _state.update { it.copy(myCoordinates = coordinates) }
+                _cameraPositionEvents.trySend(coordinates)
+            } else if(state.value.myCoordinates != null) {
+                _cameraPositionEvents.trySend(state.value.myCoordinates!!)
+            }
+        } catch (e: Exception) {
+            if(state.value.myCoordinates != null) {
+                _cameraPositionEvents.trySend(state.value.myCoordinates!!)
+            }
+            throw e
+        }
+        listenForUserLocation()
     }
 
     fun onTapMyLocation() {
@@ -128,8 +182,7 @@ class AnonymousGroupDetailsViewModel(
                         "No location permissions"
                     )
                 )
-            }
-            catch (e: Exception) {
+            } catch (e: Exception) {
                 _snackbarEvents.trySend(
                     SnackbarErrorMessage(
                         "Can't get location", errorInfo = ErrorInfo.fromException(e)
@@ -161,6 +214,9 @@ class AnonymousGroupDetailsViewModel(
     }
 
 
+    /**
+     * Sets state.members to the local members
+     */
     @Throws
     private suspend fun getLocalMembers() {
         val currentState = state.value
@@ -173,6 +229,7 @@ class AnonymousGroupDetailsViewModel(
                 handleMembersWithSameName(anonymousGroupService.getLocalAGMembers(currentState.anonymousGroup.id))
             Log.d("", "Local members: $members")
             val membersMap = members.associateBy { it.id }
+
             _state.update {
                 it.copy(
                     members = membersMap
@@ -189,6 +246,9 @@ class AnonymousGroupDetailsViewModel(
         }
     }
 
+    /**
+     * Updates state.members with the remote members
+     */
     @Throws
     private suspend fun getRemoteMembers(connectionSettingsId: Long) {
         try {
@@ -234,7 +294,6 @@ class AnonymousGroupDetailsViewModel(
         if (currentState.anonymousGroup == null) {
             return
         }
-        _state.update { it.copy(showLoadingIcon = true) }
         Log.d("", "verifying admin auth")
         val result = ErrorHandler.runAndHandleException(customHandler = { e ->
             when (e) {
@@ -299,44 +358,33 @@ class AnonymousGroupDetailsViewModel(
         _state.update { it.copy(adminPasswordText = text) }
     }
 
+    @Throws
     private suspend fun streamLocations(connectionSettingsId: Long) {
-        if (state.value.anonymousGroup == null) {
-            return
-        }
-        while (true) {
-            val result = ErrorHandler.runAndHandleException {
-                anonymousGroupService.streamLocations(
-                    connectionSettingsId = connectionSettingsId,
-                    anonymousGroupId = state.value.anonymousGroup!!.id
-                ).collect { locationUpdate ->
-                    Log.d("", "Received location: $locationUpdate")
-                    if (state.value.members == null) {
-                        return@collect
-                    }
-                    if (locationUpdate.agMemberId !in state.value.members!!.keys) {
-                        Log.d(
-                            "", "Refetching members (new member ${locationUpdate.agMemberId})"
-                        )
-                        getRemoteMembers(connectionSettingsId)
-                    }
-                    val member = state.value.members!![locationUpdate.agMemberId]
-                    if (member != null) {
-                        _state.update {
-                            val newMembers =
-                                it.members!! + (locationUpdate.agMemberId to member.copy(
-                                    lastLocationRecord = locationUpdate.locationRecord
-                                ))
-                            it.copy(
-                                members = newMembers
-                            )
-                        }
-                    }
-                }
+        anonymousGroupService.streamLocations(
+            connectionSettingsId = connectionSettingsId,
+            anonymousGroupId = state.value.anonymousGroup!!.id
+        ).collect { locationUpdate ->
+            Log.d("", "Received location: $locationUpdate")
+            if (state.value.members == null) {
+                return@collect
             }
-            if (result.errorInfo != null) {
-                result.errorInfo.exception?.printStackTrace()
-                Log.d("", "Streaming location failed, retrying in 10 s")
-                delay(10000L)
+            if (locationUpdate.agMemberId !in state.value.members!!.keys) {
+                Log.d(
+                    "", "Refetching members (new member ${locationUpdate.agMemberId})"
+                )
+                getRemoteMembers(connectionSettingsId)
+            }
+            val member = state.value.members!![locationUpdate.agMemberId]
+            if (member != null) {
+                _state.update {
+                    val newMembers =
+                        it.members!! + (locationUpdate.agMemberId to member.copy(
+                            lastLocationRecord = locationUpdate.locationRecord
+                        ))
+                    it.copy(
+                        members = newMembers
+                    )
+                }
             }
         }
     }
@@ -410,10 +458,6 @@ class AnonymousGroupDetailsViewModel(
         _state.update { it.copy(dialogErrorInfo = errorInfo) }
     }
 
-    fun hideReloadDataButton() {
-        _state.update { it.copy(reloadData = false) }
-    }
-
     fun moveToMe() {
         if (state.value.myCoordinates == null) {
             return
@@ -421,27 +465,23 @@ class AnonymousGroupDetailsViewModel(
         _cameraPositionEvents.trySend(state.value.myCoordinates!!)
     }
 
+    /**
+     * Move to a member, if the member is you this just calls onTapMyLocation()
+     */
     fun moveToMember(agMemberId: String) {
-        if (state.value.members == null) {
+        if (state.value.members == null || state.value.anonymousGroup == null) {
             return
         }
-        try {
-            state.value.members!![agMemberId]?.let { member ->
-                if (member.lastLocationRecord == null) {
-                    return@let
-                }
-                Log.d("", "Locating member ${agMemberId}: ${member.lastLocationRecord}")
-                _cameraPositionEvents.trySend(member.lastLocationRecord.coordinates)
+        state.value.members!![agMemberId]?.let { member ->
+            if (member.lastLocationRecord == null) {
+                return@let
             }
-            return
-        } catch (e: Exception) {
-            _snackbarEvents.trySend(
-                SnackbarErrorMessage(
-                    text = "Member with id $agMemberId does not exist!",
-                    errorInfo = ErrorInfo.fromException(e)
-                )
-            )
-            return
+            if(member.id == state.value.anonymousGroup!!.memberId) {
+                onTapMyLocation()
+                return
+            }
+            Log.d("", "Locating member ${agMemberId}: ${member.lastLocationRecord}")
+            _cameraPositionEvents.trySend(member.lastLocationRecord.coordinates)
         }
     }
 }

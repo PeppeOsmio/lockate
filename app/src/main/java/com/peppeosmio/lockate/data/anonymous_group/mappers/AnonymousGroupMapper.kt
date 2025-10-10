@@ -15,7 +15,7 @@ import kotlin.time.Instant
 object AnonymousGroupMapper {
     @OptIn(ExperimentalTime::class)
     suspend fun toEntity(
-        anonymousGroup: AnonymousGroup, connectionSettingsId: Long, keyStoreService: KeyStoreService
+        anonymousGroup: AnonymousGroup, keyStoreService: KeyStoreService
     ): AnonymousGroupEntity {
         val encryptedMemberToken = keyStoreService.encrypt(anonymousGroup.memberToken)
         val encryptedAdminToken = anonymousGroup.adminToken?.let {
@@ -33,7 +33,7 @@ object AnonymousGroupMapper {
             isMember = anonymousGroup.isMember,
             existsRemote = anonymousGroup.existsRemote,
             sendLocation = anonymousGroup.sendLocation,
-            connectionSettingsId = connectionSettingsId,
+            connectionSettingsId = anonymousGroup.connectionSettingsId,
 
             memberName = anonymousGroup.memberName,
             memberId = anonymousGroup.memberId,
@@ -84,7 +84,8 @@ object AnonymousGroupMapper {
             isMember = entity.isMember,
             existsRemote = entity.existsRemote,
             sendLocation = entity.sendLocation,
-            key = key
+            key = key,
+            connectionSettingsId = entity.connectionSettingsId
         )
     }
 

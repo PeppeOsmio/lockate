@@ -78,7 +78,6 @@ class AndroidSendLocationService : Service() {
                     notificationManager.notify(1, updatedNotification.build())
                 }
             } catch (e: Exception){
-                Log.d("", "GOT HIM")
                 e.printStackTrace()
             }
         }

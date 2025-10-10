@@ -21,6 +21,7 @@ import com.peppeosmio.lockate.exceptions.NoPermissionException
 import com.peppeosmio.lockate.service.ConfigSettings
 import com.peppeosmio.lockate.service.PermissionsService
 import com.peppeosmio.lockate.service.dataStore
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.concurrent.atomics.AtomicInt
@@ -36,9 +37,7 @@ class LocationService(
     private val permissionsService: PermissionsService,
 ) {
 
-    private val _coordinatesUpdates = MutableSharedFlow<Coordinates>(
-        replay = 0, extraBufferCapacity = 1
-    )
+    private val _coordinatesUpdates = MutableSharedFlow<Coordinates>(extraBufferCapacity = 1)
 
     @OptIn(ExperimentalAtomicApi::class)
     private val activeCollectors = AtomicInt(0)
@@ -64,6 +63,7 @@ class LocationService(
         }
     }
 
+    @Throws
     fun getLocationUpdates(): Flow<Coordinates> = flow {
         onCollectorAdded()
         try {
@@ -75,6 +75,8 @@ class LocationService(
 
     @OptIn(ExperimentalAtomicApi::class)
     private suspend fun onCollectorAdded() {
+        checkPermissions()
+        checkLocationEnabled()
         if (activeCollectors.incrementAndFetch() == 1) {
             startLocationUpdates()
         }
@@ -96,7 +98,7 @@ class LocationService(
                 cont.resumeWithException(LocationDisabledException())
             } else {
                 val isLocationUsable = it.locationSettingsStates?.isLocationUsable
-                if(isLocationUsable == null || !isLocationUsable) {
+                if (isLocationUsable == null || !isLocationUsable) {
                     cont.resumeWithException(LocationDisabledException())
                 } else {
                     cont.resume(Unit) { _, _, _ -> }
@@ -109,18 +111,16 @@ class LocationService(
     }
 
     @Throws(NoPermissionException::class)
-    private suspend fun startLocationUpdates() {
-        checkPermissions()
-        checkLocationEnabled()
+    private fun startLocationUpdates() {
         val request = LocationRequest.Builder(
-            Priority.PRIORITY_HIGH_ACCURACY, 10_000L
+            Priority.PRIORITY_HIGH_ACCURACY, 2000L
         ).build()
 
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 result.lastLocation?.let { loc ->
                     val coordinates = Coordinates(loc.latitude, loc.longitude)
-                    _coordinatesUpdates.tryEmit(coordinates)
+                    val emitted = _coordinatesUpdates.tryEmit(coordinates)
                 }
             }
         }
@@ -153,8 +153,8 @@ class LocationService(
                             Coordinates(it.latitude, it.longitude)
                         }
                         cont.resume(location) { _, _, _ -> }
-                    }.addOnFailureListener {
-                        cont.resume(null) { _, _, _ -> }
+                    }.addOnFailureListener { e ->
+                        cont.resumeWithException(e)
                     }
             }
         } catch (e: SecurityException) {

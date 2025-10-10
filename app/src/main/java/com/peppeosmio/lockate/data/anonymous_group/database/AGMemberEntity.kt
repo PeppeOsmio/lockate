@@ -18,7 +18,6 @@ data class AGMemberEntity(
     @PrimaryKey val id : String,
     val name: String,
     val createdAt: Long,
-    val lastLocationRecordId: String?,
     val lastLatitude: Double?,
     val lastLongitude: Double?,
     val lastSeen: Long?,

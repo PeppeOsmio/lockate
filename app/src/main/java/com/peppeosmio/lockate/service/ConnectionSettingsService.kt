@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.datastore.preferences.core.edit
 import com.peppeosmio.lockate.dao.ConnectionSettingsDao
+import com.peppeosmio.lockate.data.anonymous_group.mappers.ConnectionSettingsMapper
 import com.peppeosmio.lockate.data.anonymous_group.remote.ApiKeyRequiredResDto
 import com.peppeosmio.lockate.domain.ConnectionSettings
 import com.peppeosmio.lockate.exceptions.ConnectionSettingsNotFoundException
@@ -85,14 +86,14 @@ class ConnectionSettingsService(
         if (connectionSettingsEntity == null) {
             throw ConnectionSettingsNotFoundException()
         }
-        ConnectionSettings.fromEntity(connectionSettingsEntity)
+        ConnectionSettingsMapper.toDomain(connectionSettingsEntity)
     }
 
     @Throws(ConnectionSettingsNotFoundException::class)
     suspend fun getConnectionSettingsById(connectionSettingsId: Long): ConnectionSettings =
         withContext(Dispatchers.IO) {
             connectionSettingsDao.getConnectionSettingsById(connectionSettingsId)?.let {
-                ConnectionSettings.fromEntity(it)
+                ConnectionSettingsMapper.toDomain(it)
             } ?: throw ConnectionSettingsNotFoundException()
         }
 
@@ -108,15 +109,15 @@ class ConnectionSettingsService(
             if (connectionSettings.id != null) {
                 throw IllegalArgumentException("id must be null")
             }
-            val id = connectionSettingsDao.insertConnectionSettings(connectionSettings.toEntity())
+            val id = connectionSettingsDao.insertConnectionSettings(ConnectionSettingsMapper.toEntity(connectionSettings))
             val connectionSettingsEntity = connectionSettingsDao.getConnectionSettingsById(id)
                 ?: throw ConnectionSettingsNotFoundException()
-            ConnectionSettings.fromEntity(connectionSettingsEntity)
+            ConnectionSettingsMapper.toDomain(connectionSettingsEntity)
         }
 
     suspend fun listConnectionSettings(): List<ConnectionSettings> = withContext(Dispatchers.IO) {
         connectionSettingsDao.listConnectionSettings().map {
-            ConnectionSettings.fromEntity(it)
+            ConnectionSettingsMapper.toDomain(it)
         }
     }
 

@@ -20,7 +20,6 @@ object LocationRecordMapper {
         try {
 
             return LocationRecord(
-                id = encryptedLocationRecordDto.id,
                 coordinates = Coordinates.fromByteArray(decryptedCoordinates),
                 timestamp = encryptedLocationRecordDto.timestamp
             )
@@ -38,7 +37,6 @@ object LocationRecordMapper {
             key = key,
         )
         return EncryptedLocationRecordDto(
-            id = locationRecord.id,
             encryptedCoordinates = EncryptedDataMapper.toDto(encryptedCoordinates),
             timestamp = locationRecord.timestamp,
         )

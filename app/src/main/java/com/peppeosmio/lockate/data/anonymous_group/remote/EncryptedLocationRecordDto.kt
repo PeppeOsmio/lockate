@@ -5,7 +5,6 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class EncryptedLocationRecordDto(
-    val id: String,
     val encryptedCoordinates: EncryptedDataDto,
     val timestamp: LocalDateTime,
 )

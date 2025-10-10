@@ -114,6 +114,8 @@ class AnonymousGroupsViewModel(
                         })
                     }
                 }
+
+                else -> Unit
             }
         }
     }
@@ -124,27 +126,23 @@ class AnonymousGroupsViewModel(
             return
         }
         state.value.anonymousGroups!!.forEach { anonymousGroup ->
-            val result = ErrorHandler.runAndHandleException(customHandler = { e ->
-                when (e) {
-                    is UnauthorizedException -> null
-                    else -> throw e
-                }
-            }) {
+            try {
                 anonymousGroupService.verifyMemberAuth(
                     connectionSettingsId = connectionSettingsId,
                     anonymousGroupId = anonymousGroup.id
                 )
-            }
-            if (result.errorInfo != null) {
-                if (result.errorInfo.exception is CancellationException) {
-                    return
+            } catch (e: Exception) {
+                when (e) {
+                    is UnauthorizedException -> Unit
+                    else -> {
+                        _snackbarEvents.trySend(
+                            SnackbarErrorMessage(
+                                text = "Connection error", errorInfo = ErrorInfo.fromException(e)
+                            )
+                        )
+                        throw e
+                    }
                 }
-                _snackbarEvents.trySend(
-                    SnackbarErrorMessage(
-                        text = "Connection error", errorInfo = result.errorInfo
-                    )
-                )
-                result.errorInfo.exception?.let { throw it }
             }
         }
     }
