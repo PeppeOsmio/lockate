@@ -68,11 +68,11 @@ interface AnonymousGroupDao {
     @Query("DELETE FROM anonymous_group WHERE id = :anonymousGroupId")
     suspend fun deleteAnonymousGroupById(anonymousGroupId: String)
 
-    @Query("UPDATE anonymous_group SET isMember = 0 WHERE id = :anonymousGroupId")
-    suspend fun setAGIsMemberFalse(anonymousGroupId: String)
+    @Query("UPDATE anonymous_group SET isMember = :isMember WHERE id = :anonymousGroupId")
+    suspend fun setAGIsMember(anonymousGroupId: String, isMember: Boolean)
 
-    @Query("UPDATE anonymous_group SET existsRemote = 0 WHERE id = :anonymousGroupId")
-    suspend fun setAGExistsRemoteFalse(anonymousGroupId: String)
+    @Query("UPDATE anonymous_group SET existsRemote = :existsRemote WHERE id = :anonymousGroupId")
+    suspend fun setAGExistsRemote(anonymousGroupId: String, existsRemote: Boolean)
 
     @Query("UPDATE anonymous_group SET sendLocation = :sendLocation WHERE id = :anonymousGroupId")
     suspend fun setAGSendLocation(anonymousGroupId: String, sendLocation: Boolean)

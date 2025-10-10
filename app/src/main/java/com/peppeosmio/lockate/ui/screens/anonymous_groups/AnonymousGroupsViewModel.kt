@@ -103,6 +103,18 @@ class AnonymousGroupsViewModel(
                     }
                 }
 
+                is AnonymousGroupEvent.RemoteAGExistsEvent -> {
+                    _state.update {
+                        it.copy(anonymousGroups = it.anonymousGroups!!.map { ag ->
+                            if (ag.id != event.anonymousGroupId) {
+                                ag
+                            } else {
+                                ag.copy(existsRemote = true)
+                            }
+                        })
+                    }
+                }
+
                 is AnonymousGroupEvent.RemovedFromAnonymousGroupEvent -> {
                     _state.update {
                         it.copy(anonymousGroups = it.anonymousGroups!!.map { ag ->
@@ -114,6 +126,19 @@ class AnonymousGroupsViewModel(
                         })
                     }
                 }
+
+                is AnonymousGroupEvent.ReaddedToAnonymousGroupEvent -> {
+                    _state.update {
+                        it.copy(anonymousGroups = it.anonymousGroups!!.map { ag ->
+                            if (ag.id != event.anonymousGroupId) {
+                                ag
+                            } else {
+                                ag.copy(isMember = true)
+                            }
+                        })
+                    }
+                }
+
 
                 else -> Unit
             }
