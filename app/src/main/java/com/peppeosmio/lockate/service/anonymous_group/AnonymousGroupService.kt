@@ -46,6 +46,7 @@ import io.ktor.client.call.body
 import io.ktor.client.plugins.ResponseException
 import io.ktor.client.plugins.sse.deserialize
 import io.ktor.client.plugins.sse.sse
+import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
 import io.ktor.client.plugins.websocket.webSocketSession
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
@@ -76,6 +77,10 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
 import java.net.ConnectException
+import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
+import kotlin.concurrent.atomics.decrementAndFetch
+import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.io.encoding.Base64
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
@@ -131,6 +136,11 @@ class AnonymousGroupService(
         anonymousGroupDao.setAGSendLocation(
             anonymousGroupId = anonymousGroupId, sendLocation = sendLocation
         )
+        if (sendLocation) {
+            _events.tryEmit(AnonymousGroupEvent.SendEnabledEvent(anonymousGroupId))
+        } else {
+            _events.tryEmit(AnonymousGroupEvent.SendDisabledEvent(anonymousGroupId))
+        }
     }
 
     private suspend fun setAGIsMemberFalse(anonymousGroupId: String) = withContext(Dispatchers.IO) {
@@ -479,11 +489,11 @@ class AnonymousGroupService(
                     else -> ErrorHandler.handleGeneric(response)
                 }
                 // just if it was marked as not existing by mistake
-                if(!anonymousGroup.existsRemote) {
+                if (!anonymousGroup.existsRemote) {
                     setAGExistsRemoteTrue(anonymousGroupId)
                 }
                 // just if it was marked as not a member by mistake
-                if(!anonymousGroup.isMember) {
+                if (!anonymousGroup.isMember) {
                     setAGIsMemberTrue(anonymousGroupId)
                 }
             } catch (e: UnauthorizedException) {
@@ -658,118 +668,140 @@ class AnonymousGroupService(
     }
 
     @OptIn(ExperimentalTime::class)
+    private suspend fun anonymousGroupSendLocation(
+        anonymousGroup: AnonymousGroup, onConnected: () -> Unit, onDisconnected: () -> Unit
+    ) {
+        while (true) {
+            val connectionSettings =
+                connectionSettingsService.getConnectionSettingsById(anonymousGroup.connectionSettingsId)
+            var didConnect = false
+            try {
+                lateinit var session: DefaultClientWebSocketSession
+                try {
+                    session = httpClient.webSocketSession {
+                        url("${connectionSettings.getWebSocketUrl()}/api/ws/anonymous-groups/${anonymousGroup.id}/send-location")
+                        headers {
+                            connectionSettings.apiKey?.let { ak ->
+                                append(
+                                    "X-API-KEY", ak
+                                )
+                            }
+                            append(
+                                HttpHeaders.Authorization, "AGMember ${anonymousGroup.memberId} ${
+                                    Base64.encode(
+                                        anonymousGroup.memberToken
+                                    )
+                                }"
+                            )
+                            append(
+                                HttpHeaders.ContentType, "application/json"
+                            )
+                        }
+                    }
+                    onConnected()
+                    didConnect = true
+                } catch (e: ResponseException) {
+                    e.printStackTrace()
+                    val response = e.response
+                    when (response.status.value) {
+                        401, 403 -> ErrorHandler.handleUnauthorized(response)
+                        404 -> throw RemoteAGNotFoundException()
+                        else -> ErrorHandler.handleGeneric(response)
+                    }
+                }
+                Log.i(
+                    "",
+                    "Sending AG location to ${connectionSettings.url} agId: ${anonymousGroup.id} agMemberId: ${anonymousGroup.memberId}"
+                )
+                locationService.getLocationUpdates().collect { coordinates ->
+                    val coordinatesBytes = coordinates.toByteArray()
+                    val encryptedCoordinates = cryptoService.encrypt(
+                        data = coordinatesBytes, key = anonymousGroup.key
+                    )
+                    session.send(
+                        Frame.Text(
+                            text = Json.encodeToString(
+                                AGLocationSaveRequestDto(
+                                    encryptedLocation = EncryptedDataMapper.toDto(
+                                        encryptedCoordinates
+                                    )
+                                )
+                            )
+                        )
+                    )
+//                                Log.d(
+//                                    "",
+//                                    "Sent location $coordinates to AG ${anonymousGroup.id} connection ${connectionSettings.url}"
+//                                )
+                    _events.tryEmit(
+                        AnonymousGroupEvent.AGLocationSentEvent(
+                            anonymousGroupId = anonymousGroup.id, timestamp = Clock.System.now()
+                        )
+                    )
+                }
+            } catch (e: Exception) {
+                if (didConnect) {
+                    onDisconnected()
+                }
+                when (e) {
+                    is UnauthorizedException -> {
+                        setAGIsMemberFalse(
+                            anonymousGroup.id
+                        )
+                        return
+                    }
+
+                    is RemoteAGNotFoundException -> {
+                        setAGExistsRemoteFalse(
+                            anonymousGroup.id
+                        )
+                        return
+                    }
+
+                    else -> {
+                        Log.d("", "[1] ${e::class}")
+                        e.printStackTrace()
+                        Log.e("", "Can't connect to ${connectionSettings.url}")
+                        delay(60000L)
+                    }
+                }
+            }
+        }
+    }
+
+    @OptIn(ExperimentalAtomicApi::class)
     suspend fun sendLocation(updateActiveAGCount: (count: Int) -> Unit): Unit =
         withContext(Dispatchers.IO) {
-            val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
             val anonymousGroupEntities = anonymousGroupDao.listAGsToSendLocation()
             val anonymousGroups = anonymousGroupEntities.map {
                 AnonymousGroupMapper.toDomain(
                     entity = it, keyStoreService = keyStoreService
                 )
             }
+            val connectedAGCount = AtomicInt(0)
 
-            suspend fun anonymousGroupJob(anonymousGroup: AnonymousGroup) {
-                while (true) {
-                    val connectionSettings =
-                        connectionSettingsService.getConnectionSettingsById(anonymousGroup.connectionSettingsId)
-                    try {
-                        try {
-                            val session = httpClient.webSocketSession {
-                                url("${connectionSettings.getWebSocketUrl()}/api/ws/anonymous-groups/${anonymousGroup.id}/send-location")
-                                headers {
-                                    connectionSettings.apiKey?.let { ak ->
-                                        append(
-                                            "X-API-KEY", ak
-                                        )
-                                    }
-                                    append(
-                                        HttpHeaders.Authorization,
-                                        "AGMember ${anonymousGroup.memberId} ${
-                                            Base64.encode(
-                                                anonymousGroup.memberToken
-                                            )
-                                        }"
-                                    )
-                                    append(
-                                        HttpHeaders.ContentType, "application/json"
-                                    )
-                                }
-                            }
-                            Log.i(
-                                "",
-                                "Sending AG location to ${connectionSettings.url} agId: ${anonymousGroup.id} agMemberId: ${anonymousGroup.memberId}"
-                            )
-                            locationService.getLocationUpdates().collect { coordinates ->
-                                val coordinatesBytes = coordinates.toByteArray()
-                                val encryptedCoordinates = cryptoService.encrypt(
-                                    data = coordinatesBytes, key = anonymousGroup.key
-                                )
-                                session.send(
-                                    Frame.Text(
-                                        text = Json.encodeToString(
-                                            AGLocationSaveRequestDto(
-                                                encryptedLocation = EncryptedDataMapper.toDto(
-                                                    encryptedCoordinates
-                                                )
-                                            )
-                                        )
-                                    )
-                                )
-//                                Log.d(
-//                                    "",
-//                                    "Sent location $coordinates to AG ${anonymousGroup.id} connection ${connectionSettings.url}"
-//                                )
-                                _events.tryEmit(
-                                    AnonymousGroupEvent.AGLocationSentEvent(
-                                        anonymousGroupId = anonymousGroup.id,
-                                        timestamp = Clock.System.now()
-                                    )
-                                )
-                            }
-                        } catch (e: ResponseException) {
-                            e.printStackTrace()
-                            val response = e.response
-                            when (response.status.value) {
-                                201 -> Unit
-                                401, 403 -> ErrorHandler.handleUnauthorized(response)
-                                404 -> throw RemoteAGNotFoundException()
-                                else -> ErrorHandler.handleGeneric(response)
-                            }
-                        }
-                    } catch (e: Exception) {
-                        when (e) {
-                            is UnauthorizedException -> {
-                                setAGIsMemberFalse(
-                                    anonymousGroup.id
-                                )
-                                return
-                            }
+            val onConnecting = fun() {
+                val count = connectedAGCount.incrementAndFetch()
+                updateActiveAGCount(count)
+            }
 
-                            is RemoteAGNotFoundException -> {
-                                setAGExistsRemoteFalse(
-                                    anonymousGroup.id
-                                )
-                                return
-                            }
-
-                            else -> {
-                                e.printStackTrace()
-                                Log.e("", "Lost connection to ${connectionSettings.url}")
-                                delay(10000L)
-                            }
-                        }
-                    }
-                }
+            // this is also called when a Job is canceled since it gets JobCancellationException
+            val onDisconnected = fun() {
+                val count = connectedAGCount.decrementAndFetch()
+                updateActiveAGCount(count)
             }
 
             anonymousGroups.forEach {
                 sendLocationJobs[it.id]?.cancel()
-                sendLocationJobs[it.id] = scope.launch {
-                    anonymousGroupJob(it)
+                sendLocationJobs[it.id] = launch {
+                    anonymousGroupSendLocation(
+                        anonymousGroup = it,
+                        onConnected = onConnecting,
+                        onDisconnected = onDisconnected
+                    )
                 }
             }
-            var initialAGCount = anonymousGroups.size
-            updateActiveAGCount(initialAGCount)
+
             events.collect { event ->
                 when (event) {
                     is AnonymousGroupEvent.NewAnonymousGroupEvent -> {
@@ -779,32 +811,48 @@ class AnonymousGroupService(
                         val anonymousGroup = AnonymousGroupMapper.toDomain(
                             entity = anonymousGroupEntity, keyStoreService = keyStoreService
                         )
-                        sendLocationJobs[anonymousGroup.id] = scope.launch {
-                            anonymousGroupJob(anonymousGroup)
+                        sendLocationJobs[anonymousGroup.id] = launch {
+                            anonymousGroupSendLocation(
+                                anonymousGroup,
+                                onConnected = onConnecting,
+                                onDisconnected = onDisconnected
+                            )
                         }
-                        initialAGCount += 1
-                        updateActiveAGCount(initialAGCount)
+                    }
+
+                    is AnonymousGroupEvent.SendEnabledEvent -> {
+                        val anonymousGroupEntity =
+                            anonymousGroupDao.getAnonymousGroupById(event.anonymousGroupId)
+                                ?: return@collect
+                        val anonymousGroup = AnonymousGroupMapper.toDomain(
+                            entity = anonymousGroupEntity, keyStoreService = keyStoreService
+                        )
+                        sendLocationJobs[anonymousGroup.id] = launch {
+                            anonymousGroupSendLocation(
+                                anonymousGroup,
+                                onConnected = onConnecting,
+                                onDisconnected = onDisconnected
+                            )
+                        }
                     }
 
                     is AnonymousGroupEvent.DeleteAnonymousGroupEvent -> {
                         sendLocationJobs.remove(event.anonymousGroupId)?.cancel()
-                        initialAGCount -= 1
-                        updateActiveAGCount(initialAGCount)
                     }
 
                     is AnonymousGroupEvent.RemovedFromAnonymousGroupEvent -> {
                         sendLocationJobs.remove(event.anonymousGroupId)?.cancel()
-                        initialAGCount -= 1
-                        updateActiveAGCount(initialAGCount)
-                    }
 
+                    }
 
                     is AnonymousGroupEvent.RemoteAGDoesntExistEvent -> {
                         sendLocationJobs.remove(event.anonymousGroupId)?.cancel()
-                        initialAGCount -= 1
-                        updateActiveAGCount(initialAGCount)
+
                     }
 
+                    is AnonymousGroupEvent.SendDisabledEvent -> {
+                        sendLocationJobs.remove(event.anonymousGroupId)?.cancel()
+                    }
 
                     else -> Unit
                 }

@@ -10,6 +10,8 @@ sealed class AnonymousGroupEvent {
     data class ReaddedToAnonymousGroupEvent(val anonymousGroupId: String): AnonymousGroupEvent()
     data class RemoteAGDoesntExistEvent(val anonymousGroupId: String) : AnonymousGroupEvent()
     data class RemoteAGExistsEvent(val anonymousGroupId: String): AnonymousGroupEvent()
+    data class SendDisabledEvent(val anonymousGroupId: String): AnonymousGroupEvent()
+    data class SendEnabledEvent(val anonymousGroupId: String): AnonymousGroupEvent()
     data class AGLocationSentEvent @OptIn(ExperimentalTime::class) constructor(
         val anonymousGroupId: String, val timestamp: Instant
     ) : AnonymousGroupEvent()
