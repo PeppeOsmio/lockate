@@ -56,10 +56,9 @@ import io.ktor.client.request.setBody
 import io.ktor.client.request.url
 import io.ktor.http.HttpHeaders
 import io.ktor.websocket.Frame
-import kotlinx.coroutines.CoroutineScope
+import io.ktor.websocket.close
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.awaitClose
@@ -674,9 +673,8 @@ class AnonymousGroupService(
         while (true) {
             val connectionSettings =
                 connectionSettingsService.getConnectionSettingsById(anonymousGroup.connectionSettingsId)
-            var didConnect = false
+            var session: DefaultClientWebSocketSession? = null
             try {
-                lateinit var session: DefaultClientWebSocketSession
                 try {
                     session = httpClient.webSocketSession {
                         url("${connectionSettings.getWebSocketUrl()}/api/ws/anonymous-groups/${anonymousGroup.id}/send-location")
@@ -699,7 +697,6 @@ class AnonymousGroupService(
                         }
                     }
                     onConnected()
-                    didConnect = true
                 } catch (e: ResponseException) {
                     e.printStackTrace()
                     val response = e.response
@@ -718,7 +715,7 @@ class AnonymousGroupService(
                     val encryptedCoordinates = cryptoService.encrypt(
                         data = coordinatesBytes, key = anonymousGroup.key
                     )
-                    session.send(
+                    session!!.send(
                         Frame.Text(
                             text = Json.encodeToString(
                                 AGLocationSaveRequestDto(
@@ -740,8 +737,12 @@ class AnonymousGroupService(
                     )
                 }
             } catch (e: Exception) {
-                if (didConnect) {
+                if (session != null) {
                     onDisconnected()
+                    try {
+                        session.close()
+                    } catch (_: Exception) {
+                    }
                 }
                 when (e) {
                     is UnauthorizedException -> {
