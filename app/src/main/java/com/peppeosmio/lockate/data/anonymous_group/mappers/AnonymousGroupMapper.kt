@@ -1,6 +1,5 @@
 package com.peppeosmio.lockate.data.anonymous_group.mappers
 
-import android.util.Log
 import com.peppeosmio.lockate.data.anonymous_group.database.AnonymousGroupEntity
 import com.peppeosmio.lockate.domain.anonymous_group.AnonymousGroup
 import com.peppeosmio.lockate.domain.crypto.EncryptedData
@@ -8,7 +7,6 @@ import com.peppeosmio.lockate.platform_service.KeyStoreService
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
-import kotlin.io.encoding.Base64
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
@@ -23,6 +21,7 @@ object AnonymousGroupMapper {
         }
         val encryptedKey = keyStoreService.encrypt(anonymousGroup.key)
         return AnonymousGroupEntity(
+            internalId = anonymousGroup.internalId,
             id = anonymousGroup.id,
             name = anonymousGroup.name,
             createdAt = anonymousGroup.createdAt.toInstant(TimeZone.UTC)
@@ -33,7 +32,7 @@ object AnonymousGroupMapper {
             isMember = anonymousGroup.isMember,
             existsRemote = anonymousGroup.existsRemote,
             sendLocation = anonymousGroup.sendLocation,
-            connectionSettingsId = anonymousGroup.connectionSettingsId,
+            connectionId = anonymousGroup.connectionId,
 
             memberName = anonymousGroup.memberName,
             memberId = anonymousGroup.memberId,
@@ -71,6 +70,7 @@ object AnonymousGroupMapper {
             )
         }
         return AnonymousGroup(
+            internalId = entity.internalId,
             id = entity.id,
             name = entity.name,
             createdAt = Instant.fromEpochMilliseconds(entity.createdAt)
@@ -85,7 +85,7 @@ object AnonymousGroupMapper {
             existsRemote = entity.existsRemote,
             sendLocation = entity.sendLocation,
             key = key,
-            connectionSettingsId = entity.connectionSettingsId
+            connectionId = entity.connectionId
         )
     }
 

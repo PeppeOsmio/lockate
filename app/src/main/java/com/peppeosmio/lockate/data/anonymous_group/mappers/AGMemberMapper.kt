@@ -18,6 +18,7 @@ object AGMemberMapper {
         entity: AGMemberEntity,
     ): AGMember {
         return AGMember(
+            internalId = entity.internalId,
             id = entity.id,
             name = entity.name,
             createdAt = Instant.fromEpochMilliseconds(entity.createdAt)
@@ -37,10 +38,11 @@ object AGMemberMapper {
 
     @OptIn(ExperimentalTime::class)
     fun domainToEntity(
-        agMember: AGMember, anonymousGroupId: String
+        agMember: AGMember, anonymousGroupInternalId: Long
     ): AGMemberEntity {
         return AGMemberEntity(
-            agMember.id,
+            internalId = agMember.internalId,
+            id = agMember.id,
             name = agMember.name,
             createdAt = agMember.createdAt.toInstant(TimeZone.UTC)
                 .toEpochMilliseconds(),
@@ -48,7 +50,7 @@ object AGMemberMapper {
             lastLongitude = agMember.lastLocationRecord?.coordinates?.longitude,
             lastSeen = agMember.lastLocationRecord?.timestamp?.toInstant(TimeZone.UTC)
                 ?.toEpochMilliseconds(),
-            anonymousGroupId = anonymousGroupId,
+            anonymousGroupInternalId = anonymousGroupInternalId
         )
     }
 
@@ -66,6 +68,7 @@ object AGMemberMapper {
             )
         }
         return AGMember(
+            internalId = 0,
             id = encryptedAGMemberDto.id,
             name = name,
             createdAt = encryptedAGMemberDto.createdAt,

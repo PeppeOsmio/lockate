@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.peppeosmio.lockate.exceptions.ConnectionSettingsNotFoundException
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
-import com.peppeosmio.lockate.service.ConnectionSettingsService
+import com.peppeosmio.lockate.service.ConnectionService
 import com.peppeosmio.lockate.service.PermissionsService
 import com.peppeosmio.lockate.utils.ErrorInfo
 import com.peppeosmio.lockate.utils.ErrorHandler
@@ -18,7 +18,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class HomePageViewModel(
-    private val connectionSettingsService: ConnectionSettingsService,
+    private val connectionService: ConnectionService,
     private val anonymousGroupService: AnonymousGroupService,
     private val permissionsService: PermissionsService
 ) : ViewModel() {
@@ -30,15 +30,15 @@ class HomePageViewModel(
 
     init {
         viewModelScope.launch {
-            val connectionSettings = connectionSettingsService.listConnectionSettings()
+            val connectionSettings = connectionService.listConnectionSettings()
             if (connectionSettings.isNotEmpty()) {
-                _state.update { it.copy(connectionSettings = connectionSettings.associateBy { connectionSettings -> connectionSettings.id!! }) }
+                _state.update { it.copy(connection = connectionSettings.associateBy { connectionSettings -> connectionSettings.id!! }) }
             } else {
-                _state.update { it.copy(shouldRedirectToCredentialsPage = true) }
+                _state.update { it.copy(shouldRedirectToConnectionScreen = true) }
             }
             try {
-                val selectedConnectionSettings = connectionSettingsService.getSelectedConnectionSettings()
-                _state.update { it.copy(selectedConnectionSettingsId = selectedConnectionSettings.id) }
+                val selectedConnectionSettings = connectionService.getSelectedConnectionSettings()
+                _state.update { it.copy(selectedConnectionId = selectedConnectionSettings.id) }
             } catch (e: ConnectionSettingsNotFoundException) {
                 _snackbarEvents.trySend(SnackbarErrorMessage(text = "No connection settings found!"))
             }
@@ -93,13 +93,13 @@ class HomePageViewModel(
 
     suspend fun disconnect(): Boolean {
         closeLogoutDialog()
-        if (state.value.selectedConnectionSettingsId == null) {
+        if (state.value.selectedConnectionId == null) {
             return false
         }
         _state.update { it.copy(showLoadingOverlay = true) }
         val result = ErrorHandler.runAndHandleException {
-            anonymousGroupService.leaveAllAG(state.value.selectedConnectionSettingsId!!)
-            connectionSettingsService.deleteConnectionSettings(state.value.selectedConnectionSettingsId!!)
+            anonymousGroupService.leaveAllAG(state.value.selectedConnectionId!!)
+            connectionService.deleteConnectionSettings(state.value.selectedConnectionId!!)
         }
         if (result.errorInfo != null) {
             _snackbarEvents.trySend(
@@ -127,7 +127,7 @@ class HomePageViewModel(
     }
 
     fun setSelectedConnectionSettingsId(connectionSettingsId: Long) {
-        _state.update { it.copy(selectedConnectionSettingsId = connectionSettingsId) }
+        _state.update { it.copy(selectedConnectionId = connectionSettingsId) }
     }
 
     fun toggleConnectionsMenu() {
@@ -139,10 +139,10 @@ class HomePageViewModel(
     }
 
     suspend fun onConnectionSelected(connectionSettingsId: Long) {
-        if (connectionSettingsId == state.value.selectedConnectionSettingsId) {
+        if (connectionSettingsId == state.value.selectedConnectionId) {
             return
         }
-        _state.update { it.copy(selectedConnectionSettingsId = connectionSettingsId) }
-        connectionSettingsService.saveSelectedConnectionSettingsId(connectionSettingsId)
+        _state.update { it.copy(selectedConnectionId = connectionSettingsId) }
+        connectionService.saveSelectedConnectionSettingsId(connectionSettingsId)
     }
 }

@@ -1,25 +1,23 @@
 package com.peppeosmio.lockate.ui.screens.connection_settings
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.peppeosmio.lockate.domain.ConnectionSettings
+import com.peppeosmio.lockate.domain.Connection
 import com.peppeosmio.lockate.exceptions.InvalidApiKeyException
-import com.peppeosmio.lockate.service.ConnectionSettingsService
+import com.peppeosmio.lockate.service.ConnectionService
 import com.peppeosmio.lockate.utils.ErrorInfo
 import com.peppeosmio.lockate.utils.ErrorHandler
 import com.peppeosmio.lockate.utils.SnackbarErrorMessage
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class ConnectionSettingsViewModel(
-    private val connectionSettingsService: ConnectionSettingsService
+    private val connectionService: ConnectionService
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ConnectionSettingsState())
@@ -31,24 +29,23 @@ class ConnectionSettingsViewModel(
     val navigateHomeEvents = _navigateHomeEvents.receiveAsFlow()
 
     fun getInitialData(initialConnectionSettingsId: Long?) {
+        Log.d("ConnectionSettingsViewModel", "initialConnectionSettingsId: $initialConnectionSettingsId")
         if (initialConnectionSettingsId == null) {
             _state.update { it.copy(showLoadingOverlay = false) }
             return
         }
         viewModelScope.launch {
-            val result = ErrorHandler.runAndHandleException {
-                connectionSettingsService.getConnectionSettingsById(initialConnectionSettingsId)
-            }
-            if (result.errorInfo != null) {
-                _state.update { it.copy(showLoadingOverlay = false) }
-            } else {
+            try {
+                val connectionSettings = connectionService.getConnectionSettingsById(initialConnectionSettingsId)
                 _state.update {
                     it.copy(
                         showLoadingOverlay = false,
-                        apiKey = result.value!!.apiKey ?: "",
-                        url = result.value.url
+                        apiKey = connectionSettings.apiKey ?: "",
+                        url = connectionSettings.url
                     )
                 }
+            } catch (e: Exception) {
+                _state.update { it.copy(showLoadingOverlay = false) }
             }
         }
     }
@@ -74,7 +71,7 @@ class ConnectionSettingsViewModel(
             _state.update { it.copy(showLoadingOverlay = true) }
             if (!state.value.requireApiKey) {
                 val result = ErrorHandler.runAndHandleException {
-                    connectionSettingsService.checkRequireApiKey(state.value.url)
+                    connectionService.checkRequireApiKey(state.value.url)
                 }
                 if (result.errorInfo != null) {
                     _snackbarEvents.trySend(
@@ -94,7 +91,7 @@ class ConnectionSettingsViewModel(
                     _state.update { it.copy(showLoadingOverlay = false) }
                 }
             }
-            val connectionSettings = ConnectionSettings(
+            val connection = Connection(
                 id = null,
                 url = _state.value.url,
                 apiKey = if(state.value.requireApiKey) state.value.apiKey else null ,
@@ -102,7 +99,7 @@ class ConnectionSettingsViewModel(
                 authToken = null
             )
             try {
-                connectionSettingsService.testConnectionSettings(connectionSettings)
+                connectionService.testConnectionSettings(connection)
             } catch (e: InvalidApiKeyException) {
                 val errorInfo = ErrorInfo.fromException(e)
                 _snackbarEvents.trySend(
@@ -124,8 +121,8 @@ class ConnectionSettingsViewModel(
                 return@launch
             }
             val result = ErrorHandler.runAndHandleException {
-                connectionSettingsService.saveConnectionSettings(
-                    connectionSettings
+                connectionService.saveConnectionSettings(
+                    connection
                 )
             }
             if (result.errorInfo != null) {

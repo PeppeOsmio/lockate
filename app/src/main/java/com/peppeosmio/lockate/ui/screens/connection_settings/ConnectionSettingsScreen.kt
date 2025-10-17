@@ -7,11 +7,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -20,6 +23,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -34,10 +38,12 @@ import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConnectionSettingsScreen(
-    initialConnectionSettingsId: Long?,
+    initialConnectionId: Long?,
     navigateToHome: () -> Unit,
+    navigateBack: () -> Unit,
     viewModel: ConnectionSettingsViewModel = koinViewModel()
 ) {
     val state by viewModel.state.collectAsState()
@@ -46,7 +52,7 @@ fun ConnectionSettingsScreen(
     val focusManager = LocalFocusManager.current
 
     LaunchedEffect(true) {
-        viewModel.getInitialData(initialConnectionSettingsId)
+        viewModel.getInitialData(initialConnectionId)
     }
 
     // Navigate on success
@@ -88,7 +94,21 @@ fun ConnectionSettingsScreen(
         SnackbarHost(
             hostState = snackbarHostState
         )
-    }, content = { paddingValues ->
+    }, topBar = {
+        if (initialConnectionId == null) {
+            return@Scaffold
+        }
+        TopAppBar(title = {}, navigationIcon = {
+            IconButton(onClick = {
+                navigateBack()
+            }) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Default.ArrowBack,
+                    contentDescription = "Navigate back"
+                )
+            }
+        })
+    }) { paddingValues ->
         Column(
             modifier = Modifier
                 .padding(paddingValues)
@@ -128,7 +148,7 @@ fun ConnectionSettingsScreen(
             }
             Spacer(modifier = Modifier.weight(2.0f))
         }
-    })
+    }
 
 
 }

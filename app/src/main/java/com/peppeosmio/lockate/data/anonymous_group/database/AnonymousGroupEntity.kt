@@ -7,14 +7,15 @@ import androidx.room.PrimaryKey
 
 @Entity(
     tableName = "anonymous_group", foreignKeys = [ForeignKey(
-        entity = ConnectionSettingsEntity::class,
+        entity = ConnectionEntity::class,
         parentColumns = ["id"],
-        childColumns = ["connectionSettingsId"],
+        childColumns = ["connectionId"],
         onDelete = ForeignKey.CASCADE
-    )], indices = [Index("connectionSettingsId")]
+    )], indices = [Index("connectionId", name = "idx_anonymous_group_connectionId")]
 )
 data class AnonymousGroupEntity(
-    @PrimaryKey val id: String,
+    @PrimaryKey(autoGenerate = true) val internalId: Long,
+    val id: String,
     val name: String,
     val createdAt: Long,
     val joinedAt: Long,
@@ -22,7 +23,7 @@ data class AnonymousGroupEntity(
     val isMember: Boolean,
     val existsRemote: Boolean,
     val sendLocation: Boolean,
-    val connectionSettingsId: Long,
+    val connectionId: Long,
 
     val memberName: String,
     val memberId: String,
@@ -41,12 +42,13 @@ data class AnonymousGroupEntity(
 
         other as AnonymousGroupEntity
 
+        if (internalId != other.internalId) return false
         if (createdAt != other.createdAt) return false
         if (joinedAt != other.joinedAt) return false
         if (isMember != other.isMember) return false
         if (existsRemote != other.existsRemote) return false
         if (sendLocation != other.sendLocation) return false
-        if (connectionSettingsId != other.connectionSettingsId) return false
+        if (connectionId != other.connectionId) return false
         if (id != other.id) return false
         if (name != other.name) return false
         if (memberName != other.memberName) return false
@@ -68,12 +70,13 @@ data class AnonymousGroupEntity(
     }
 
     override fun hashCode(): Int {
-        var result = createdAt.hashCode()
+        var result = internalId.hashCode()
+        result = 31 * result + createdAt.hashCode()
         result = 31 * result + joinedAt.hashCode()
         result = 31 * result + isMember.hashCode()
         result = 31 * result + existsRemote.hashCode()
         result = 31 * result + sendLocation.hashCode()
-        result = 31 * result + connectionSettingsId.hashCode()
+        result = 31 * result + connectionId.hashCode()
         result = 31 * result + id.hashCode()
         result = 31 * result + name.hashCode()
         result = 31 * result + memberName.hashCode()

@@ -3,10 +3,10 @@ package com.peppeosmio.lockate.service
 import android.content.Context
 import android.util.Log
 import androidx.datastore.preferences.core.edit
-import com.peppeosmio.lockate.dao.ConnectionSettingsDao
-import com.peppeosmio.lockate.data.anonymous_group.mappers.ConnectionSettingsMapper
+import com.peppeosmio.lockate.dao.ConnectionDao
+import com.peppeosmio.lockate.data.anonymous_group.mappers.ConnectionMapper
 import com.peppeosmio.lockate.data.anonymous_group.remote.ApiKeyRequiredResDto
-import com.peppeosmio.lockate.domain.ConnectionSettings
+import com.peppeosmio.lockate.domain.Connection
 import com.peppeosmio.lockate.exceptions.ConnectionSettingsNotFoundException
 import com.peppeosmio.lockate.exceptions.InvalidApiKeyException
 import com.peppeosmio.lockate.exceptions.UnauthorizedException
@@ -25,10 +25,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
-class ConnectionSettingsService(
+class ConnectionService(
     private val context: Context,
     private val httpClient: HttpClient,
-    private val connectionSettingsDao: ConnectionSettingsDao,
+    private val connectionDao: ConnectionDao,
     private val keyStoreService: KeyStoreService
 ) {
     @Throws
@@ -55,7 +55,7 @@ class ConnectionSettingsService(
     }
 
     @Throws(InvalidApiKeyException::class, UnauthorizedException::class)
-    suspend fun testConnectionSettings(credentials: ConnectionSettings) =
+    suspend fun testConnectionSettings(credentials: Connection) =
         withContext(Dispatchers.IO) {
             val response = httpClient.get {
                 url(Url("${credentials.url.trimEnd('/')}/api/api-key/test"))
@@ -74,26 +74,26 @@ class ConnectionSettingsService(
         }
 
     @Throws(ConnectionSettingsNotFoundException::class)
-    suspend fun getSelectedConnectionSettings(): ConnectionSettings = withContext(Dispatchers.IO) {
+    suspend fun getSelectedConnectionSettings(): Connection = withContext(Dispatchers.IO) {
         val selectedConnectionSettingsId = context.dataStore.data.map {
             it[ConfigSettings.SELECTED_CONNECTION_SETTINGS_ID]
         }.first()
         val connectionSettingsEntity = if (selectedConnectionSettingsId != null) {
-            connectionSettingsDao.getConnectionSettingsById(selectedConnectionSettingsId)
+            connectionDao.getConnectionSettingsById(selectedConnectionSettingsId)
         } else {
-            connectionSettingsDao.getFirstConnectionSettings()
+            connectionDao.getFirstConnectionSettings()
         }
         if (connectionSettingsEntity == null) {
             throw ConnectionSettingsNotFoundException()
         }
-        ConnectionSettingsMapper.toDomain(connectionSettingsEntity)
+        ConnectionMapper.toDomain(connectionSettingsEntity)
     }
 
     @Throws(ConnectionSettingsNotFoundException::class)
-    suspend fun getConnectionSettingsById(connectionSettingsId: Long): ConnectionSettings =
+    suspend fun getConnectionSettingsById(connectionSettingsId: Long): Connection =
         withContext(Dispatchers.IO) {
-            connectionSettingsDao.getConnectionSettingsById(connectionSettingsId)?.let {
-                ConnectionSettingsMapper.toDomain(it)
+            connectionDao.getConnectionSettingsById(connectionSettingsId)?.let {
+                ConnectionMapper.toDomain(it)
             } ?: throw ConnectionSettingsNotFoundException()
         }
 
@@ -104,24 +104,24 @@ class ConnectionSettingsService(
             }
         }
 
-    suspend fun saveConnectionSettings(connectionSettings: ConnectionSettings): ConnectionSettings =
+    suspend fun saveConnectionSettings(connection: Connection): Connection =
         withContext(Dispatchers.IO) {
-            if (connectionSettings.id != null) {
+            if (connection.id != null) {
                 throw IllegalArgumentException("id must be null")
             }
-            val id = connectionSettingsDao.insertConnectionSettings(ConnectionSettingsMapper.toEntity(connectionSettings))
-            val connectionSettingsEntity = connectionSettingsDao.getConnectionSettingsById(id)
+            val id = connectionDao.insertConnectionSettings(ConnectionMapper.toEntity(connection))
+            val connectionSettingsEntity = connectionDao.getConnectionSettingsById(id)
                 ?: throw ConnectionSettingsNotFoundException()
-            ConnectionSettingsMapper.toDomain(connectionSettingsEntity)
+            ConnectionMapper.toDomain(connectionSettingsEntity)
         }
 
-    suspend fun listConnectionSettings(): List<ConnectionSettings> = withContext(Dispatchers.IO) {
-        connectionSettingsDao.listConnectionSettings().map {
-            ConnectionSettingsMapper.toDomain(it)
+    suspend fun listConnectionSettings(): List<Connection> = withContext(Dispatchers.IO) {
+        connectionDao.listConnectionSettings().map {
+            ConnectionMapper.toDomain(it)
         }
     }
 
     suspend fun deleteConnectionSettings(connectionSettingsId: Long) = withContext(Dispatchers.IO) {
-        connectionSettingsDao.deleteConnectionSettings(connectionSettingsId)
+        connectionDao.deleteConnectionSettings(connectionSettingsId)
     }
 }

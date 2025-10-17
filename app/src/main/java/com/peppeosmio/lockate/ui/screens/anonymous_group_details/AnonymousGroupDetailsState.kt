@@ -10,6 +10,7 @@ import com.peppeosmio.lockate.utils.LoadingState
 data class AnonymousGroupDetailsState(
     val anonymousGroup: AnonymousGroup? = null,
     val members: Map<String, AGMember>? = null,
+    val membersCoordinates: Map<String, Coordinates>? = null,
     val isAdminTokenValid: Boolean? = null,
     val showLoadingOverlay: Boolean = false,
     val adminPasswordText: String = "",
@@ -17,5 +18,6 @@ data class AnonymousGroupDetailsState(
     val dialogErrorInfo: ErrorInfo? = null,
     val remoteDataLoadingState: LoadingState = LoadingState.IsLoading,
     val isDropdownMenuOpen: Boolean = false,
-    val myCoordinates: Coordinates? = null
+    val myCoordinates: Coordinates? = null,
+    val followedMemberId: String? = null
 )

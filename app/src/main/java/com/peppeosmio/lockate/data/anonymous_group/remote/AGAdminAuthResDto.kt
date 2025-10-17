@@ -3,4 +3,4 @@ package com.peppeosmio.lockate.data.anonymous_group.remote
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class AGAdminAuthRequestDto(val adminPassword: String)
+data class AGAdminAuthResDto(val adminToken: String)

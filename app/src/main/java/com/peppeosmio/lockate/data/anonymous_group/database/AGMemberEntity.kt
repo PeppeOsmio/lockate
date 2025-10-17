@@ -5,22 +5,25 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "anonymous_group_member",
-    foreignKeys = [
-        ForeignKey(
-            entity = AnonymousGroupEntity::class,
-            parentColumns = ["id"],
-            childColumns = ["anonymousGroupId"],
-            onDelete = ForeignKey.CASCADE
-        )
-    ], indices = [Index("anonymousGroupId")])
+@Entity(
+    tableName = "ag_member", foreignKeys = [ForeignKey(
+        entity = AnonymousGroupEntity::class,
+        parentColumns = ["internalId"],
+        childColumns = ["anonymousGroupInternalId"],
+        onDelete = ForeignKey.CASCADE
+    )], indices = [Index(
+        "anonymousGroupInternalId",
+        "id",
+        name = "idx_ag_member_anonymousGroupInternalId_id"
+    )]
+)
 data class AGMemberEntity(
-    @PrimaryKey val id : String,
+    @PrimaryKey(autoGenerate = true) val internalId: Long,
+    val id: String,
     val name: String,
     val createdAt: Long,
     val lastLatitude: Double?,
     val lastLongitude: Double?,
     val lastSeen: Long?,
-    val anonymousGroupId: String = "",
-) {
-}
+    val anonymousGroupInternalId: Long,
+) {}

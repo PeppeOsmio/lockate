@@ -41,10 +41,10 @@ import org.koin.compose.viewmodel.koinViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomePageScreen(
-    navigateToConnectionSettings: () -> Unit,
+    navigateToConnectionSettings: (connectionSettingsId: Long?) -> Unit,
     navigateToCreateAG: (connectionSettingsId: Long) -> Unit,
     navigateToJoinAG: (connectionSettingsId: Long) -> Unit,
-    navigateToAGDetails: (connectionSettingsId: Long, anonymousGroupId: String, anonymousGroupName: String) -> Unit,
+    navigateToAGDetails: (connectionSettingsId: Long, anonymousGroupInternalId: Long, anonymousGroupName: String) -> Unit,
     startLocationService: () -> Unit,
     stopLocationService: () -> Unit,
     viewModel: HomePageViewModel = koinViewModel()
@@ -64,9 +64,9 @@ fun HomePageScreen(
     val snackbarHostState = remember { SnackbarHostState() }
 
     // Redirect to settings if needed, should never happen
-    LaunchedEffect(state.shouldRedirectToCredentialsPage) {
-        if (state.shouldRedirectToCredentialsPage) {
-            navigateToConnectionSettings()
+    LaunchedEffect(state.shouldRedirectToConnectionScreen) {
+        if (state.shouldRedirectToConnectionScreen) {
+            navigateToConnectionSettings(null)
         }
     }
 
@@ -102,7 +102,7 @@ fun HomePageScreen(
                     coroutineScope.launch {
                         if (viewModel.disconnect()) {
                             stopLocationService()
-                            navigateToConnectionSettings()
+                            navigateToConnectionSettings(null)
                         }
                     }
                 }) { Text("Yes, disconnect") }
@@ -152,8 +152,8 @@ fun HomePageScreen(
                         contentDescription = "logout"
                     )
                 }, label = { Text("Logout") }, selected = false, onClick = {
+                    viewModel.openLogoutDialog()
                     coroutineScope.launch {
-                        viewModel.openLogoutDialog()
                         drawerState.close()
                     }
                 })
@@ -163,7 +163,10 @@ fun HomePageScreen(
                         contentDescription = "Connection settings"
                     )
                 }, label = { Text("Connection settings") }, selected = false, onClick = {
-                    navigateToConnectionSettings()
+                    navigateToConnectionSettings(state.selectedConnectionId)
+                    coroutineScope.launch {
+                        drawerState.close()
+                    }
                 })
             }
         }) {
@@ -202,7 +205,7 @@ fun HomePageScreen(
                         }
                     },
                     actions = {
-                        if (state.connectionSettings == null) {
+                        if (state.connection == null) {
                             return@RoundedSearchAppBar
                         }
                         Box {
@@ -235,9 +238,9 @@ fun HomePageScreen(
                                     },
                                     onClick = {
                                         viewModel.closeConnectionsMenu()
-                                        navigateToConnectionSettings()
+                                        navigateToConnectionSettings(null)
                                     })
-                                state.connectionSettings!!.map { (connectionSettingsId, connectionSettings) ->
+                                state.connection!!.map { (connectionSettingsId, connectionSettings) ->
                                     val connectionName = if (connectionSettings.username != null) {
                                         "${connectionSettings.username}@${connectionSettings.url}"
                                     } else {
@@ -248,7 +251,7 @@ fun HomePageScreen(
                                         leadingIcon = {
                                             Checkbox(
                                                 modifier = Modifier.padding(0.dp),
-                                                checked = state.selectedConnectionSettingsId == connectionSettingsId,
+                                                checked = state.selectedConnectionId == connectionSettingsId,
                                                 onCheckedChange = null
                                             )
                                         },
@@ -297,7 +300,7 @@ fun HomePageScreen(
                     }, icon = { Icon(Icons.Default.AccountBox, null) }, label = { Text("Groups") })
                 }
             }) { innerPadding ->
-            if (state.connectionSettings == null || state.selectedConnectionSettingsId == null) {
+            if (state.connection == null || state.selectedConnectionId == null) {
                 Column(modifier = Modifier.fillMaxSize()) {
                     CircularProgressIndicator()
                 }
@@ -310,17 +313,17 @@ fun HomePageScreen(
                     exitTransition = { ExitTransition.None }) {
                     composable<AnonymousGroupsRoute> {
                         AnonymousGroupsScreen(
-                            connectionSettingsId = state.selectedConnectionSettingsId!!,
+                            connectionSettingsId = state.selectedConnectionId!!,
                             navigateToCreateAG = {
-                                navigateToCreateAG(state.selectedConnectionSettingsId!!)
+                                navigateToCreateAG(state.selectedConnectionId!!)
                             },
                             navigateToJoinAG = {
-                                navigateToJoinAG(state.selectedConnectionSettingsId!!)
+                                navigateToJoinAG(state.selectedConnectionId!!)
                             },
-                            navigateToAGDetails = { anonymousGroupId, anonymousGroupName ->
+                            navigateToAGDetails = { anonymousGroupInternalId, anonymousGroupName ->
                                 navigateToAGDetails(
-                                    state.selectedConnectionSettingsId!!,
-                                    anonymousGroupId,
+                                    state.selectedConnectionId!!,
+                                    anonymousGroupInternalId,
                                     anonymousGroupName
                                 )
                             },

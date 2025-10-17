@@ -3,4 +3,6 @@ package com.peppeosmio.lockate.data.anonymous_group.remote
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class AGLocationSaveRequestDto(val encryptedLocation: EncryptedDataDto)
+data class AGMemberLeaveReqDto(
+    val memberId: String
+)

@@ -1,9 +1,7 @@
 package com.peppeosmio.lockate.ui.screens.anonymous_groups
 
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.peppeosmio.lockate.exceptions.UnauthorizedException
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupEvent
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
@@ -13,7 +11,6 @@ import com.peppeosmio.lockate.utils.SnackbarErrorMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -79,7 +76,7 @@ class AnonymousGroupsViewModel(
                         return@collect
                     }
                     val createdAnonymousGroup =
-                        anonymousGroupService.getAnonymousGroupById(event.anonymousGroupId)
+                        anonymousGroupService.getAGByInternalId(event.anonymousGroupInternalId)
                     _state.update { it.copy(anonymousGroups = listOf(createdAnonymousGroup) + it.anonymousGroups!!) }
                 }
 
@@ -154,7 +151,7 @@ class AnonymousGroupsViewModel(
             try {
                 anonymousGroupService.verifyMemberAuth(
                     connectionSettingsId = connectionSettingsId,
-                    anonymousGroupId = anonymousGroup.id
+                    anonymousGroupInternalId = anonymousGroup.internalId
                 )
             } catch (e: Exception) {
                 when (e) {
@@ -213,16 +210,15 @@ class AnonymousGroupsViewModel(
                 return@launch
             }
             _state.update { it.copy(showLoadingOverlay = true) }
-            val anonymousGroupId = currentState.anonymousGroups[currentState.selectedAGIndex].id
-            val result = ErrorHandler.runAndHandleException {
-                anonymousGroupService.deleteLocalAnonymousGroup(anonymousGroupId)
-            }
-            _state.update { it.copy(showLoadingOverlay = false) }
-            if (result.errorInfo != null) {
+            val anonymousGroup = currentState.anonymousGroups[currentState.selectedAGIndex]
+            try {
+                anonymousGroupService.deleteLocalAnonymousGroup(anonymousGroup)
+                _state.update { it.copy(showLoadingOverlay = false) }
+            } catch (e: Exception) {
                 _snackbarEvents.trySend(
                     SnackbarErrorMessage(
-                        text = "Can't delete local anonymous group $anonymousGroupId",
-                        errorInfo = result.errorInfo
+                        text = "Can't delete local anonymous group $anonymousGroup",
+                        errorInfo = ErrorInfo.fromException(e)
                     )
                 )
             }
@@ -236,15 +232,16 @@ class AnonymousGroupsViewModel(
                 _state.update { it.copy(showLoadingOverlay = false, showSureLeaveDialog = false) }
             }
             _state.update { it.copy(showLoadingOverlay = true, showSureLeaveDialog = false) }
-            val anonymousGroupId = currentState.anonymousGroups!![currentState.selectedAGIndex!!].id
+            val anonymousGroup = currentState.anonymousGroups!![currentState.selectedAGIndex!!]
             try {
                 anonymousGroupService.leaveAnonymousGroup(
-                    connectionSettingsId = connectionSettingsId, anonymousGroupId = anonymousGroupId
+                    connectionSettingsId = connectionSettingsId,
+                    anonymousGroupInternalId = anonymousGroup.internalId
                 )
             } catch (e: Exception) {
                 _snackbarEvents.trySend(
                     SnackbarErrorMessage(
-                        text = "Can't leave anonymous group $anonymousGroupId",
+                        text = "Can't leave anonymous group $anonymousGroup",
                         errorInfo = ErrorInfo.fromException(e)
                     )
                 )

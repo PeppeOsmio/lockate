@@ -1,11 +1,11 @@
 {
   "formatVersion": 1,
   "database": {
-    "version": 3,
-    "identityHash": "a54a67b4c6d3abcdd50dd6dc2d54f594",
+    "version": 4,
+    "identityHash": "ce4bede55514cc1dfc864fbfdb6981a7",
     "entities": [
       {
-        "tableName": "connection_settings",
+        "tableName": "connection",
         "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `url` TEXT NOT NULL, `apiKey` TEXT, `username` TEXT, `authToken` TEXT)",
         "fields": [
           {
@@ -45,7 +45,7 @@
       },
       {
         "tableName": "anonymous_group",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`internalId` INTEGER NOT NULL, `id` TEXT NOT NULL, `name` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `joinedAt` INTEGER NOT NULL, `isMember` INTEGER NOT NULL, `existsRemote` INTEGER NOT NULL, `sendLocation` INTEGER NOT NULL, `connectionSettingsId` INTEGER NOT NULL, `memberName` TEXT NOT NULL, `memberId` TEXT NOT NULL, `memberTokenCipher` BLOB NOT NULL, `memberTokenIv` BLOB NOT NULL, `adminTokenCipher` BLOB, `adminTokenIv` BLOB, `keyCipher` BLOB NOT NULL, `keyIv` BLOB NOT NULL, FOREIGN KEY(`connectionSettingsId`) REFERENCES `connection_settings`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`internalId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `id` TEXT NOT NULL, `name` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `joinedAt` INTEGER NOT NULL, `isMember` INTEGER NOT NULL, `existsRemote` INTEGER NOT NULL, `sendLocation` INTEGER NOT NULL, `connectionId` INTEGER NOT NULL, `memberName` TEXT NOT NULL, `memberId` TEXT NOT NULL, `memberTokenCipher` BLOB NOT NULL, `memberTokenIv` BLOB NOT NULL, `adminTokenCipher` BLOB, `adminTokenIv` BLOB, `keyCipher` BLOB NOT NULL, `keyIv` BLOB NOT NULL, FOREIGN KEY(`connectionId`) REFERENCES `connection`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "internalId",
@@ -96,8 +96,8 @@
             "notNull": true
           },
           {
-            "fieldPath": "connectionSettingsId",
-            "columnName": "connectionSettingsId",
+            "fieldPath": "connectionId",
+            "columnName": "connectionId",
             "affinity": "INTEGER",
             "notNull": true
           },
@@ -149,27 +149,29 @@
           }
         ],
         "primaryKey": {
-          "autoGenerate": false,
-          "columnNames": []
+          "autoGenerate": true,
+          "columnNames": [
+            "internalId"
+          ]
         },
         "indices": [
           {
-            "name": "index_anonymous_group_connectionSettingsId",
+            "name": "idx_anonymous_group_connectionId",
             "unique": false,
             "columnNames": [
-              "connectionSettingsId"
+              "connectionId"
             ],
             "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_anonymous_group_connectionSettingsId` ON `${TABLE_NAME}` (`connectionSettingsId`)"
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_anonymous_group_connectionId` ON `${TABLE_NAME}` (`connectionId`)"
           }
         ],
         "foreignKeys": [
           {
-            "table": "connection_settings",
+            "table": "connection",
             "onDelete": "CASCADE",
             "onUpdate": "NO ACTION",
             "columns": [
-              "connectionSettingsId"
+              "connectionId"
             ],
             "referencedColumns": [
               "id"
@@ -178,8 +180,8 @@
         ]
       },
       {
-        "tableName": "anonymous_group_member",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`internalId` INTEGER NOT NULL, `id` TEXT NOT NULL, `name` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `lastLatitude` REAL, `lastLongitude` REAL, `lastSeen` INTEGER, `anonymousGroupId` TEXT NOT NULL, FOREIGN KEY(`anonymousGroupId`) REFERENCES `anonymous_group`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "tableName": "ag_member",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`internalId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `id` TEXT NOT NULL, `name` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `lastLatitude` REAL, `lastLongitude` REAL, `lastSeen` INTEGER, `anonymousGroupInternalId` INTEGER NOT NULL, FOREIGN KEY(`anonymousGroupInternalId`) REFERENCES `anonymous_group`(`internalId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "internalId",
@@ -221,25 +223,27 @@
             "affinity": "INTEGER"
           },
           {
-            "fieldPath": "anonymousGroupId",
-            "columnName": "anonymousGroupId",
-            "affinity": "TEXT",
+            "fieldPath": "anonymousGroupInternalId",
+            "columnName": "anonymousGroupInternalId",
+            "affinity": "INTEGER",
             "notNull": true
           }
         ],
         "primaryKey": {
-          "autoGenerate": false,
-          "columnNames": []
+          "autoGenerate": true,
+          "columnNames": [
+            "internalId"
+          ]
         },
         "indices": [
           {
-            "name": "index_anonymous_group_member_anonymousGroupId",
+            "name": "idx_anonymous_group_member_anonymousGroupInternalId",
             "unique": false,
             "columnNames": [
-              "anonymousGroupId"
+              "anonymousGroupInternalId"
             ],
             "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_anonymous_group_member_anonymousGroupId` ON `${TABLE_NAME}` (`anonymousGroupId`)"
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_anonymous_group_member_anonymousGroupInternalId` ON `${TABLE_NAME}` (`anonymousGroupInternalId`)"
           }
         ],
         "foreignKeys": [
@@ -248,10 +252,10 @@
             "onDelete": "CASCADE",
             "onUpdate": "NO ACTION",
             "columns": [
-              "anonymousGroupId"
+              "anonymousGroupInternalId"
             ],
             "referencedColumns": [
-              "id"
+              "internalId"
             ]
           }
         ]
@@ -259,7 +263,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'a54a67b4c6d3abcdd50dd6dc2d54f594')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'ce4bede55514cc1dfc864fbfdb6981a7')"
     ]
   }
 }

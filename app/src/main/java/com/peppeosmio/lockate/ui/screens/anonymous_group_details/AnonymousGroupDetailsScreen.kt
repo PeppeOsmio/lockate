@@ -56,8 +56,8 @@ enum class AnonymousGroupDetailsTab {
 fun AnonymousGroupDetailsScreen(
     viewModel: AnonymousGroupDetailsViewModel = koinViewModel(),
     navigateBack: () -> Unit,
-    connectionSettingsId: Long,
-    anonymousGroupId: String,
+    connectionId: Long,
+    anonymousGroupInternalId: Long,
     anonymousGroupName: String
 ) {
     val state by viewModel.state.collectAsState()
@@ -154,7 +154,7 @@ fun AnonymousGroupDetailsScreen(
 
     LaunchedEffect(true) {
         viewModel.getInitialDetails(
-            anonymousGroupId = anonymousGroupId, connectionSettingsId = connectionSettingsId
+            anonymousGroupInternalId = anonymousGroupInternalId, connectionSettings = connectionId
         )
     }
 
@@ -208,8 +208,8 @@ fun AnonymousGroupDetailsScreen(
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.deleteAnonymousGroup(
-                        connectionSettingsId = connectionSettingsId,
-                        anonymousGroupId = anonymousGroupId
+                        connectionSettingsId = connectionId,
+                        anonymousGroupInternalId = anonymousGroupInternalId
                     )
                 }) { Text("Yes, delete") }
             },
@@ -236,7 +236,7 @@ fun AnonymousGroupDetailsScreen(
                 LoadingState.Failed -> {
                     IconButton(onClick = {
                         coroutineScope.launch {
-                            viewModel.remoteOperations(connectionSettingsId = connectionSettingsId)
+                            viewModel.remoteOperations(connectionSettingsId = connectionId)
                         }
                     }) {
                         Icon(imageVector = Icons.Default.Refresh, contentDescription = "Reconnect")
@@ -387,7 +387,7 @@ fun AnonymousGroupDetailsScreen(
                                     Spacer(modifier = Modifier.padding(4.dp))
                                     Button(onClick = {
                                         coroutineScope.launch {
-                                            viewModel.authAdmin(connectionSettingsId)
+                                            viewModel.authAdmin(connectionId)
                                         }
                                     }) { Text("Authenticate") }
                                 }

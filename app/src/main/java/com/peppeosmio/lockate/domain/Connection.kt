@@ -1,8 +1,6 @@
 package com.peppeosmio.lockate.domain
 
-import com.peppeosmio.lockate.data.anonymous_group.database.ConnectionSettingsEntity
-
-data class ConnectionSettings(
+data class Connection(
     val id: Long?, val url: String, val apiKey: String?, val username: String?, val authToken: String?
 ) {
     fun getWebSocketUrl(): String {

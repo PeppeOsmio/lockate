@@ -1,7 +1,7 @@
 package com.peppeosmio.lockate.di
 
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
-import com.peppeosmio.lockate.service.ConnectionSettingsService
+import com.peppeosmio.lockate.service.ConnectionService
 import com.peppeosmio.lockate.service.PermissionsService
 import com.peppeosmio.lockate.platform_service.LocationService
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.AnonymousGroupDetailsViewModel
@@ -16,16 +16,16 @@ import org.koin.dsl.module
 
 val viewModelModule = module {
     viewModel<LoadingViewModel> {
-        LoadingViewModel(connectionSettingsService = get<ConnectionSettingsService>())
+        LoadingViewModel(connectionService = get<ConnectionService>())
     }
 
     viewModel<ConnectionSettingsViewModel> {
-        ConnectionSettingsViewModel(connectionSettingsService = get<ConnectionSettingsService>())
+        ConnectionSettingsViewModel(connectionService = get<ConnectionService>())
     }
 
     viewModel<HomePageViewModel> {
         HomePageViewModel(
-            connectionSettingsService = get<ConnectionSettingsService>(),
+            connectionService = get<ConnectionService>(),
             anonymousGroupService = get<AnonymousGroupService>(),
             permissionsService = get<PermissionsService>()
         )

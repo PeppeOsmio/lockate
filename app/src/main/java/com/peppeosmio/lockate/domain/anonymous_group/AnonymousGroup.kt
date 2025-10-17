@@ -5,6 +5,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class AnonymousGroup(
+    val internalId: Long,
     val id: String,
     val name: String,
     val createdAt: LocalDateTime,
@@ -17,7 +18,7 @@ data class AnonymousGroup(
     val existsRemote: Boolean,
     val sendLocation: Boolean,
     val key: ByteArray,
-    val connectionSettingsId: Long
+    val connectionId: Long
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -28,7 +29,7 @@ data class AnonymousGroup(
         if (isMember != other.isMember) return false
         if (existsRemote != other.existsRemote) return false
         if (sendLocation != other.sendLocation) return false
-        if (connectionSettingsId != other.connectionSettingsId) return false
+        if (connectionId != other.connectionId) return false
         if (id != other.id) return false
         if (name != other.name) return false
         if (createdAt != other.createdAt) return false
@@ -49,7 +50,7 @@ data class AnonymousGroup(
         var result = isMember.hashCode()
         result = 31 * result + existsRemote.hashCode()
         result = 31 * result + sendLocation.hashCode()
-        result = 31 * result + connectionSettingsId.hashCode()
+        result = 31 * result + connectionId.hashCode()
         result = 31 * result + id.hashCode()
         result = 31 * result + name.hashCode()
         result = 31 * result + createdAt.hashCode()

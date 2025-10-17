@@ -2,11 +2,9 @@ package com.peppeosmio.lockate.ui.screens.join_anonymous_group
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.peppeosmio.lockate.exceptions.LocalAGExistsException
 import com.peppeosmio.lockate.exceptions.UnauthorizedException
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
-import com.peppeosmio.lockate.utils.ErrorHandler
 import com.peppeosmio.lockate.utils.ErrorInfo
 import com.peppeosmio.lockate.utils.SnackbarErrorMessage
 import kotlinx.coroutines.channels.Channel
@@ -75,7 +73,7 @@ class JoinAnonymousGroupViewModel(
             _state.update { it.copy(showLoadingOverlay = true) }
             try {
                 anonymousGroupService.authMember(
-                    connectionSettingsId = connectionSettingsId,
+                    connectionId = connectionSettingsId,
                     anonymousGroupId = state.value.idText.trim(),
                     memberName = state.value.memberNameText.trim(),
                     memberPassword = state.value.memberPasswordText.trim()

@@ -2,9 +2,7 @@ package com.peppeosmio.lockate.ui.screens.create_anonymous_group
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
-import com.peppeosmio.lockate.utils.ErrorHandler
 import com.peppeosmio.lockate.utils.ErrorInfo
 import com.peppeosmio.lockate.utils.SnackbarErrorMessage
 import kotlinx.coroutines.channels.Channel
@@ -82,7 +80,7 @@ class CreateAnonymousGroupViewModel(
             clearFieldsErrors()
             try {
                 anonymousGroupService.createAnonymousGroup(
-                    connectionSettingsId = connectionSettingsId,
+                    connectionId = connectionSettingsId,
                     groupName = state.value.groupNameText,
                     memberName = state.value.userNameText,
                     memberPassword = state.value.memberPasswordText,
@@ -91,6 +89,7 @@ class CreateAnonymousGroupViewModel(
                 _state.update { it.copy(showLoadingOverlay = false) }
                 _navigateBackEvents.trySend(Unit)
             } catch (e: Exception) {
+                e.printStackTrace()
                 _snackbarEvents.trySend(
                     SnackbarErrorMessage(
                         text = "Can't create anonymous group",

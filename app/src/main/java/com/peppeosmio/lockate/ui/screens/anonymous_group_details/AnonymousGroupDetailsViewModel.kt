@@ -41,9 +41,9 @@ class AnonymousGroupDetailsViewModel(
     val cameraPositionEvents = _cameraPositionEvents.receiveAsFlow()
     private val _navigateBackEvents = Channel<Unit>()
     val navigateBackEvents = _navigateBackEvents.receiveAsFlow()
-    private var listenForUserLocationJob : Job? = null
+    private var listenForUserLocationJob: Job? = null
 
-    fun getInitialDetails(anonymousGroupId: String, connectionSettingsId: Long) {
+    fun getInitialDetails(anonymousGroupInternalId: Long, connectionSettings: Long) {
         viewModelScope.launch {
             runCatching { getAndMoveToMyLocation() }
         }
@@ -52,9 +52,9 @@ class AnonymousGroupDetailsViewModel(
         }
         viewModelScope.launch {
             runCatching {
-                getLocalAG(anonymousGroupId)
+                getLocalAG(anonymousGroupInternalId)
                 getLocalMembers()
-                remoteOperations(connectionSettingsId)
+                remoteOperations(connectionSettings)
             }
         }
     }
@@ -106,11 +106,14 @@ class AnonymousGroupDetailsViewModel(
                         verifyAdminAuth(connectionSettingsId)
                     })
                     _state.update { it.copy(remoteDataLoadingState = LoadingState.Success) }
-                    while(true) {
+                    while (true) {
                         try {
                             streamLocations(connectionSettingsId)
                         } catch (e: Exception) {
-                            Log.e("", "Streaming location for $connectionSettingsId failed, retrying in 10 s")
+                            Log.e(
+                                "",
+                                "Streaming location for $connectionSettingsId failed, retrying in 10 s"
+                            )
                             delay(10000L)
                         }
                     }
@@ -151,14 +154,14 @@ class AnonymousGroupDetailsViewModel(
         Log.d("", "Getting my location")
         try {
             val coordinates = locationService.getCurrentLocation()
-            if(coordinates != null) {
+            if (coordinates != null) {
                 _state.update { it.copy(myCoordinates = coordinates) }
                 _cameraPositionEvents.trySend(coordinates)
-            } else if(state.value.myCoordinates != null) {
+            } else if (state.value.myCoordinates != null) {
                 _cameraPositionEvents.trySend(state.value.myCoordinates!!)
             }
         } catch (e: Exception) {
-            if(state.value.myCoordinates != null) {
+            if (state.value.myCoordinates != null) {
                 _cameraPositionEvents.trySend(state.value.myCoordinates!!)
             }
             throw e
@@ -193,9 +196,9 @@ class AnonymousGroupDetailsViewModel(
     }
 
     @Throws
-    private suspend fun getLocalAG(anonymousGroupId: String) {
+    private suspend fun getLocalAG(anonymousGroupInternalId: Long) {
         val result = ErrorHandler.runAndHandleException {
-            anonymousGroupService.getAnonymousGroupById(anonymousGroupId)
+            anonymousGroupService.getAGByInternalId(anonymousGroupInternalId)
         }
         if (result.errorInfo != null) {
             _snackbarEvents.trySend(
@@ -219,14 +222,14 @@ class AnonymousGroupDetailsViewModel(
      */
     @Throws
     private suspend fun getLocalMembers() {
-        val currentState = state.value
-        if (currentState.anonymousGroup == null) {
+        if (state.value.anonymousGroup == null) {
             return
         }
         Log.d("", "Fetching local members...")
         try {
-            val members =
-                handleMembersWithSameName(anonymousGroupService.getLocalAGMembers(currentState.anonymousGroup.id))
+            val members = handleMembersWithSameName(
+                anonymousGroupService.getLocalAGMembers(state.value.anonymousGroup!!)
+            )
             Log.d("", "Local members: $members")
             val membersMap = members.associateBy { it.id }
 
@@ -254,7 +257,7 @@ class AnonymousGroupDetailsViewModel(
         try {
             val members = handleMembersWithSameName(
                 anonymousGroupService.getRemoteAGMembers(
-                    anonymousGroupId = state.value.anonymousGroup!!.id,
+                    anonymousGroupInternalId = state.value.anonymousGroup!!.internalId,
                     connectionSettingsId = connectionSettingsId
                 )
             )
@@ -290,8 +293,7 @@ class AnonymousGroupDetailsViewModel(
 
     @Throws
     private suspend fun verifyAdminAuth(connectionSettingsId: Long) {
-        val currentState = state.value
-        if (currentState.anonymousGroup == null) {
+        if (state.value.anonymousGroup == null) {
             return
         }
         Log.d("", "verifying admin auth")
@@ -303,7 +305,7 @@ class AnonymousGroupDetailsViewModel(
             }
         }) {
             anonymousGroupService.verifyAdminAuth(
-                anonymousGroupId = currentState.anonymousGroup.id,
+                anonymousGroupInternalId = state.value.anonymousGroup!!.internalId,
                 connectionSettingsId = connectionSettingsId
             )
             true
@@ -319,16 +321,15 @@ class AnonymousGroupDetailsViewModel(
 
     fun authAdmin(connectionSettingsId: Long) {
         viewModelScope.launch {
-            val currentState = state.value
-            if (currentState.anonymousGroup == null || currentState.adminPasswordText.isBlank()) {
+            if (state.value.anonymousGroup == null || state.value.adminPasswordText.isBlank()) {
                 return@launch
             }
             _state.update { it.copy(showLoadingOverlay = true) }
             try {
                 anonymousGroupService.getAdminToken(
                     connectionSettingsId = connectionSettingsId,
-                    anonymousGroupId = currentState.anonymousGroup.id,
-                    adminPassword = currentState.adminPasswordText
+                    anonymousGroupInternalId = state.value.anonymousGroup!!.internalId,
+                    adminPassword = state.value.adminPasswordText
                 )
             } catch (e: Exception) {
                 when (e) {
@@ -349,7 +350,7 @@ class AnonymousGroupDetailsViewModel(
 
             }
             _state.update { it.copy(showLoadingOverlay = false, isAdminTokenValid = true) }
-            getLocalAG(anonymousGroupId = currentState.anonymousGroup.id)
+            getLocalAG(anonymousGroupInternalId = state.value.anonymousGroup!!.internalId)
         }
     }
 
@@ -362,7 +363,7 @@ class AnonymousGroupDetailsViewModel(
     private suspend fun streamLocations(connectionSettingsId: Long) {
         anonymousGroupService.streamLocations(
             connectionSettingsId = connectionSettingsId,
-            anonymousGroupId = state.value.anonymousGroup!!.id
+            anonymousGroupInternalId = state.value.anonymousGroup!!.internalId
         ).collect { locationUpdate ->
             Log.d("", "Received location: $locationUpdate")
             if (state.value.members == null) {
@@ -377,10 +378,9 @@ class AnonymousGroupDetailsViewModel(
             val member = state.value.members!![locationUpdate.agMemberId]
             if (member != null) {
                 _state.update {
-                    val newMembers =
-                        it.members!! + (locationUpdate.agMemberId to member.copy(
-                            lastLocationRecord = locationUpdate.locationRecord
-                        ))
+                    val newMembers = it.members!! + (locationUpdate.agMemberId to member.copy(
+                        lastLocationRecord = locationUpdate.locationRecord
+                    ))
                     it.copy(
                         members = newMembers
                     )
@@ -399,13 +399,14 @@ class AnonymousGroupDetailsViewModel(
 
     @Throws
     fun deleteAnonymousGroup(
-        connectionSettingsId: Long, anonymousGroupId: String
+        connectionSettingsId: Long, anonymousGroupInternalId: Long
     ) {
         viewModelScope.launch {
             _state.update { it.copy(showLoadingOverlay = true) }
             try {
                 anonymousGroupService.deleteAnonymousGroup(
-                    connectionSettingsId = connectionSettingsId, anonymousGroupId = anonymousGroupId
+                    connectionSettingsId = connectionSettingsId,
+                    anonymousGroupInternalId = anonymousGroupInternalId
                 )
                 _state.update { it.copy(showLoadingOverlay = false) }
                 _navigateBackEvents.trySend(Unit)
@@ -435,9 +436,8 @@ class AnonymousGroupDetailsViewModel(
             }
             val newSendLocation = !state.value.anonymousGroup!!.sendLocation
             try {
-                anonymousGroupService.setAGShareLocation(
-                    anonymousGroupId = state.value.anonymousGroup!!.id,
-                    sendLocation = newSendLocation
+                anonymousGroupService.setAGSendLocation(
+                    anonymousGroup = state.value.anonymousGroup!!, sendLocation = newSendLocation
                 )
                 _state.update { it.copy(anonymousGroup = it.anonymousGroup!!.copy(sendLocation = newSendLocation)) }
             } catch (e: Exception) {
@@ -476,7 +476,7 @@ class AnonymousGroupDetailsViewModel(
             if (member.lastLocationRecord == null) {
                 return@let
             }
-            if(member.id == state.value.anonymousGroup!!.memberId) {
+            if (member.id == state.value.anonymousGroup!!.memberId) {
                 onTapMyLocation()
                 return
             }

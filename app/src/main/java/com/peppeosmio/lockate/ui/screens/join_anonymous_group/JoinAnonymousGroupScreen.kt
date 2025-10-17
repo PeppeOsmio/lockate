@@ -32,18 +32,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun JoinAnonymousGroupScreen(
-    connectionSettingsId: Long,
+    connectionId: Long,
     navigateBack: () -> Unit,
     viewModel: JoinAnonymousGroupViewModel = koinViewModel()
 ) {
     val state by viewModel.state.collectAsState()
-    val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val focusManager = LocalFocusManager.current
 
@@ -95,7 +93,7 @@ fun JoinAnonymousGroupScreen(
         }, actions = {
             IconButton(onClick = {
                 focusManager.clearFocus()
-                viewModel.joinAnonymousGroup(connectionSettingsId)
+                viewModel.joinAnonymousGroup(connectionId)
             }) {
                 Icon(
                     imageVector = Icons.Default.Done, contentDescription = "Done"

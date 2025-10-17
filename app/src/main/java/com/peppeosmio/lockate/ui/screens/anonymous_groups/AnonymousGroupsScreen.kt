@@ -38,12 +38,12 @@ fun AnonymousGroupsScreen(
     connectionSettingsId: Long,
     navigateToCreateAG: () -> Unit,
     navigateToJoinAG: () -> Unit,
-    navigateToAGDetails : (anonymousGroupId: String, anonymousGroupName: String) -> Unit,
+    navigateToAGDetails: (anonymousGroupInternalId: Long, anonymousGroupName: String) -> Unit,
     registerOnFabTap: (onClickFab: () -> Unit) -> Unit,
     unregisterOnFabTap: () -> Unit,
     registerOnSearch: (onSearch: (query: String) -> Unit) -> Unit,
     unregisterOnSearch: () -> Unit,
-    showErrorSnackbar: (snackbarErrorMessage: SnackbarErrorMessage ) -> Unit,
+    showErrorSnackbar: (snackbarErrorMessage: SnackbarErrorMessage) -> Unit,
     viewModel: AnonymousGroupsViewModel = koinViewModel()
 ) {
     val state by viewModel.state.collectAsState()
@@ -179,11 +179,13 @@ fun AnonymousGroupsScreen(
                 key = { _, agWithMembersCount -> agWithMembersCount.id }) { i, anonymousGroup ->
                 AnonymousGroupCard(
                     modifier = Modifier.animateItem(),
-                    anonymousGroup = anonymousGroup, onClick = {
-                        if(anonymousGroup.existsRemote && anonymousGroup.isMember) {
-                            navigateToAGDetails(anonymousGroup.id, anonymousGroup.name)
+                    anonymousGroup = anonymousGroup,
+                    onClick = {
+                        if (anonymousGroup.existsRemote && anonymousGroup.isMember) {
+                            navigateToAGDetails(anonymousGroup.internalId, anonymousGroup.name)
                         }
-                }, onMoreOptions = { viewModel.selectAnonymousGroup(i) })
+                    },
+                    onMoreOptions = { viewModel.selectAnonymousGroup(i) })
             }
             item { Spacer(Modifier.size(8.dp)) }
         }

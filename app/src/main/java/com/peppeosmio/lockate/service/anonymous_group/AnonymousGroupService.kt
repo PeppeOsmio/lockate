@@ -6,19 +6,19 @@ import com.peppeosmio.lockate.data.anonymous_group.mappers.AGLocationUpdateMappe
 import com.peppeosmio.lockate.data.anonymous_group.mappers.AGMemberMapper
 import com.peppeosmio.lockate.data.anonymous_group.mappers.AnonymousGroupMapper
 import com.peppeosmio.lockate.data.anonymous_group.mappers.EncryptedDataMapper
-import com.peppeosmio.lockate.data.anonymous_group.remote.AGAdminAuthRequestDto
-import com.peppeosmio.lockate.data.anonymous_group.remote.AGAdminAuthResponseDto
-import com.peppeosmio.lockate.data.anonymous_group.remote.AGCreateRequestDto
-import com.peppeosmio.lockate.data.anonymous_group.remote.AGCreateResponseDto
+import com.peppeosmio.lockate.data.anonymous_group.remote.AGAdminAuthReqDto
+import com.peppeosmio.lockate.data.anonymous_group.remote.AGAdminAuthResDto
+import com.peppeosmio.lockate.data.anonymous_group.remote.AGCreateReqDto
+import com.peppeosmio.lockate.data.anonymous_group.remote.AGCreateResDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGGetMemberPasswordSrpInfoResDto
-import com.peppeosmio.lockate.data.anonymous_group.remote.AGGetMembersResponseDto
-import com.peppeosmio.lockate.data.anonymous_group.remote.AGLocationSaveRequestDto
-import com.peppeosmio.lockate.data.anonymous_group.remote.AGMemberAuthStartRequestDto
-import com.peppeosmio.lockate.data.anonymous_group.remote.AGMemberAuthStartResponseDto
-import com.peppeosmio.lockate.data.anonymous_group.remote.AGMemberAuthVerifyRequestDto
-import com.peppeosmio.lockate.data.anonymous_group.remote.AGMemberAuthVerifyResponseDto
+import com.peppeosmio.lockate.data.anonymous_group.remote.AGGetMembersResDto
+import com.peppeosmio.lockate.data.anonymous_group.remote.AGLocationSaveReqDto
+import com.peppeosmio.lockate.data.anonymous_group.remote.AGMemberAuthStartReqDto
+import com.peppeosmio.lockate.data.anonymous_group.remote.AGMemberAuthStartResDto
+import com.peppeosmio.lockate.data.anonymous_group.remote.AGMemberAuthVerifyReqDto
+import com.peppeosmio.lockate.data.anonymous_group.remote.AGMemberAuthVerifyResDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.LocationUpdateDto
-import com.peppeosmio.lockate.domain.ConnectionSettings
+import com.peppeosmio.lockate.domain.Connection
 import com.peppeosmio.lockate.domain.anonymous_group.AGLocationUpdate
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.domain.anonymous_group.AnonymousGroup
@@ -35,7 +35,7 @@ import com.peppeosmio.lockate.exceptions.RemoteAGNotFoundException
 import com.peppeosmio.lockate.exceptions.UnauthorizedException
 import com.peppeosmio.lockate.platform_service.KeyStoreService
 import com.peppeosmio.lockate.platform_service.LocationService
-import com.peppeosmio.lockate.service.ConnectionSettingsService
+import com.peppeosmio.lockate.service.ConnectionService
 import com.peppeosmio.lockate.service.crypto.CryptoService
 import com.peppeosmio.lockate.service.srp.SrpClientService
 import com.peppeosmio.lockate.utils.ErrorHandler
@@ -87,7 +87,7 @@ import kotlin.time.ExperimentalTime
 class AnonymousGroupService(
     private val anonymousGroupDao: AnonymousGroupDao,
     private val cryptoService: CryptoService,
-    private val connectionSettingsService: ConnectionSettingsService,
+    private val connectionService: ConnectionService,
     private val httpClient: HttpClient,
     private val srpClientService: SrpClientService,
     private val locationService: LocationService,
@@ -107,65 +107,114 @@ class AnonymousGroupService(
             }
         }
 
-    suspend fun getAnonymousGroupById(anonymousGroupId: String): AnonymousGroup =
+    suspend fun getAGByInternalId(anonymousGroupInternalId: Long): AnonymousGroup =
         withContext(Dispatchers.IO) {
-            val entity = anonymousGroupDao.getAnonymousGroupById(
-                anonymousGroupId
+            val entity = anonymousGroupDao.getAGByInternalId(
+                anonymousGroupInternalId
             ) ?: throw LocalAGNotFoundException()
             AnonymousGroupMapper.toDomain(
                 entity = entity, keyStoreService = keyStoreService
             )
         }
 
-    suspend fun getLocalAGMembers(anonymousGroupId: String): List<AGMember> =
+    suspend fun getLocalAGMembers(anonymousGroup: AnonymousGroup): List<AGMember> =
         withContext(Dispatchers.IO) {
-            anonymousGroupDao.getAnonymousGroupById(anonymousGroupId)
+            anonymousGroupDao.getAGByInternalId(anonymousGroup.internalId)
                 ?: throw LocalAGNotFoundException()
-            anonymousGroupDao.listAGMembers(anonymousGroupId).map {
+            anonymousGroupDao.listAGMembers(anonymousGroup.internalId).map {
                 AGMemberMapper.entityToDomain(it)
             }
         }
 
-    suspend fun deleteLocalAnonymousGroup(anonymousGroupId: String) = withContext(Dispatchers.IO) {
-        anonymousGroupDao.deleteAnonymousGroupById(anonymousGroupId)
-        _events.tryEmit(AnonymousGroupEvent.DeleteAnonymousGroupEvent(anonymousGroupId))
-    }
+    suspend fun deleteLocalAnonymousGroup(anonymousGroup: AnonymousGroup) =
+        withContext(Dispatchers.IO) {
+            anonymousGroupDao.deleteAGByInternalId(anonymousGroup.internalId)
+            _events.tryEmit(
+                AnonymousGroupEvent.DeleteAnonymousGroupEvent(
+                    anonymousGroupInternalId = anonymousGroup.internalId,
+                    anonymousGroupId = anonymousGroup.id,
+                    connectionId = anonymousGroup.connectionId
+                )
+            )
+        }
 
-    suspend fun setAGShareLocation(anonymousGroupId: String, sendLocation: Boolean) {
+    suspend fun setAGSendLocation(anonymousGroup: AnonymousGroup, sendLocation: Boolean) {
         anonymousGroupDao.setAGSendLocation(
-            anonymousGroupId = anonymousGroupId, sendLocation = sendLocation
+            anonymousGroupInternalId = anonymousGroup.internalId, sendLocation = sendLocation
         )
         if (sendLocation) {
-            _events.tryEmit(AnonymousGroupEvent.SendEnabledEvent(anonymousGroupId))
+            _events.tryEmit(
+                AnonymousGroupEvent.SendEnabledEvent(
+                    anonymousGroupInternalId = anonymousGroup.internalId,
+                    anonymousGroupId = anonymousGroup.id,
+                    connectionId = anonymousGroup.connectionId
+                )
+            )
         } else {
-            _events.tryEmit(AnonymousGroupEvent.SendDisabledEvent(anonymousGroupId))
+            _events.tryEmit(
+                AnonymousGroupEvent.SendDisabledEvent(
+                    anonymousGroupInternalId = anonymousGroup.internalId,
+                    anonymousGroupId = anonymousGroup.id,
+                    connectionId = anonymousGroup.connectionId
+                )
+            )
         }
     }
 
-    private suspend fun setAGIsMemberFalse(anonymousGroupId: String) = withContext(Dispatchers.IO) {
-        anonymousGroupDao.setAGIsMember(anonymousGroupId = anonymousGroupId, isMember = false)
-        _events.tryEmit(AnonymousGroupEvent.RemovedFromAnonymousGroupEvent(anonymousGroupId))
-    }
-
-    private suspend fun setAGIsMemberTrue(anonymousGroupId: String) = withContext(Dispatchers.IO) {
-        anonymousGroupDao.setAGIsMember(anonymousGroupId = anonymousGroupId, isMember = true)
-        _events.tryEmit(AnonymousGroupEvent.ReaddedToAnonymousGroupEvent(anonymousGroupId))
-    }
-
-    private suspend fun setAGExistsRemoteFalse(anonymousGroupId: String) =
+    private suspend fun setAGIsMemberFalse(anonymousGroup: AnonymousGroup) =
         withContext(Dispatchers.IO) {
-            anonymousGroupDao.setAGExistsRemote(
-                anonymousGroupId = anonymousGroupId, existsRemote = false
+            anonymousGroupDao.setAGIsMember(
+                anonymousGroupInternalId = anonymousGroup.internalId, isMember = false
             )
-            _events.tryEmit(AnonymousGroupEvent.RemoteAGDoesntExistEvent(anonymousGroupId))
+            _events.tryEmit(
+                AnonymousGroupEvent.RemovedFromAnonymousGroupEvent(
+                    anonymousGroupInternalId = anonymousGroup.internalId,
+                    anonymousGroupId = anonymousGroup.id,
+                    connectionId = anonymousGroup.connectionId,
+                )
+            )
         }
 
-    private suspend fun setAGExistsRemoteTrue(anonymousGroupId: String) =
+    private suspend fun setAGIsMemberTrue(anonymousGroup: AnonymousGroup) =
+        withContext(Dispatchers.IO) {
+            anonymousGroupDao.setAGIsMember(
+                anonymousGroupInternalId = anonymousGroup.internalId, isMember = true
+            )
+            _events.tryEmit(
+                AnonymousGroupEvent.ReaddedToAnonymousGroupEvent(
+                    anonymousGroupInternalId = anonymousGroup.internalId,
+                    anonymousGroupId = anonymousGroup.id,
+                    connectionId = anonymousGroup.connectionId
+                )
+            )
+        }
+
+    private suspend fun setAGExistsRemoteFalse(anonymousGroup: AnonymousGroup) =
         withContext(Dispatchers.IO) {
             anonymousGroupDao.setAGExistsRemote(
-                anonymousGroupId = anonymousGroupId, existsRemote = true
+                anonymousGroupInternalId = anonymousGroup.internalId, existsRemote = false
             )
-            _events.tryEmit(AnonymousGroupEvent.RemoteAGExistsEvent(anonymousGroupId))
+            _events.tryEmit(
+                AnonymousGroupEvent.RemoteAGDoesntExistEvent(
+                    anonymousGroupInternalId = anonymousGroup.internalId,
+                    anonymousGroupId = anonymousGroup.id,
+                    connectionId = anonymousGroup.connectionId
+                )
+            )
+        }
+
+    private suspend fun setAGExistsRemoteTrue(anonymousGroup: AnonymousGroup) =
+        withContext(Dispatchers.IO) {
+            anonymousGroupDao.setAGExistsRemote(
+                anonymousGroupInternalId = anonymousGroup.internalId, existsRemote = true
+            )
+            _events.tryEmit(
+                AnonymousGroupEvent.RemoteAGExistsEvent(
+                    anonymousGroupInternalId = anonymousGroup.internalId,
+                    anonymousGroupId = anonymousGroup.id,
+                    connectionId = anonymousGroup.connectionId
+                )
+            )
         }
 
     @Throws(
@@ -174,19 +223,19 @@ class AnonymousGroupService(
         RemoteAGNotFoundException::class,
         APIException::class
     )
-    suspend fun leaveAnonymousGroup(anonymousGroupId: String, connectionSettingsId: Long) =
+    suspend fun leaveAnonymousGroup(anonymousGroupInternalId: Long, connectionSettingsId: Long) =
         withContext(Dispatchers.IO) {
 
-            val agEntity = anonymousGroupDao.getAnonymousGroupById(anonymousGroupId)
+            val agEntity = anonymousGroupDao.getAGByInternalId(anonymousGroupInternalId)
                 ?: throw LocalAGNotFoundException()
             val anonymousGroup = AnonymousGroupMapper.toDomain(
                 entity = agEntity, keyStoreService = keyStoreService
             )
 
             val connectionSettings =
-                connectionSettingsService.getConnectionSettingsById(connectionSettingsId)
+                connectionService.getConnectionSettingsById(connectionSettingsId)
             val response = httpClient.post {
-                url("${connectionSettings.url}/api/anonymous-groups/$anonymousGroupId/members/leave")
+                url("${connectionSettings.url}/api/anonymous-groups/${anonymousGroup.id}/members/leave")
                 headers {
                     connectionSettings.apiKey?.let { ak -> append(name = "X-API-KEY", ak) }
                     append(
@@ -208,13 +257,13 @@ class AnonymousGroupService(
                     else -> ErrorHandler.handleGeneric(response)
                 }
             } catch (e: RemoteAGNotFoundException) {
-                deleteLocalAnonymousGroup(anonymousGroupId)
+                deleteLocalAnonymousGroup(anonymousGroup)
                 throw e
             } catch (e: UnauthorizedException) {
-                setAGIsMemberFalse(anonymousGroupId)
+                setAGIsMemberFalse(anonymousGroup)
                 throw AGMemberUnauthorizedException()
             }
-            deleteLocalAnonymousGroup(anonymousGroupId)
+            deleteLocalAnonymousGroup(anonymousGroup)
         }
 
 
@@ -225,7 +274,7 @@ class AnonymousGroupService(
         ConnectException::class
     )
     suspend fun createAnonymousGroup(
-        connectionSettingsId: Long,
+        connectionId: Long,
         groupName: String,
         memberName: String,
         memberPassword: String,
@@ -242,8 +291,7 @@ class AnonymousGroupService(
         val memberSrpVerifier = srpClientService.generateVerifier(
             identifier = groupName, password = memberPassword, salt = memberSrpSalt
         )
-        val connectionSettings =
-            connectionSettingsService.getConnectionSettingsById(connectionSettingsId)
+        val connectionSettings = connectionService.getConnectionSettingsById(connectionId)
         val encryptedGroupNameDto = EncryptedDataMapper.toDto(
             cryptoService.encrypt(
                 data = groupName.toByteArray(Charsets.UTF_8), key = key
@@ -257,7 +305,7 @@ class AnonymousGroupService(
                 append(HttpHeaders.ContentType, "application/json")
             }
             setBody(
-                AGCreateRequestDto(
+                AGCreateReqDto(
                     encryptedMemberName = encryptedMemberNameDto,
                     encryptedGroupName = encryptedGroupNameDto,
                     memberPasswordSrpVerifier = Base64.encode(memberSrpVerifier.toByteArray()),
@@ -274,7 +322,7 @@ class AnonymousGroupService(
             else -> ErrorHandler.handleGeneric(createResponse)
         }
 
-        val createResponseBody = createResponse.body<AGCreateResponseDto>()
+        val createResponseBody = createResponse.body<AGCreateResDto>()
         val agMember = AGMemberMapper.dtoToDomain(
             encryptedAGMemberDto = createResponseBody.authenticatedMemberInfo.member,
             cryptoService = cryptoService,
@@ -282,9 +330,10 @@ class AnonymousGroupService(
         )
         val agMemberEntity = AGMemberMapper.domainToEntity(
             agMember = agMember,
-            anonymousGroupId = createResponseBody.anonymousGroup.id,
+            anonymousGroupInternalId = 0,
         )
         val anonymousGroup = AnonymousGroup(
+            internalId = 0,
             id = createResponseBody.anonymousGroup.id,
             name = groupName,
             createdAt = createResponseBody.anonymousGroup.createdAt,
@@ -297,15 +346,22 @@ class AnonymousGroupService(
             existsRemote = true,
             sendLocation = true,
             key = key,
-            connectionSettingsId = connectionSettingsId
+            connectionId = connectionId
         )
-        anonymousGroupDao.createAGWithMembers(
+        val anonymousGroupInternalId = anonymousGroupDao.createAGWithMembers(
             agEntity = AnonymousGroupMapper.toEntity(
                 anonymousGroup = anonymousGroup, keyStoreService = keyStoreService
             ), agMemberEntities = listOf(agMemberEntity)
         )
-        _events.tryEmit(AnonymousGroupEvent.NewAnonymousGroupEvent(createResponseBody.anonymousGroup.id))
+        _events.tryEmit(
+            AnonymousGroupEvent.NewAnonymousGroupEvent(
+                anonymousGroupInternalId = anonymousGroupInternalId,
+                anonymousGroupId = anonymousGroup.id,
+                connectionId = anonymousGroup.connectionId
+            )
+        )
         AnonymousGroup(
+            internalId = anonymousGroupInternalId,
             id = createResponseBody.anonymousGroup.id,
             name = groupName,
             createdAt = createResponseBody.anonymousGroup.createdAt,
@@ -318,11 +374,10 @@ class AnonymousGroupService(
             existsRemote = true,
             sendLocation = true,
             key = key,
-            connectionSettingsId = connectionSettingsId
+            connectionId = connectionId
         )
     }
 
-    @OptIn(ExperimentalTime::class)
     @Throws(
         ConnectionSettingsNotFoundException::class,
         SerializationException::class,
@@ -331,18 +386,16 @@ class AnonymousGroupService(
         ConnectException::class
     )
     suspend fun authMember(
-        connectionSettingsId: Long,
-        anonymousGroupId: String,
-        memberName: String,
-        memberPassword: String
+        connectionId: Long, anonymousGroupId: String, memberName: String, memberPassword: String
     ): String = withContext(Dispatchers.IO) {
-        val agEntity = anonymousGroupDao.getAnonymousGroupById(anonymousGroupId)
+        val agEntity = anonymousGroupDao.getAGByIdAndConnectionId(
+            anonymousGroupId = anonymousGroupId, connectionId = connectionId
+        )
         if (agEntity != null) {
             throw LocalAGExistsException()
         }
         val srpClient = srpClientService.getSrpClient()
-        val connectionSettings =
-            connectionSettingsService.getConnectionSettingsById(connectionSettingsId)
+        val connectionSettings = connectionService.getConnectionSettingsById(connectionId)
         val agGetMemberPasswordSrpInfoResponse = httpClient.get {
             url("${connectionSettings.url}/api/anonymous-groups/${anonymousGroupId}/members/auth/srp/info")
             headers {
@@ -384,8 +437,8 @@ class AnonymousGroupService(
                 connectionSettings.apiKey?.let { ak -> append("X-API-KEY", ak) }
                 append(HttpHeaders.ContentType, "application/json")
             }
-            setBody<AGMemberAuthStartRequestDto>(
-                AGMemberAuthStartRequestDto(
+            setBody<AGMemberAuthStartReqDto>(
+                AGMemberAuthStartReqDto(
                     A = Base64.encode(A.encodeToByteArray())
                 )
             )
@@ -397,8 +450,7 @@ class AnonymousGroupService(
             404 -> throw RemoteAGNotFoundException()
             else -> ErrorHandler.handleGeneric(memberAuthStartResponse)
         }
-        val memberAuthStartResponseBody =
-            memberAuthStartResponse.body<AGMemberAuthStartResponseDto>()
+        val memberAuthStartResponseBody = memberAuthStartResponse.body<AGMemberAuthStartResDto>()
         val M1 = srpClientService.getM1(
             srpClient = srpClient, B = Base64.decode(memberAuthStartResponseBody.B).decodeToBigInt()
         )
@@ -411,8 +463,8 @@ class AnonymousGroupService(
                 connectionSettings.apiKey?.let { ak -> append("X-API-KEY", ak) }
                 append(HttpHeaders.ContentType, "application/json")
             }
-            setBody<AGMemberAuthVerifyRequestDto>(
-                AGMemberAuthVerifyRequestDto(
+            setBody<AGMemberAuthVerifyReqDto>(
+                AGMemberAuthVerifyReqDto(
                     encryptedMemberName = EncryptedDataMapper.toDto(encryptedMemberName),
                     srpSessionId = memberAuthStartResponseBody.srpSessionId,
                     M1 = Base64.encode(M1.encodeToByteArray()),
@@ -426,18 +478,19 @@ class AnonymousGroupService(
             404 -> throw RemoteAGNotFoundException()
             else -> ErrorHandler.handleGeneric(memberAuthVerifyResponse)
         }
-        val memberAuthVerifyResBody = memberAuthVerifyResponse.body<AGMemberAuthVerifyResponseDto>()
+        val memberAuthVerifyResBody = memberAuthVerifyResponse.body<AGMemberAuthVerifyResDto>()
         val agMember = AGMemberMapper.dtoToDomain(
             encryptedAGMemberDto = memberAuthVerifyResBody.authenticatedMemberInfo.member,
             cryptoService = cryptoService,
             key = key
         )
         val agMemberEntity = AGMemberMapper.domainToEntity(
-            agMember = agMember, anonymousGroupId = anonymousGroupId
+            agMember = agMember, anonymousGroupInternalId = 0
         )
-        anonymousGroupDao.createAGWithMembers(
+        val anonymousGroupInternalId = anonymousGroupDao.createAGWithMembers(
             agEntity = AnonymousGroupMapper.toEntity(
                 anonymousGroup = AnonymousGroup(
+                    internalId = 0,
                     id = memberAuthVerifyResBody.anonymousGroup.id,
                     name = agName,
                     createdAt = memberAuthVerifyResBody.anonymousGroup.createdAt,
@@ -453,25 +506,31 @@ class AnonymousGroupService(
                     memberToken = Base64.decode(memberAuthVerifyResBody.authenticatedMemberInfo.token),
                     adminToken = null,
                     key = key,
-                    connectionSettingsId = connectionSettingsId
+                    connectionId = connectionId
                 ), keyStoreService = keyStoreService
             ), agMemberEntities = listOf(agMemberEntity)
         )
-        _events.tryEmit(AnonymousGroupEvent.NewAnonymousGroupEvent(memberAuthVerifyResBody.anonymousGroup.id))
+        _events.tryEmit(
+            AnonymousGroupEvent.NewAnonymousGroupEvent(
+                anonymousGroupInternalId = anonymousGroupInternalId,
+                anonymousGroupId = memberAuthVerifyResBody.anonymousGroup.id,
+                connectionId = connectionId
+            )
+        )
         memberAuthVerifyResBody.authenticatedMemberInfo.token
     }
 
-    suspend fun verifyMemberAuth(connectionSettingsId: Long, anonymousGroupId: String) =
+    suspend fun verifyMemberAuth(connectionSettingsId: Long, anonymousGroupInternalId: Long) =
         withContext(Dispatchers.IO) {
             val connectionSettings =
-                connectionSettingsService.getConnectionSettingsById(connectionSettingsId)
-            val agEntity = anonymousGroupDao.getAnonymousGroupById(anonymousGroupId)
+                connectionService.getConnectionSettingsById(connectionSettingsId)
+            val agEntity = anonymousGroupDao.getAGByInternalId(anonymousGroupInternalId)
                 ?: throw LocalAGNotFoundException()
             val anonymousGroup = AnonymousGroupMapper.toDomain(
                 entity = agEntity, keyStoreService = keyStoreService
             )
             val response = httpClient.get {
-                url("${connectionSettings.url}/api/anonymous-groups/${anonymousGroupId}/members/auth/verify")
+                url("${connectionSettings.url}/api/anonymous-groups/${anonymousGroup.id}/members/auth/verify")
                 headers {
                     connectionSettings.apiKey?.let { ak -> append("X-API-KEY", ak) }
                     append(
@@ -489,17 +548,17 @@ class AnonymousGroupService(
                 }
                 // just if it was marked as not existing by mistake
                 if (!anonymousGroup.existsRemote) {
-                    setAGExistsRemoteTrue(anonymousGroupId)
+                    setAGExistsRemoteTrue(anonymousGroup)
                 }
                 // just if it was marked as not a member by mistake
                 if (!anonymousGroup.isMember) {
-                    setAGIsMemberTrue(anonymousGroupId)
+                    setAGIsMemberTrue(anonymousGroup)
                 }
             } catch (e: UnauthorizedException) {
-                setAGIsMemberFalse(anonymousGroupId)
+                setAGIsMemberFalse(anonymousGroup)
                 throw AGMemberUnauthorizedException()
             } catch (e: RemoteAGNotFoundException) {
-                setAGExistsRemoteFalse(anonymousGroupId)
+                setAGExistsRemoteFalse(anonymousGroup)
                 throw e
             }
         }
@@ -508,23 +567,23 @@ class AnonymousGroupService(
         val ags = listLocalAnonymousGroups(connectionSettingsId)
         ags.forEach {
             leaveAnonymousGroup(
-                anonymousGroupId = it.id, connectionSettingsId = connectionSettingsId
+                anonymousGroupInternalId = it.internalId,
+                connectionSettingsId = connectionSettingsId
             )
         }
     }
 
     suspend fun getRemoteAGMembers(
-        connectionSettingsId: Long, anonymousGroupId: String
+        connectionSettingsId: Long, anonymousGroupInternalId: Long
     ): List<AGMember> = withContext(Dispatchers.IO) {
-        val agEntity = anonymousGroupDao.getAnonymousGroupById(anonymousGroupId)
-            ?: throw RemoteAGNotFoundException()
+        val agEntity = anonymousGroupDao.getAGByInternalId(anonymousGroupInternalId)
+            ?: throw LocalAGNotFoundException()
         val anonymousGroup = AnonymousGroupMapper.toDomain(
             entity = agEntity, keyStoreService = keyStoreService
         )
-        val connectionSettings =
-            connectionSettingsService.getConnectionSettingsById(connectionSettingsId)
+        val connectionSettings = connectionService.getConnectionSettingsById(connectionSettingsId)
         val response = httpClient.get {
-            url("${connectionSettings.url}/api/anonymous-groups/${anonymousGroupId}/members")
+            url("${connectionSettings.url}/api/anonymous-groups/${anonymousGroup.id}/members")
             headers {
                 connectionSettings.apiKey?.let { ak -> append("X-API-KEY", ak) }
                 append(
@@ -541,13 +600,13 @@ class AnonymousGroupService(
                 else -> ErrorHandler.handleGeneric(response)
             }
         } catch (e: UnauthorizedException) {
-            setAGIsMemberFalse(anonymousGroupId)
+            setAGIsMemberFalse(anonymousGroup)
             throw AGMemberUnauthorizedException()
         } catch (e: RemoteAGNotFoundException) {
-            setAGExistsRemoteFalse(anonymousGroupId)
+            setAGExistsRemoteFalse(anonymousGroup)
             throw e
         }
-        val encryptedMembers = response.body<AGGetMembersResponseDto>().members
+        val encryptedMembers = response.body<AGGetMembersResDto>().members
         val decryptedMembers = encryptedMembers.map {
             async {
                 AGMemberMapper.dtoToDomain(
@@ -559,17 +618,20 @@ class AnonymousGroupService(
         }.awaitAll()
         Log.d("", "Decrypted members: ${decryptedMembers.map { it.id }}")
         anonymousGroupDao.setAGMembers(
-            anonymousGroupId = anonymousGroupId, agMemberEntities = decryptedMembers.map {
-                AGMemberMapper.domainToEntity(agMember = it, anonymousGroupId = anonymousGroupId)
+            anonymousGroupInternalId = anonymousGroupInternalId,
+            agMemberEntities = decryptedMembers.map {
+                AGMemberMapper.domainToEntity(
+                    agMember = it, anonymousGroupInternalId = it.internalId
+                )
             })
         decryptedMembers
     }
 
-    suspend fun verifyAdminAuth(connectionSettingsId: Long, anonymousGroupId: String) =
+    suspend fun verifyAdminAuth(connectionSettingsId: Long, anonymousGroupInternalId: Long) =
         withContext(Dispatchers.IO) {
             val connectionSettings =
-                connectionSettingsService.getConnectionSettingsById(connectionSettingsId)
-            val agEntity = anonymousGroupDao.getAnonymousGroupById(anonymousGroupId)
+                connectionService.getConnectionSettingsById(connectionSettingsId)
+            val agEntity = anonymousGroupDao.getAGByInternalId(anonymousGroupInternalId)
                 ?: throw LocalAGNotFoundException()
             val anonymousGroup = AnonymousGroupMapper.toDomain(
                 entity = agEntity, keyStoreService = keyStoreService
@@ -578,7 +640,7 @@ class AnonymousGroupService(
                 throw AGAdminTokenInvalidException()
             }
             val response = httpClient.get {
-                url("${connectionSettings.url}/api/anonymous-groups/${anonymousGroupId}/admin/auth/verify")
+                url("${connectionSettings.url}/api/anonymous-groups/${anonymousGroup.id}/admin/auth/verify")
                 headers {
                     connectionSettings.apiKey?.let { ak -> append("X-API-KEY", ak) }
                     append(
@@ -596,7 +658,7 @@ class AnonymousGroupService(
                     else -> ErrorHandler.handleGeneric(response)
                 }
             } catch (e: RemoteAGNotFoundException) {
-                setAGExistsRemoteFalse(anonymousGroupId)
+                setAGExistsRemoteFalse(anonymousGroup)
                 throw e
             } catch (e: UnauthorizedException) {
                 throw AGAdminTokenInvalidException()
@@ -604,22 +666,21 @@ class AnonymousGroupService(
         }
 
     suspend fun getAdminToken(
-        connectionSettingsId: Long, anonymousGroupId: String, adminPassword: String
+        connectionSettingsId: Long, anonymousGroupInternalId: Long, adminPassword: String
     ) = withContext(Dispatchers.IO) {
-        val connectionSettings =
-            connectionSettingsService.getConnectionSettingsById(connectionSettingsId)
-        val agEntity = anonymousGroupDao.getAnonymousGroupById(anonymousGroupId)
+        val connectionSettings = connectionService.getConnectionSettingsById(connectionSettingsId)
+        val agEntity = anonymousGroupDao.getAGByInternalId(anonymousGroupInternalId)
             ?: throw LocalAGNotFoundException()
         val anonymousGroup = AnonymousGroupMapper.toDomain(
             entity = agEntity, keyStoreService = keyStoreService
         )
         val response = httpClient.post {
-            url("${connectionSettings.url}/api/anonymous-groups/${anonymousGroupId}/admin/auth/token")
+            url("${connectionSettings.url}/api/anonymous-groups/${anonymousGroup.id}/admin/auth/token")
             headers {
                 connectionSettings.apiKey?.let { ak -> append("X-API-KEY", ak) }
                 append(HttpHeaders.ContentType, "application/json")
             }
-            setBody(AGAdminAuthRequestDto(adminPassword = adminPassword))
+            setBody(AGAdminAuthReqDto(adminPassword = adminPassword))
         }
         try {
             when (response.status.value) {
@@ -629,27 +690,27 @@ class AnonymousGroupService(
                 else -> ErrorHandler.handleGeneric(response)
             }
         } catch (e: RemoteAGNotFoundException) {
-            setAGExistsRemoteFalse(anonymousGroupId)
+            setAGExistsRemoteFalse(anonymousGroup)
             throw e
         } catch (e: UnauthorizedException) {
             throw AGAdminUnauthorizedException()
         }
-        val responseBody = response.body<AGAdminAuthResponseDto>()
+        val responseBody = response.body<AGAdminAuthResDto>()
         val encryptedAdminToken = keyStoreService.encrypt(Base64.decode(responseBody.adminToken))
         anonymousGroupDao.setAGAdminToken(
-            anonymousGroupId = anonymousGroupId,
+            anonymousGroupInternalId = anonymousGroupInternalId,
             adminTokenCipher = encryptedAdminToken.cipherText,
             adminTokenIv = encryptedAdminToken.iv,
         )
     }
 
     private suspend fun getAvailableConnections(
-        connectionSettingsList: List<ConnectionSettings>,
-    ): List<ConnectionSettings> = coroutineScope {
-        connectionSettingsList.map { settings ->
+        connectionList: List<Connection>,
+    ): List<Connection> = coroutineScope {
+        connectionList.map { settings ->
             async {
                 try {
-                    connectionSettingsService.isApiAvailable(settings.url)
+                    connectionService.isApiAvailable(settings.url)
                     settings
                 } catch (_: Exception) {
                     null
@@ -658,7 +719,7 @@ class AnonymousGroupService(
         }.awaitAll().filterNotNull()
     }
 
-    private suspend fun getAvailableAGs(availableConnections: List<ConnectionSettings>): Int {
+    private suspend fun getAvailableAGs(availableConnections: List<Connection>): Int {
         var availableAGs = 0
         availableConnections.forEach {
             availableAGs += anonymousGroupDao.listAGToSendLocationOfConnection(it.id!!).size
@@ -672,7 +733,7 @@ class AnonymousGroupService(
     ) {
         while (true) {
             val connectionSettings =
-                connectionSettingsService.getConnectionSettingsById(anonymousGroup.connectionSettingsId)
+                connectionService.getConnectionSettingsById(anonymousGroup.connectionId)
             var session: DefaultClientWebSocketSession? = null
             try {
                 try {
@@ -718,7 +779,7 @@ class AnonymousGroupService(
                     session!!.send(
                         Frame.Text(
                             text = Json.encodeToString(
-                                AGLocationSaveRequestDto(
+                                AGLocationSaveReqDto(
                                     encryptedLocation = EncryptedDataMapper.toDto(
                                         encryptedCoordinates
                                     )
@@ -732,7 +793,10 @@ class AnonymousGroupService(
 //                                )
                     _events.tryEmit(
                         AnonymousGroupEvent.AGLocationSentEvent(
-                            anonymousGroupId = anonymousGroup.id, timestamp = Clock.System.now()
+                            anonymousGroupInternalId = anonymousGroup.internalId,
+                            anonymousGroupId = anonymousGroup.id,
+                            connectionId = anonymousGroup.connectionId,
+                            timestamp = Clock.System.now()
                         )
                     )
                 }
@@ -747,14 +811,14 @@ class AnonymousGroupService(
                 when (e) {
                     is UnauthorizedException -> {
                         setAGIsMemberFalse(
-                            anonymousGroup.id
+                            anonymousGroup
                         )
                         return
                     }
 
                     is RemoteAGNotFoundException -> {
                         setAGExistsRemoteFalse(
-                            anonymousGroup.id
+                            anonymousGroup
                         )
                         return
                     }
@@ -807,7 +871,7 @@ class AnonymousGroupService(
                 when (event) {
                     is AnonymousGroupEvent.NewAnonymousGroupEvent -> {
                         val anonymousGroupEntity =
-                            anonymousGroupDao.getAnonymousGroupById(event.anonymousGroupId)
+                            anonymousGroupDao.getAGByInternalId(event.anonymousGroupInternalId)
                                 ?: return@collect
                         val anonymousGroup = AnonymousGroupMapper.toDomain(
                             entity = anonymousGroupEntity, keyStoreService = keyStoreService
@@ -823,7 +887,7 @@ class AnonymousGroupService(
 
                     is AnonymousGroupEvent.SendEnabledEvent -> {
                         val anonymousGroupEntity =
-                            anonymousGroupDao.getAnonymousGroupById(event.anonymousGroupId)
+                            anonymousGroupDao.getAGByInternalId(event.anonymousGroupInternalId)
                                 ?: return@collect
                         val anonymousGroup = AnonymousGroupMapper.toDomain(
                             entity = anonymousGroupEntity, keyStoreService = keyStoreService
@@ -862,18 +926,17 @@ class AnonymousGroupService(
 
     @OptIn(ExperimentalTime::class)
     suspend fun streamLocations(
-        connectionSettingsId: Long, anonymousGroupId: String
+        connectionSettingsId: Long, anonymousGroupInternalId: Long
     ): Flow<AGLocationUpdate> = withContext(Dispatchers.IO) {
-        val connectionSettings =
-            connectionSettingsService.getConnectionSettingsById(connectionSettingsId)
-        val agEntity = anonymousGroupDao.getAnonymousGroupById(anonymousGroupId)
+        val connectionSettings = connectionService.getConnectionSettingsById(connectionSettingsId)
+        val agEntity = anonymousGroupDao.getAGByInternalId(anonymousGroupInternalId)
             ?: throw LocalAGNotFoundException()
         val anonymousGroup = AnonymousGroupMapper.toDomain(
             entity = agEntity, keyStoreService = keyStoreService
         )
         callbackFlow {
             httpClient.sse(
-                "${connectionSettings.url}/api/anonymous-groups/$anonymousGroupId/locations",
+                "${connectionSettings.url}/api/anonymous-groups/${anonymousGroup.id}/locations",
                 request = {
                     headers {
                         connectionSettings.apiKey?.let { ak -> append("X-API-KEY", ak) }
@@ -905,8 +968,12 @@ class AnonymousGroupService(
                                     Log.d(
                                         "", "Received location $agLocation"
                                     )
+                                    val agMember = anonymousGroupDao.getAGMemberByIdAndAGInternalId(
+                                        agInternalId = anonymousGroup.internalId,
+                                        id = agLocation.agMemberId,
+                                    ) ?: return@collect
                                     anonymousGroupDao.setAGMemberLastLocation(
-                                        agMemberId = agLocation.agMemberId,
+                                        agMemberInternalId = agMember.internalId,
                                         lastLatitude = agLocation.locationRecord.coordinates.latitude,
                                         lastLongitude = agLocation.locationRecord.coordinates.longitude,
                                         lastSeen = agLocation.locationRecord.timestamp.toInstant(
@@ -931,11 +998,11 @@ class AnonymousGroupService(
         }
     }
 
-    suspend fun deleteAnonymousGroup(connectionSettingsId: Long, anonymousGroupId: String) =
+    suspend fun deleteAnonymousGroup(connectionSettingsId: Long, anonymousGroupInternalId: Long) =
         withContext(Dispatchers.IO) {
             val connectionSettings =
-                connectionSettingsService.getConnectionSettingsById(connectionSettingsId)
-            val agEntity = anonymousGroupDao.getAnonymousGroupById(anonymousGroupId)
+                connectionService.getConnectionSettingsById(connectionSettingsId)
+            val agEntity = anonymousGroupDao.getAGByInternalId(anonymousGroupInternalId)
                 ?: throw LocalAGNotFoundException()
             val anonymousGroup = AnonymousGroupMapper.toDomain(
                 entity = agEntity, keyStoreService = keyStoreService
@@ -944,7 +1011,7 @@ class AnonymousGroupService(
                 throw AGAdminTokenInvalidException()
             }
             val response = httpClient.delete {
-                url("${connectionSettings.url}/api/anonymous-groups/${anonymousGroupId}")
+                url("${connectionSettings.url}/api/anonymous-groups/${anonymousGroup.id}")
                 headers {
                     connectionSettings.apiKey?.let { ak -> append("X-API-KEY", ak) }
                     append(
@@ -959,6 +1026,6 @@ class AnonymousGroupService(
                 404 -> throw RemoteAGNotFoundException()
                 else -> ErrorHandler.handleGeneric(response)
             }
-            deleteLocalAnonymousGroup(anonymousGroupId)
+            deleteLocalAnonymousGroup(anonymousGroup)
         }
 }

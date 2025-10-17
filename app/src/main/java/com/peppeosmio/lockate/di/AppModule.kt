@@ -5,12 +5,14 @@ import androidx.room.Room
 import com.google.android.gms.location.LocationServices
 import com.peppeosmio.lockate.AppDatabase
 import com.peppeosmio.lockate.dao.AnonymousGroupDao
-import com.peppeosmio.lockate.dao.ConnectionSettingsDao
+import com.peppeosmio.lockate.dao.ConnectionDao
 import com.peppeosmio.lockate.migrations.MIGRATION_1_2
 import com.peppeosmio.lockate.migrations.MIGRATION_2_3
+import com.peppeosmio.lockate.migrations.MIGRATION_3_4
+import com.peppeosmio.lockate.migrations.MIGRATION_4_5
 import com.peppeosmio.lockate.platform_service.KeyStoreService
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
-import com.peppeosmio.lockate.service.ConnectionSettingsService
+import com.peppeosmio.lockate.service.ConnectionService
 import com.peppeosmio.lockate.service.PermissionsService
 import com.peppeosmio.lockate.service.crypto.CryptoService
 import com.peppeosmio.lockate.platform_service.LocationService
@@ -32,7 +34,7 @@ val appModule = module {
     single<AppDatabase> {
         Room.databaseBuilder(
             androidContext(), AppDatabase::class.java, "lockate.db"
-        ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
+        ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build()
     }
 
     // DAO from the database
@@ -40,7 +42,7 @@ val appModule = module {
         get<AppDatabase>().anonymousGroupDao()
     }
 
-    single<ConnectionSettingsDao> {
+    single<ConnectionDao> {
         get<AppDatabase>().connectionSettingsDao()
     }
 
@@ -68,11 +70,11 @@ val appModule = module {
         KeyStoreService()
     }
 
-    single<ConnectionSettingsService> {
-        ConnectionSettingsService(
+    single<ConnectionService> {
+        ConnectionService(
             context = androidContext(),
             httpClient = get(),
-            connectionSettingsDao = get(),
+            connectionDao = get(),
             keyStoreService = get()
         )
     }
@@ -103,7 +105,7 @@ val appModule = module {
         AnonymousGroupService(
             anonymousGroupDao = get(),
             cryptoService = get(),
-            connectionSettingsService = get(),
+            connectionService = get(),
             httpClient = get(),
             srpClientService = get(),
             locationService = get(),

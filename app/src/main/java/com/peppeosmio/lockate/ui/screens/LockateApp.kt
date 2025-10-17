@@ -2,7 +2,6 @@ package com.peppeosmio.lockate.ui.screens
 
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.runtime.Composable
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -67,14 +66,14 @@ fun LockateApp(startLocationService: () -> Unit, stopLocationService: () -> Unit
             }
             composable<HomeRoute> {
                 HomePageScreen(
-                    navigateToConnectionSettings = {
-                    appNavController.navigate(ConnectionSettingsRoute(null)) {}
+                    navigateToConnectionSettings = { connectionSettingsId ->
+                    appNavController.navigate(ConnectionSettingsRoute(connectionSettingsId)) {}
                 },
-                    navigateToAGDetails = { connectionSettingsId, anonymousGroupId, anonymousGroupName ->
+                    navigateToAGDetails = { connectionSettingsId, anonymousGroupInternalId, anonymousGroupName ->
                         appNavController.navigate(
                             AnonymousGroupDetailsRoute(
-                                connectionSettingsId = connectionSettingsId,
-                                anonymousGroupId = anonymousGroupId,
+                                connectionId = connectionSettingsId,
+                                anonymousGroupInternalId = anonymousGroupInternalId,
                                 anonymousGroupName = anonymousGroupName
                             )
                         )
@@ -100,7 +99,7 @@ fun LockateApp(startLocationService: () -> Unit, stopLocationService: () -> Unit
                 val joinAnonymousGroupRoute = navBackStackEntry.toRoute<JoinAnonymousGroupRoute>()
                 JoinAnonymousGroupScreen(navigateBack = {
                     appNavController.popBackStack()
-                }, connectionSettingsId = joinAnonymousGroupRoute.connectionSettingsId)
+                }, connectionId = joinAnonymousGroupRoute.connectionSettingsId)
             }
             composable<AnonymousGroupDetailsRoute> { backStackEntry ->
                 val anonymousGroupDetailsRoute: AnonymousGroupDetailsRoute =
@@ -109,15 +108,18 @@ fun LockateApp(startLocationService: () -> Unit, stopLocationService: () -> Unit
                     navigateBack = {
                         appNavController.popBackStack()
                     },
-                    connectionSettingsId = anonymousGroupDetailsRoute.connectionSettingsId,
-                    anonymousGroupId = anonymousGroupDetailsRoute.anonymousGroupId,
+                    connectionId = anonymousGroupDetailsRoute.connectionId,
+                    anonymousGroupInternalId = anonymousGroupDetailsRoute.anonymousGroupInternalId,
                     anonymousGroupName = anonymousGroupDetailsRoute.anonymousGroupName
                 )
             }
             composable<ConnectionSettingsRoute> { navBackStackEntry ->
                 val connectionSettingsRoute = navBackStackEntry.toRoute<ConnectionSettingsRoute>()
                 ConnectionSettingsScreen(
-                    initialConnectionSettingsId = connectionSettingsRoute.initialConnectionSettingsId,
+                    initialConnectionId = connectionSettingsRoute.initialConnectionSettingsId,
+                    navigateBack = {
+                        appNavController.popBackStack()
+                    },
                     navigateToHome = {
                         appNavController.navigate(HomeRoute) {
                             popUpTo(0) { inclusive = true }

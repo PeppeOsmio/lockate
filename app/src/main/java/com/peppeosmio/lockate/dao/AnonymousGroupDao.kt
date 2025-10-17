@@ -11,7 +11,7 @@ import com.peppeosmio.lockate.data.anonymous_group.database.AnonymousGroupEntity
 @Dao
 interface AnonymousGroupDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
-    suspend fun insertAnonymousGroup(agEntity: AnonymousGroupEntity)
+    suspend fun insertAnonymousGroup(agEntity: AnonymousGroupEntity): Long
 
     @Insert
     suspend fun insertAGMembers(agMember: List<AGMemberEntity>)
@@ -19,38 +19,43 @@ interface AnonymousGroupDao {
     @Transaction
     suspend fun createAGWithMembers(
         agEntity: AnonymousGroupEntity, agMemberEntities: List<AGMemberEntity>
-    ) {
-        insertAnonymousGroup(agEntity)
-        val agMembersWithAGId = agMemberEntities.map { it.copy(anonymousGroupId = agEntity.id) }
+    ) : Long {
+        val anonymousGroupInternalId = insertAnonymousGroup(agEntity)
+        val agMembersWithAGId =
+            agMemberEntities.map { it.copy(anonymousGroupInternalId = anonymousGroupInternalId) }
         insertAGMembers(agMembersWithAGId)
+        return anonymousGroupInternalId
     }
 
-    @Query("SELECT EXISTS(SELECT 1 FROM anonymous_group_member WHERE id = :agMemberId)")
-    suspend fun existsAGMember(agMemberId: String): Boolean
+    @Query("SELECT EXISTS(SELECT 1 FROM ag_member WHERE internalId = :agMemberInternalId)")
+    suspend fun existsAGMember(agMemberInternalId: Long): Boolean
 
-    @Query("DELETE FROM anonymous_group_member WHERE anonymousGroupId = :anonymousGroupId")
-    suspend fun deleteAGMembers(anonymousGroupId: String)
+    @Query("DELETE FROM ag_member WHERE anonymousGroupInternalId = :anonymousGroupInternalId")
+    suspend fun deleteAGMembers(anonymousGroupInternalId: Long)
 
-    @Query("DELETE FROM anonymous_group_member WHERE id = :agMemberId")
-    suspend fun deleteAGMember(agMemberId: String)
+    @Query("DELETE FROM ag_member WHERE internalId = :agMemberInternalId")
+    suspend fun deleteAGMember(agMemberInternalId: Long)
 
     @Transaction
     suspend fun setAGMembers(
-        anonymousGroupId: String, agMemberEntities: List<AGMemberEntity>
+        anonymousGroupInternalId: Long, agMemberEntities: List<AGMemberEntity>
     ) {
-        deleteAGMembers(anonymousGroupId)
+        deleteAGMembers(anonymousGroupInternalId)
         val agMembersWithAGId =
-            agMemberEntities.map { it.copy(anonymousGroupId = anonymousGroupId) }
+            agMemberEntities.map { it.copy(anonymousGroupInternalId = anonymousGroupInternalId) }
         insertAGMembers(agMembersWithAGId)
     }
 
-    @Query("SELECT * FROM anonymous_group WHERE id = :anonymousGroupId")
-    suspend fun getAnonymousGroupById(anonymousGroupId: String): AnonymousGroupEntity?
+    @Query("SELECT * FROM anonymous_group WHERE internalId = :anonymousGroupInternalId")
+    suspend fun getAGByInternalId(anonymousGroupInternalId: Long): AnonymousGroupEntity?
+
+    @Query("SELECT * FROM anonymous_group WHERE internalId = :anonymousGroupId AND connectionId = :connectionId")
+    suspend fun getAGByIdAndConnectionId(anonymousGroupId: String, connectionId: Long)  : AnonymousGroupEntity?
 
     @Query(
         """
         SELECT * FROM anonymous_group
-        WHERE connectionSettingsId = :connectionSettingsId
+        WHERE connectionId = :connectionSettingsId
         ORDER BY createdAt DESC, id DESC
     """
     )
@@ -58,33 +63,35 @@ interface AnonymousGroupDao {
 
     @Query(
         """
-        SELECT * FROM anonymous_group_member
-        WHERE anonymousGroupId = :anonymousGroupId
-        ORDER BY createdAt DESC, id DESC
+        SELECT * FROM ag_member
+        WHERE anonymousGroupInternalId = :anonymousGroupInternalId
+        ORDER BY internalId
     """
     )
-    suspend fun listAGMembers(anonymousGroupId: String): List<AGMemberEntity>
+    suspend fun listAGMembers(anonymousGroupInternalId: Long): List<AGMemberEntity>
 
-    @Query("DELETE FROM anonymous_group WHERE id = :anonymousGroupId")
-    suspend fun deleteAnonymousGroupById(anonymousGroupId: String)
+    @Query("DELETE FROM anonymous_group WHERE internalId = :anonymousGroupInternalId")
+    suspend fun deleteAGByInternalId(anonymousGroupInternalId: Long)
 
-    @Query("UPDATE anonymous_group SET isMember = :isMember WHERE id = :anonymousGroupId")
-    suspend fun setAGIsMember(anonymousGroupId: String, isMember: Boolean)
+    @Query("UPDATE anonymous_group SET isMember = :isMember WHERE internalId = :anonymousGroupInternalId")
+    suspend fun setAGIsMember(anonymousGroupInternalId: Long, isMember: Boolean)
 
-    @Query("UPDATE anonymous_group SET existsRemote = :existsRemote WHERE id = :anonymousGroupId")
-    suspend fun setAGExistsRemote(anonymousGroupId: String, existsRemote: Boolean)
+    @Query("UPDATE anonymous_group SET existsRemote = :existsRemote WHERE internalId = :anonymousGroupInternalId")
+    suspend fun setAGExistsRemote(anonymousGroupInternalId: Long, existsRemote: Boolean)
 
-    @Query("UPDATE anonymous_group SET sendLocation = :sendLocation WHERE id = :anonymousGroupId")
-    suspend fun setAGSendLocation(anonymousGroupId: String, sendLocation: Boolean)
+    @Query("UPDATE anonymous_group SET sendLocation = :sendLocation WHERE internalId = :anonymousGroupInternalId")
+    suspend fun setAGSendLocation(anonymousGroupInternalId: Long, sendLocation: Boolean)
 
-    @Query("""
+    @Query(
+        """
         UPDATE anonymous_group 
         SET adminTokenCipher = :adminTokenCipher, 
         adminTokenIv = :adminTokenIv
-        WHERE id = :anonymousGroupId
-        """)
+        WHERE internalId = :anonymousGroupInternalId
+        """
+    )
     suspend fun setAGAdminToken(
-        anonymousGroupId: String,
+        anonymousGroupInternalId: Long,
         adminTokenCipher: ByteArray,
         adminTokenIv: ByteArray,
     )
@@ -92,8 +99,8 @@ interface AnonymousGroupDao {
     @Query(
         """
         SELECT * FROM anonymous_group 
-        WHERE sendLocation = 1 AND isMember = 1 AND existsRemote = 1 AND connectionSettingsId = :connectionSettingsId
-        ORDER BY createdAt DESC, id DESC
+        WHERE sendLocation = 1 AND isMember = 1 AND existsRemote = 1 AND connectionId = :connectionSettingsId
+        ORDER BY internalId DESC
     """
     )
     suspend fun listAGToSendLocationOfConnection(connectionSettingsId: Long): List<AnonymousGroupEntity>
@@ -102,26 +109,31 @@ interface AnonymousGroupDao {
         """
         SELECT * FROM anonymous_group 
         WHERE sendLocation = 1 AND isMember = 1 AND existsRemote = 1
-        ORDER BY createdAt DESC, id DESC
-    """
+        ORDER BY internalId DESC
+        """
     )
     suspend fun listAGsToSendLocation(): List<AnonymousGroupEntity>
 
     @Query(
         """
-        UPDATE anonymous_group_member
+        SELECT * FROM ag_member
+        WHERE id = :id AND anonymousGroupInternalId = :agInternalId
+        """
+    )
+    suspend fun getAGMemberByIdAndAGInternalId(id: String, agInternalId: Long): AGMemberEntity?
+
+    @Query(
+        """
+        UPDATE ag_member
         SET lastLatitude = :lastLatitude, lastLongitude = :lastLongitude,
         lastSeen = :lastSeen
-        WHERE id = :agMemberId
-    """
+        WHERE internalId = :agMemberInternalId
+        """
     )
     suspend fun setAGMemberLastLocation(
-        agMemberId: String,
-        lastLatitude: Double,
-        lastLongitude: Double,
-        lastSeen: Long
+        agMemberInternalId: Long, lastLatitude: Double, lastLongitude: Double, lastSeen: Long
     ): Int
 
-    @Query("DELETE FROM anonymous_group WHERE connectionSettingsId = :connectionSettingsId")
+    @Query("DELETE FROM anonymous_group WHERE connectionId = :connectionSettingsId")
     suspend fun deleteAllAGsOfConnection(connectionSettingsId: Long)
 }
