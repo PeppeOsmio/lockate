@@ -49,7 +49,7 @@ interface AnonymousGroupDao {
     @Query("SELECT * FROM anonymous_group WHERE internalId = :anonymousGroupInternalId")
     suspend fun getAGByInternalId(anonymousGroupInternalId: Long): AnonymousGroupEntity?
 
-    @Query("SELECT * FROM anonymous_group WHERE internalId = :anonymousGroupId AND connectionId = :connectionId")
+    @Query("SELECT * FROM anonymous_group WHERE id = :anonymousGroupId AND connectionId = :connectionId")
     suspend fun getAGByIdAndConnectionId(anonymousGroupId: String, connectionId: Long)  : AnonymousGroupEntity?
 
     @Query(
