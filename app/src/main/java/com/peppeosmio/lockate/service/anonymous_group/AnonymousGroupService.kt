@@ -31,6 +31,7 @@ import com.peppeosmio.lockate.exceptions.ConnectionSettingsNotFoundException
 import com.peppeosmio.lockate.exceptions.InvalidApiKeyException
 import com.peppeosmio.lockate.exceptions.LocalAGExistsException
 import com.peppeosmio.lockate.exceptions.LocalAGNotFoundException
+import com.peppeosmio.lockate.exceptions.LocationDisabledException
 import com.peppeosmio.lockate.exceptions.RemoteAGNotFoundException
 import com.peppeosmio.lockate.exceptions.UnauthorizedException
 import com.peppeosmio.lockate.platform_service.KeyStoreService
@@ -46,8 +47,7 @@ import io.ktor.client.call.body
 import io.ktor.client.plugins.ResponseException
 import io.ktor.client.plugins.sse.deserialize
 import io.ktor.client.plugins.sse.sse
-import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
-import io.ktor.client.plugins.websocket.webSocketSession
+import io.ktor.client.plugins.websocket.webSocket
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.headers
@@ -56,7 +56,6 @@ import io.ktor.client.request.setBody
 import io.ktor.client.request.url
 import io.ktor.http.HttpHeaders
 import io.ktor.websocket.Frame
-import io.ktor.websocket.close
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -734,102 +733,115 @@ class AnonymousGroupService(
         while (true) {
             val connectionSettings =
                 connectionService.getConnectionSettingsById(anonymousGroup.connectionId)
-            var session: DefaultClientWebSocketSession? = null
+            var isConnected = false
             try {
-                try {
-                    session = httpClient.webSocketSession {
-                        url("${connectionSettings.getWebSocketUrl()}/api/ws/anonymous-groups/${anonymousGroup.id}/send-location")
-                        headers {
-                            connectionSettings.apiKey?.let { ak ->
-                                append(
-                                    "X-API-KEY", ak
-                                )
-                            }
+                httpClient.webSocket(request = {
+                    url("${connectionSettings.getWebSocketUrl()}/api/ws/anonymous-groups/${anonymousGroup.id}/send-location")
+                    headers {
+                        connectionSettings.apiKey?.let { ak ->
                             append(
-                                HttpHeaders.Authorization, "AGMember ${anonymousGroup.memberId} ${
-                                    Base64.encode(
-                                        anonymousGroup.memberToken
-                                    )
-                                }"
-                            )
-                            append(
-                                HttpHeaders.ContentType, "application/json"
+                                "X-API-KEY", ak
                             )
                         }
+                        append(
+                            HttpHeaders.Authorization, "AGMember ${anonymousGroup.memberId} ${
+                                Base64.encode(
+                                    anonymousGroup.memberToken
+                                )
+                            }"
+                        )
+                        append(
+                            HttpHeaders.ContentType, "application/json"
+                        )
                     }
+                }) {
+                    isConnected = true
                     onConnected()
-                } catch (e: ResponseException) {
-                    e.printStackTrace()
-                    val response = e.response
-                    when (response.status.value) {
-                        401, 403 -> ErrorHandler.handleUnauthorized(response)
-                        404 -> throw RemoteAGNotFoundException()
-                        else -> ErrorHandler.handleGeneric(response)
-                    }
-                }
-                Log.i(
-                    "",
-                    "Sending AG location to ${connectionSettings.url} agId: ${anonymousGroup.id} agMemberId: ${anonymousGroup.memberId}"
-                )
-                locationService.getLocationUpdates().collect { coordinates ->
-                    val coordinatesBytes = coordinates.toByteArray()
-                    val encryptedCoordinates = cryptoService.encrypt(
-                        data = coordinatesBytes, key = anonymousGroup.key
+                    Log.i(
+                        "",
+                        "Sending AG location to ${connectionSettings.url} agId: ${anonymousGroup.id} agMemberId: ${anonymousGroup.memberId}"
                     )
-                    session!!.send(
-                        Frame.Text(
-                            text = Json.encodeToString(
-                                AGLocationSaveReqDto(
-                                    encryptedLocation = EncryptedDataMapper.toDto(
-                                        encryptedCoordinates
+                    coroutineScope {
+                        suspend fun getTimeoutJob() {
+                            delay(30000L)
+                            Log.e("", "No location obtained in the last 30 s")
+                            throw LocationDisabledException()
+                        }
+
+                        var timeoutJob = launch {
+                            getTimeoutJob()
+                        }
+                        locationService.getLocationUpdates().collect { coordinates ->
+                            timeoutJob.cancel()
+                            timeoutJob = launch {
+                                getTimeoutJob()
+                            }
+                            val coordinatesBytes = coordinates.toByteArray()
+                            val encryptedCoordinates = cryptoService.encrypt(
+                                data = coordinatesBytes, key = anonymousGroup.key
+                            )
+                            send(
+                                Frame.Text(
+                                    text = Json.encodeToString(
+                                        AGLocationSaveReqDto(
+                                            encryptedLocation = EncryptedDataMapper.toDto(
+                                                encryptedCoordinates
+                                            )
+                                        )
                                     )
                                 )
                             )
-                        )
-                    )
 //                                Log.d(
 //                                    "",
 //                                    "Sent location $coordinates to AG ${anonymousGroup.id} connection ${connectionSettings.url}"
 //                                )
-                    _events.tryEmit(
-                        AnonymousGroupEvent.AGLocationSentEvent(
-                            anonymousGroupInternalId = anonymousGroup.internalId,
-                            anonymousGroupId = anonymousGroup.id,
-                            connectionId = anonymousGroup.connectionId,
-                            timestamp = Clock.System.now()
-                        )
-                    )
+                            _events.tryEmit(
+                                AnonymousGroupEvent.AGLocationSentEvent(
+                                    anonymousGroupInternalId = anonymousGroup.internalId,
+                                    anonymousGroupId = anonymousGroup.id,
+                                    connectionId = anonymousGroup.connectionId,
+                                    timestamp = Clock.System.now()
+                                )
+                            )
+                        }
+                    }
                 }
             } catch (e: Exception) {
-                if (session != null) {
+                if (isConnected) {
                     onDisconnected()
-                    try {
-                        session.close()
-                    } catch (_: Exception) {
-                    }
                 }
                 when (e) {
-                    is UnauthorizedException -> {
-                        setAGIsMemberFalse(
-                            anonymousGroup
-                        )
-                        return
+                    is ResponseException -> {
+                        val response = e.response
+                        try {
+                            when (response.status.value) {
+                                401, 403 -> ErrorHandler.handleUnauthorized(response)
+                                404 -> throw RemoteAGNotFoundException()
+                                else -> ErrorHandler.handleGeneric(response)
+                            }
+                        } catch (ee: UnauthorizedException) {
+                            setAGIsMemberFalse(
+                                anonymousGroup
+                            )
+                            return
+                        } catch (ee: RemoteAGNotFoundException) {
+                            setAGExistsRemoteFalse(
+                                anonymousGroup
+                            )
+                            return
+                        } catch (ee: Exception) {
+                            ee.printStackTrace()
+                        }
                     }
 
-                    is RemoteAGNotFoundException -> {
-                        setAGExistsRemoteFalse(
-                            anonymousGroup
-                        )
-                        return
-                    }
+                    is LocationDisabledException -> {}
 
                     else -> {
-                        Log.d("", "[1] ${e::class}")
-                        e.printStackTrace()
                         Log.e("", "Can't connect to ${connectionSettings.url}")
-                        delay(60000L)
+                        e.printStackTrace()
                     }
                 }
+                delay(60000L)
             }
         }
     }
@@ -979,10 +991,6 @@ class AnonymousGroupService(
                                         lastSeen = agLocation.locationRecord.timestamp.toInstant(
                                             TimeZone.UTC
                                         ).toEpochMilliseconds()
-                                    )
-                                    Log.d(
-                                        "",
-                                        "Set last location to ${agLocation.agMemberId}: ${agLocation.locationRecord}"
                                     )
                                     send(
                                         agLocation
