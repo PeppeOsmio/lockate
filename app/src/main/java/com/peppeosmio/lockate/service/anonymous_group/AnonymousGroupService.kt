@@ -80,7 +80,9 @@ import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.concurrent.atomics.decrementAndFetch
 import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.io.encoding.Base64
+import kotlin.math.min
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
 
 class AnonymousGroupService(
@@ -730,9 +732,11 @@ class AnonymousGroupService(
     private suspend fun anonymousGroupSendLocation(
         anonymousGroup: AnonymousGroup, onConnected: () -> Unit, onDisconnected: () -> Unit
     ) {
+        val connectionSettings =
+            connectionService.getConnectionSettingsById(anonymousGroup.connectionId)
+        val maxRetries = 10
+        var retries = 0
         while (true) {
-            val connectionSettings =
-                connectionService.getConnectionSettingsById(anonymousGroup.connectionId)
             var isConnected = false
             try {
                 httpClient.webSocket(request = {
@@ -756,6 +760,7 @@ class AnonymousGroupService(
                     }
                 }) {
                     isConnected = true
+                    retries = 0
                     onConnected()
                     Log.i(
                         "",
@@ -819,29 +824,35 @@ class AnonymousGroupService(
                                 404 -> throw RemoteAGNotFoundException()
                                 else -> ErrorHandler.handleGeneric(response)
                             }
-                        } catch (ee: UnauthorizedException) {
-                            setAGIsMemberFalse(
-                                anonymousGroup
-                            )
-                            return
-                        } catch (ee: RemoteAGNotFoundException) {
-                            setAGExistsRemoteFalse(
-                                anonymousGroup
-                            )
-                            return
                         } catch (ee: Exception) {
                             ee.printStackTrace()
+                            when (ee) {
+                                is UnauthorizedException -> {
+                                    setAGIsMemberFalse(anonymousGroup)
+                                    return
+                                }
+
+                                is RemoteAGNotFoundException -> {
+                                    setAGExistsRemoteFalse(
+                                        anonymousGroup
+                                    )
+                                    return
+                                }
+                            }
                         }
                     }
 
                     is LocationDisabledException -> {}
 
                     else -> {
-                        Log.e("", "Can't connect to ${connectionSettings.url}")
                         e.printStackTrace()
                     }
                 }
-                delay(60000L)
+                retries += 1
+                retries = min(retries, maxRetries)
+                val waitSeconds = 5L * retries
+                Log.e("", "Can't connect to ${connectionSettings.url} retrying in $waitSeconds s")
+                delay(waitSeconds.seconds)
             }
         }
     }
