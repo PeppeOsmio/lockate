@@ -385,6 +385,9 @@ class AnonymousGroupDetailsViewModel(
                         members = newMembers
                     )
                 }
+                if (locationUpdate.agMemberId == state.value.followedMemberId) {
+                    _cameraPositionEvents.trySend(locationUpdate.locationRecord.coordinates)
+                }
             }
         }
     }
@@ -458,30 +461,28 @@ class AnonymousGroupDetailsViewModel(
         _state.update { it.copy(dialogErrorInfo = errorInfo) }
     }
 
-    fun moveToMe() {
-        if (state.value.myCoordinates == null) {
-            return
-        }
-        _cameraPositionEvents.trySend(state.value.myCoordinates!!)
-    }
-
-    /**
-     * Move to a member, if the member is you this just calls onTapMyLocation()
-     */
-    fun moveToMember(agMemberId: String) {
+    fun onTapMember(agMemberId: String) = viewModelScope.launch {
         if (state.value.members == null || state.value.anonymousGroup == null) {
-            return
+            return@launch
         }
         state.value.members!![agMemberId]?.let { member ->
             if (member.lastLocationRecord == null) {
+                _state.update { it.copy(followedMemberId = null) }
                 return@let
             }
             if (member.id == state.value.anonymousGroup!!.memberId) {
+                _state.update { it.copy(followedMemberId = null) }
                 onTapMyLocation()
-                return
+                return@launch
             }
-            Log.d("", "Locating member ${agMemberId}: ${member.lastLocationRecord}")
+            _state.update { it.copy(followedMemberId = agMemberId) }
+            Log.d("", "Following member ${agMemberId}: ${member.lastLocationRecord}")
             _cameraPositionEvents.trySend(member.lastLocationRecord.coordinates)
         }
+    }
+
+
+    fun stopFollowMember() {
+        _state.update { it.copy(followedMemberId = null) }
     }
 }

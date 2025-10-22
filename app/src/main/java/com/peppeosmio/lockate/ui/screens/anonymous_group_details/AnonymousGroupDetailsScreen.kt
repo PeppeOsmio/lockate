@@ -104,19 +104,22 @@ fun AnonymousGroupDetailsScreen(
         }
     }
 
-    val myPoint = remember(state.anonymousGroup, state.members, state.myCoordinates, isMyLocationOld) {
-        if (state.members == null || state.anonymousGroup == null || state.myCoordinates == null) {
-            return@remember null
+    val myPoint =
+        remember(state.anonymousGroup, state.members, state.myCoordinates, isMyLocationOld) {
+            if (state.members == null || state.anonymousGroup == null || state.myCoordinates == null) {
+                return@remember null
+            }
+            val me = state.members!![state.anonymousGroup!!.memberId]
+            if (me == null) {
+                Log.e(
+                    "", "Can't find own user in members list! id=${state.anonymousGroup!!.memberId}"
+                )
+                return@remember null
+            }
+            MapPoint(
+                coordinates = state.myCoordinates!!, name = "You", isOld = isMyLocationOld
+            )
         }
-        val me = state.members!![state.anonymousGroup!!.memberId]
-        if (me == null) {
-            Log.e("", "Can't find own user in members list! id=${state.anonymousGroup!!.memberId}")
-            return@remember null
-        }
-        MapPoint(
-            coordinates = state.myCoordinates!!, name = "You", isOld = isMyLocationOld
-        )
-    }
 
     LaunchedEffect(state.members) {
         state.members?.forEach { (memberId, member) ->
@@ -232,7 +235,7 @@ fun AnonymousGroupDetailsScreen(
                 )
             }
         }, actions = {
-            when(state.remoteDataLoadingState) {
+            when (state.remoteDataLoadingState) {
                 LoadingState.Failed -> {
                     IconButton(onClick = {
                         coroutineScope.launch {
@@ -242,9 +245,11 @@ fun AnonymousGroupDetailsScreen(
                         Icon(imageVector = Icons.Default.Refresh, contentDescription = "Reconnect")
                     }
                 }
+
                 LoadingState.IsLoading -> {
                     SmallCircularProgressIndicator(modifier = Modifier.padding(8.dp))
                 }
+
                 else -> Unit
             }
             if (state.anonymousGroup != null) {
@@ -310,14 +315,34 @@ fun AnonymousGroupDetailsScreen(
             ) { page ->
                 when (tabs[page]) {
                     AnonymousGroupDetailsTab.Map -> {
-                        MembersMap(
-                            modifier = Modifier.fillMaxSize(),
-                            cameraState = mapCameraState,
-                            membersPoints = membersPoints,
-                            myPoint = myPoint,
-                            onTapMyLocation = {
-                                viewModel.onTapMyLocation()
-                            })
+                        Box {
+                            MembersMap(
+                                modifier = Modifier.fillMaxSize(),
+                                cameraState = mapCameraState,
+                                membersPoints = membersPoints,
+                                myPoint = myPoint,
+                                onTapMyLocation = {
+                                    viewModel.onTapMyLocation()
+                                })
+                            if (state.followedMemberId != null) {
+                                Snackbar(
+                                    containerColor = MaterialTheme.colorScheme.inverseSurface,
+                                    contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+                                    action = {
+                                        TextButton(
+                                            onClick = { viewModel.stopFollowMember() },
+                                            colors = ButtonDefaults.textButtonColors(
+                                                contentColor = MaterialTheme.colorScheme.onPrimary // or Color.White
+                                            )
+                                        ) {
+                                            Text("Stop")
+                                        }
+                                    }, modifier = Modifier.padding(8.dp)
+                                ) {
+                                    Text(text = "You're following ${state.members?.get(state.followedMemberId)?.name}")
+                                }
+                            }
+                        }
                     }
 
                     AnonymousGroupDetailsTab.Members -> {
@@ -334,7 +359,7 @@ fun AnonymousGroupDetailsScreen(
                                 members = state.members!!.map { (_, member) -> member },
                                 authenticatedMemberId = state.anonymousGroup!!.memberId,
                                 onLocateClick = { memberId ->
-                                    viewModel.moveToMember(memberId)
+                                    viewModel.onTapMember(memberId)
                                     coroutineScope.launch {
                                         pagerState.animateScrollToPage(AnonymousGroupDetailsTab.Map.ordinal)
                                     }
