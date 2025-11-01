@@ -30,7 +30,8 @@ fun AGMembersList(
     authenticatedMemberId: String,
     members: List<AGMember>,
     modifier: Modifier = Modifier,
-    onLocateClick: (memberId: String) -> Unit
+    onTapLocate: (memberId: String) -> Unit,
+    onTapFollow: (memberId: String) -> Unit
 ) {
     Box {
         LazyColumn(
@@ -44,8 +45,11 @@ fun AGMembersList(
                     modifier = Modifier.animateItem(),
                     member = member,
                     isMe = authenticatedMemberId == member.id,
-                    onLocateClick = {
-                        onLocateClick(member.id)
+                    onTapLocate = {
+                        onTapLocate(member.id)
+                    },
+                    onTapFollow = {
+                        onTapFollow(member.id)
                     })
             }
         }
@@ -54,7 +58,7 @@ fun AGMembersList(
 
 @Composable
 fun MemberRow(
-    modifier: Modifier = Modifier, member: AGMember, isMe: Boolean, onLocateClick: () -> Unit
+    modifier: Modifier = Modifier, member: AGMember, isMe: Boolean, onTapLocate: () -> Unit, onTapFollow: () -> Unit
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -82,8 +86,16 @@ fun MemberRow(
                         member.name
                     }, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold
                 )
+                if(!isMe) {
+                    IconButton(onClick = onTapFollow) {
+                        Icon(
+                            painter = painterResource(R.drawable.outline_navigation_24),
+                            contentDescription = "Follow member on map",
+                        )
+                    }
+                }
                 if (showFindButton) {
-                    IconButton(onClick = onLocateClick) {
+                    IconButton(onClick = onTapLocate) {
                         Icon(
                             painter = painterResource(R.drawable.outline_location_searching_24),
                             contentDescription = "Find member on map",

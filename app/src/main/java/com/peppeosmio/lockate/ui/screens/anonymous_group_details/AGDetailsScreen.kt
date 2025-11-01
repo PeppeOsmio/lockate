@@ -47,21 +47,17 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
 
-enum class AnonymousGroupDetailsTab {
-    Map, Members, Admin
-}
-
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalTime::class)
 @Composable
 fun AnonymousGroupDetailsScreen(
-    viewModel: AnonymousGroupDetailsViewModel = koinViewModel(),
+    viewModel: AGDetailsViewModel = koinViewModel(),
     navigateBack: () -> Unit,
     connectionId: Long,
     anonymousGroupInternalId: Long,
     anonymousGroupName: String
 ) {
     val state by viewModel.state.collectAsState()
-    val tabs = AnonymousGroupDetailsTab.entries.toTypedArray()
+    val tabs = AGDetailsViewModel.AGDetailsTab.entries.toTypedArray()
     val pagerState = rememberPagerState(initialPage = 0) { tabs.size }
     val coroutineScope = rememberCoroutineScope()
 
@@ -82,6 +78,12 @@ fun AnonymousGroupDetailsScreen(
     LaunchedEffect(true) {
         viewModel.navigateBackEvents.collect {
             navigateBack()
+        }
+    }
+
+    LaunchedEffect(true) {
+        viewModel.pagerEvents.collect { page ->
+            pagerState.animateScrollToPage(page.ordinal)
         }
     }
 
@@ -307,14 +309,14 @@ fun AnonymousGroupDetailsScreen(
             HorizontalPager(
                 modifier = Modifier.fillMaxSize(),
                 state = pagerState,
-                userScrollEnabled = pagerState.currentPage != AnonymousGroupDetailsTab.Map.ordinal,
+                userScrollEnabled = pagerState.currentPage != AGDetailsViewModel.AGDetailsTab.Map.ordinal,
                 // hold all pages in memory, otherwise MapLibre disposes
                 // the the layers on the native side but Compose doesn't dispose the Map,
                 // meaning we get the Map without layers
                 beyondViewportPageCount = tabs.size
             ) { page ->
                 when (tabs[page]) {
-                    AnonymousGroupDetailsTab.Map -> {
+                    AGDetailsViewModel.AGDetailsTab.Map -> {
                         Box {
                             MembersMap(
                                 modifier = Modifier.fillMaxSize(),
@@ -337,7 +339,8 @@ fun AnonymousGroupDetailsScreen(
                                         ) {
                                             Text("Stop")
                                         }
-                                    }, modifier = Modifier.padding(8.dp)
+                                    },
+                                    modifier = Modifier.padding(8.dp)
                                 ) {
                                     Text(text = "You're following ${state.members?.get(state.followedMemberId)?.name}")
                                 }
@@ -345,7 +348,7 @@ fun AnonymousGroupDetailsScreen(
                         }
                     }
 
-                    AnonymousGroupDetailsTab.Members -> {
+                    AGDetailsViewModel.AGDetailsTab.Members -> {
                         if (state.members == null) {
                             Column(
                                 modifier = Modifier.fillMaxSize(),
@@ -358,16 +361,16 @@ fun AnonymousGroupDetailsScreen(
                             AGMembersList(
                                 members = state.members!!.map { (_, member) -> member },
                                 authenticatedMemberId = state.anonymousGroup!!.memberId,
-                                onLocateClick = { memberId ->
-                                    viewModel.onTapMember(memberId)
-                                    coroutineScope.launch {
-                                        pagerState.animateScrollToPage(AnonymousGroupDetailsTab.Map.ordinal)
-                                    }
+                                onTapLocate = { memberId ->
+                                    viewModel.onTapLocate(memberId)
+                                },
+                                onTapFollow = { memberId ->
+                                    viewModel.onTapFollow(memberId)
                                 })
                         }
                     }
 
-                    AnonymousGroupDetailsTab.Admin -> {
+                    AGDetailsViewModel.AGDetailsTab.Admin -> {
                         if (state.isAdminTokenValid == null) {
                             Column(
                                 modifier = Modifier.fillMaxSize(),

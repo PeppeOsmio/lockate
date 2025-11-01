@@ -7,7 +7,7 @@ import com.peppeosmio.lockate.utils.ErrorInfo
 import com.peppeosmio.lockate.utils.LoadingState
 
 
-data class AnonymousGroupDetailsState(
+data class AGDetailsState(
     val anonymousGroup: AnonymousGroup? = null,
     val members: Map<String, AGMember>? = null,
     val membersCoordinates: Map<String, Coordinates>? = null,

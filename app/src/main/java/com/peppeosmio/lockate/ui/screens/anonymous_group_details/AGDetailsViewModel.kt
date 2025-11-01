@@ -29,11 +29,16 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.ExperimentalTime
 
-class AnonymousGroupDetailsViewModel(
+class AGDetailsViewModel(
     private val anonymousGroupService: AnonymousGroupService,
     private val locationService: LocationService
 ) : ViewModel() {
-    private val _state = MutableStateFlow(AnonymousGroupDetailsState())
+
+    enum class AGDetailsTab {
+        Map, Members, Admin
+    }
+
+    private val _state = MutableStateFlow(AGDetailsState())
     val state = _state.asStateFlow()
     private val _snackbarEvents = Channel<SnackbarErrorMessage>()
     val snackbarEvents = _snackbarEvents.receiveAsFlow()
@@ -41,6 +46,8 @@ class AnonymousGroupDetailsViewModel(
     val cameraPositionEvents = _cameraPositionEvents.receiveAsFlow()
     private val _navigateBackEvents = Channel<Unit>()
     val navigateBackEvents = _navigateBackEvents.receiveAsFlow()
+    private val _pagerEvents = Channel<AGDetailsTab>()
+    val pagerEvents = _pagerEvents.receiveAsFlow()
     private var listenForUserLocationJob: Job? = null
 
     fun getInitialDetails(anonymousGroupInternalId: Long, connectionSettings: Long) {
@@ -392,6 +399,7 @@ class AnonymousGroupDetailsViewModel(
         }
     }
 
+
     fun showDeleteAGDialog() {
         _state.update { it.copy(showDeleteAGDialog = true) }
     }
@@ -461,23 +469,39 @@ class AnonymousGroupDetailsViewModel(
         _state.update { it.copy(dialogErrorInfo = errorInfo) }
     }
 
-    fun onTapMember(agMemberId: String) = viewModelScope.launch {
+    fun onTapLocate(agMemberId: String) = viewModelScope.launch {
         if (state.value.members == null || state.value.anonymousGroup == null) {
             return@launch
         }
         state.value.members!![agMemberId]?.let { member ->
             if (member.lastLocationRecord == null) {
-                _state.update { it.copy(followedMemberId = null) }
+                // should not happen since the button should not be shown
                 return@let
             }
             if (member.id == state.value.anonymousGroup!!.memberId) {
-                _state.update { it.copy(followedMemberId = null) }
                 onTapMyLocation()
+                _pagerEvents.send(AGDetailsTab.Map)
                 return@launch
             }
-            _state.update { it.copy(followedMemberId = agMemberId) }
-            Log.d("", "Following member ${agMemberId}: ${member.lastLocationRecord}")
             _cameraPositionEvents.trySend(member.lastLocationRecord.coordinates)
+            _pagerEvents.send(AGDetailsTab.Map)
+        }
+    }
+
+    fun onTapFollow(agMemberId: String) = viewModelScope.launch {
+        if (state.value.members == null || state.value.anonymousGroup == null) {
+            return@launch
+        }
+        state.value.members!![agMemberId]?.let { member ->
+            _state.update { it.copy(followedMemberId = agMemberId) }
+            if (member.lastLocationRecord == null) {
+                _state.update { it.copy(followedMemberId = null) }
+            } else {
+                _state.update { it.copy(followedMemberId = agMemberId) }
+                Log.d("", "Following member ${agMemberId}: ${member.lastLocationRecord}")
+                _cameraPositionEvents.trySend(member.lastLocationRecord.coordinates)
+            }
+            _pagerEvents.send(AGDetailsTab.Map)
         }
     }
 

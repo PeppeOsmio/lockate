@@ -4,7 +4,7 @@ import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
 import com.peppeosmio.lockate.service.ConnectionService
 import com.peppeosmio.lockate.service.PermissionsService
 import com.peppeosmio.lockate.platform_service.LocationService
-import com.peppeosmio.lockate.ui.screens.anonymous_group_details.AnonymousGroupDetailsViewModel
+import com.peppeosmio.lockate.ui.screens.anonymous_group_details.AGDetailsViewModel
 import com.peppeosmio.lockate.ui.screens.anonymous_groups.AnonymousGroupsViewModel
 import com.peppeosmio.lockate.ui.screens.connection_settings.ConnectionSettingsViewModel
 import com.peppeosmio.lockate.ui.screens.create_anonymous_group.CreateAnonymousGroupViewModel
@@ -43,8 +43,8 @@ val viewModelModule = module {
         JoinAnonymousGroupViewModel(anonymousGroupService = get<AnonymousGroupService>())
     }
 
-    viewModel<AnonymousGroupDetailsViewModel> {
-        AnonymousGroupDetailsViewModel(
+    viewModel<AGDetailsViewModel> {
+        AGDetailsViewModel(
             anonymousGroupService = get<AnonymousGroupService>(),
             locationService = get<LocationService>()
         )

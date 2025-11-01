@@ -33,7 +33,6 @@ import dev.sargunv.maplibrecompose.core.OrnamentOptions
 import dev.sargunv.maplibrecompose.core.source.GeoJsonData
 import dev.sargunv.maplibrecompose.core.source.GeoJsonOptions
 import dev.sargunv.maplibrecompose.expressions.ast.ColorLiteral
-import dev.sargunv.maplibrecompose.expressions.dsl.Feature
 import dev.sargunv.maplibrecompose.expressions.dsl.condition
 import dev.sargunv.maplibrecompose.expressions.dsl.const
 import dev.sargunv.maplibrecompose.expressions.dsl.convertToBoolean
