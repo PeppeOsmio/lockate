@@ -5,10 +5,13 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.util.Log
 import androidx.annotation.RequiresPermission
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.peppeosmio.lockate.R
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
 import kotlinx.coroutines.CoroutineScope
@@ -35,8 +38,9 @@ class AndroidSendLocationService : Service() {
     @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_START -> if(!isRunning) start()
+            ACTION_START -> if (!isRunning) start()
             ACTION_STOP -> stop()
+            ACTION_RESTART -> if (isRunning) restart()
         }
         return START_NOT_STICKY
     }
@@ -48,19 +52,25 @@ class AndroidSendLocationService : Service() {
             action = ACTION_STOP
         }
         val stopPendingIntent = PendingIntent.getService(
+            this, 0, stopIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val restartIntent = Intent(this, AndroidSendLocationService::class.java).apply {
+            action = ACTION_RESTART
+        }
+        val restartPendingIntent = PendingIntent.getService(
             this,
-            0,
-            stopIntent,
+            1,
+            restartIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val notification =
             NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID).setContentTitle("Lockate")
                 .setContentText("Loading...").setSmallIcon(R.drawable.ic_launcher_background)
-                .setOngoing(true)
-                .addAction(
-                    R.drawable.outline_stop_24,
-                    "Stop",
-                    stopPendingIntent
+                .setOngoing(true).addAction(
+                    R.drawable.outline_stop_24, "Stop", stopPendingIntent
+                ).addAction(
+                    R.drawable.baseline_restart_alt_24, "Restart", restartPendingIntent
                 )
 
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
@@ -68,7 +78,7 @@ class AndroidSendLocationService : Service() {
         serviceScope.launch {
             try {
                 anonymousGroupService.sendLocation { activeAGCount ->
-                    if(!isRunning) {
+                    if (!isRunning) {
                         // when the coroutines are canceled the updateActiveAGCount is called
                         // to notify that they're not sending location anymore by decrementing AG count
                         // so update the notification only if !isRunning, otherwise a "ghost" notification
@@ -84,7 +94,7 @@ class AndroidSendLocationService : Service() {
                     )
                     notificationManager.notify(1, updatedNotification.build())
                 }
-            } catch (e: Exception){
+            } catch (e: Exception) {
                 e.printStackTrace()
             }
         }
@@ -99,6 +109,19 @@ class AndroidSendLocationService : Service() {
         stopSelf()
     }
 
+    @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
+    private fun restart() {
+        isRunning = false
+        serviceScope.cancel()
+        stopSelf()
+        Handler(Looper.getMainLooper()).postDelayed({
+            val startIntent = Intent(this, AndroidSendLocationService::class.java).apply {
+                action = ACTION_START
+            }
+            ContextCompat.startForegroundService(this, startIntent)
+        }, 500)
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         serviceScope.cancel()
@@ -107,6 +130,7 @@ class AndroidSendLocationService : Service() {
     companion object {
         const val ACTION_START = "ACTION_START"
         const val ACTION_STOP = "ACTION_STOP"
+        const val ACTION_RESTART = "ACTION_RESTART"
         const val NOTIFICATION_CHANNEL_ID = "lockateLocation"
     }
 }

@@ -63,32 +63,6 @@ class LocationService(
         }
     }
 
-    @Throws
-    fun getLocationUpdates(): Flow<Coordinates> = flow {
-        onCollectorAdded()
-        try {
-            emitAll(_coordinatesUpdates)
-        } finally {
-            onCollectorRemoved()
-        }
-    }
-
-    @OptIn(ExperimentalAtomicApi::class)
-    private suspend fun onCollectorAdded() {
-        checkPermissions()
-        checkLocationEnabled()
-        if (activeCollectors.incrementAndFetch() == 1) {
-            startLocationUpdates()
-        }
-    }
-
-    @OptIn(ExperimentalAtomicApi::class)
-    private fun onCollectorRemoved() {
-        if (activeCollectors.decrementAndFetch() == 0) {
-            stopLocationUpdates()
-        }
-    }
-
     private suspend fun checkLocationEnabled(): Unit = suspendCancellableCoroutine { cont ->
         val builder = LocationSettingsRequest.Builder()
         val client: SettingsClient = LocationServices.getSettingsClient(context)
@@ -107,6 +81,35 @@ class LocationService(
         }
         task.addOnFailureListener { e ->
             cont.resumeWithException(e)
+        }
+    }
+
+    suspend fun checkPermissionsAndLocationEnabled() : Unit {
+        checkPermissions()
+        checkLocationEnabled()
+    }
+
+    @Throws
+    fun getLocationUpdates(): Flow<Coordinates> = flow {
+        onCollectorAdded()
+        try {
+            emitAll(_coordinatesUpdates)
+        } finally {
+            onCollectorRemoved()
+        }
+    }
+
+    @OptIn(ExperimentalAtomicApi::class)
+    private fun onCollectorAdded() {
+        if (activeCollectors.incrementAndFetch() == 1) {
+            startLocationUpdates()
+        }
+    }
+
+    @OptIn(ExperimentalAtomicApi::class)
+    private fun onCollectorRemoved() {
+        if (activeCollectors.decrementAndFetch() == 0) {
+            stopLocationUpdates()
         }
     }
 

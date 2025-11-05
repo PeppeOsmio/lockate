@@ -739,6 +739,8 @@ class AnonymousGroupService(
         while (true) {
             var isConnected = false
             try {
+                // initiate connection only when location is enabled and we have permissions
+                locationService.checkPermissionsAndLocationEnabled()
                 httpClient.webSocket(request = {
                     url("${connectionSettings.getWebSocketUrl()}/api/ws/anonymous-groups/${anonymousGroup.id}/send-location")
                     headers {
@@ -760,8 +762,8 @@ class AnonymousGroupService(
                     }
                 }) {
                     isConnected = true
-                    retries = 0
                     onConnected()
+                    retries = 0
                     Log.i(
                         "",
                         "Sending AG location to ${connectionSettings.url} agId: ${anonymousGroup.id} agMemberId: ${anonymousGroup.memberId}"
