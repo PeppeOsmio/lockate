@@ -111,14 +111,12 @@ class AndroidSendLocationService : Service() {
 
     @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
     private fun restart() {
-        isRunning = false
-        serviceScope.cancel()
-        stopSelf()
+        stop()
         Handler(Looper.getMainLooper()).postDelayed({
             val startIntent = Intent(this, AndroidSendLocationService::class.java).apply {
                 action = ACTION_START
             }
-            ContextCompat.startForegroundService(this, startIntent)
+            ContextCompat.startForegroundService(this, startIntent )
         }, 500)
     }
 
