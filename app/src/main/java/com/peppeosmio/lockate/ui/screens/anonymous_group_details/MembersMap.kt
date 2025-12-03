@@ -38,25 +38,54 @@ import dev.sargunv.maplibrecompose.core.MapOptions
 import dev.sargunv.maplibrecompose.core.OrnamentOptions
 import dev.sargunv.maplibrecompose.material3.controls.DisappearingCompassButton
 
-data class Cluster(
+data class MembersCluster(
     val center: DpOffset, val members: List<MapPoint>
 )
 
 fun clusterPoints(
-    points: List<Pair<MapPoint, DpOffset>>, cellSize: Dp = 80.dp
-): List<Cluster> {
-    val buckets = mutableMapOf<Pair<Int, Int>, MutableList<Pair<MapPoint, DpOffset>>>()
+    points: List<Pair<MapPoint, DpOffset>>, maxDistance: Dp = 60.dp   // threshold in screen pixels
+): List<MembersCluster> {
 
-    for ((point, screen) in points) {
-        val key =
-            (screen.x.value.toInt() / cellSize.value.toInt()) to (screen.y.value.toInt() / cellSize.value.toInt())
-        buckets.getOrPut(key) { mutableListOf() }.add(point to screen)
+    if (points.isEmpty()) return emptyList()
+
+    val clusters = mutableListOf<MutableList<Pair<MapPoint, DpOffset>>>()
+    val maxDistPx = maxDistance.value
+
+    fun distance(a: DpOffset, b: DpOffset): Float {
+        val dx = a.x.value - b.x.value
+        val dy = a.y.value - b.y.value
+        return kotlin.math.sqrt(dx * dx + dy * dy)
     }
 
-    return buckets.values.map { bucket ->
-        val centerX = bucket.map { it.second.x.value }.average().toFloat()
-        val centerY = bucket.map { it.second.y.value }.average().toFloat()
-        Cluster(DpOffset(centerX.dp, centerY.dp), bucket.map { it.first })
+    for ((point, screenPos) in points) {
+        var added = false
+
+        // Try to assign point to an existing cluster
+        for (cluster in clusters) {
+            // current center of cluster
+            val centerX = cluster.map { it.second.x.value }.average().toFloat()
+            val centerY = cluster.map { it.second.y.value }.average().toFloat()
+            val center = DpOffset(centerX.dp, centerY.dp)
+
+            if (distance(screenPos, center) <= maxDistPx) {
+                cluster += (point to screenPos)
+                added = true
+                break
+            }
+        }
+
+        // Otherwise create a new cluster
+        if (!added) {
+            clusters += mutableListOf(point to screenPos)
+        }
+    }
+
+    return clusters.map { cluster ->
+        val centerX = cluster.map { it.second.x.value }.average().toFloat()
+        val centerY = cluster.map { it.second.y.value }.average().toFloat()
+
+        MembersCluster(
+            center = DpOffset(centerX.dp, centerY.dp), members = cluster.map { it.first })
     }
 }
 
@@ -138,20 +167,7 @@ fun MembersMap(
             baseStyle = mapStyle,
         ) {}
 
-//        projectedPoints.forEach { (point, screen) ->
-//            Column(
-//                modifier = Modifier.offset(
-//                    x = screen.x, y = screen.y
-//                ), horizontalAlignment = Alignment.CenterHorizontally
-//            ) {
-//                Box(
-//                    modifier = Modifier
-//                        .size(16.dp)
-//                        .background(MaterialTheme.colorScheme.secondary, CircleShape)
-//                )
-//                Text(point.name)
-//            }
-//        }
+        // TODO consider returning to rendering via maplibre native layers
 
         Log.d("Clusters", "clusters count: ${pointsClusters.size}")
 
