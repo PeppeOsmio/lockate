@@ -7,20 +7,9 @@ import io.github.dellisd.spatialk.geojson.Position
 import kotlinx.serialization.json.JsonPrimitive
 
 data class MapPoint(
+    val id: String,
     val name: String,
     val coordinates: Coordinates,
     val isOld: Boolean,
 ) {
-    fun toGeoJsonFeature(): Feature {
-        return Feature(
-            geometry = Point(
-                coordinates = Position(
-                    latitude = coordinates.latitude, longitude = coordinates.longitude
-                )
-            ), properties = mapOf(
-                "name" to JsonPrimitive(name),
-                "isOld" to JsonPrimitive(isOld),
-            )
-        )
-    }
 }

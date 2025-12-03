@@ -19,6 +19,7 @@ import com.peppeosmio.lockate.data.anonymous_group.remote.AGMemberAuthVerifyReqD
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGMemberAuthVerifyResDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.LocationUpdateDto
 import com.peppeosmio.lockate.domain.Connection
+import com.peppeosmio.lockate.domain.LocationRecord
 import com.peppeosmio.lockate.domain.anonymous_group.AGLocationUpdate
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.domain.anonymous_group.AnonymousGroup
@@ -39,6 +40,7 @@ import com.peppeosmio.lockate.platform_service.LocationService
 import com.peppeosmio.lockate.service.ConnectionService
 import com.peppeosmio.lockate.service.crypto.CryptoService
 import com.peppeosmio.lockate.service.srp.SrpClientService
+import com.peppeosmio.lockate.utils.DateTimeUtils
 import com.peppeosmio.lockate.utils.ErrorHandler
 import dev.whyoleg.cryptography.bigint.decodeToBigInt
 import dev.whyoleg.cryptography.bigint.encodeToByteArray
@@ -71,6 +73,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
+import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
@@ -574,6 +577,10 @@ class AnonymousGroupService(
         }
     }
 
+    suspend fun deleteAllAG(connectionSettingsId: Long) {
+        anonymousGroupDao.deleteAllAGsOfConnection(connectionSettingsId)
+    }
+
     suspend fun getRemoteAGMembers(
         connectionSettingsId: Long, anonymousGroupInternalId: Long
     ): List<AGMember> = withContext(Dispatchers.IO) {
@@ -807,7 +814,10 @@ class AnonymousGroupService(
                                     anonymousGroupInternalId = anonymousGroup.internalId,
                                     anonymousGroupId = anonymousGroup.id,
                                     connectionId = anonymousGroup.connectionId,
-                                    timestamp = Clock.System.now()
+                                    locationRecord = LocationRecord(
+                                        coordinates = coordinates,
+                                        timestamp = Clock.System.now().toLocalDateTime(TimeZone.UTC)
+                                    )
                                 )
                             )
                         }

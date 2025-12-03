@@ -57,7 +57,12 @@ fun LockateApp(startLocationService: () -> Unit, stopLocationService: () -> Unit
                         }
                     }
                 }, navigateToConnectionSettings = {
-                    appNavController.navigate(ConnectionSettingsRoute(initialConnectionSettingsId = null)) {
+                    appNavController.navigate(
+                        ConnectionSettingsRoute(
+                            initialConnectionSettingsId = null,
+                            showBackButton = false
+                        )
+                    ) {
                         popUpTo<LoadingRoute>() {
                             inclusive = true
                         }
@@ -66,9 +71,11 @@ fun LockateApp(startLocationService: () -> Unit, stopLocationService: () -> Unit
             }
             composable<HomeRoute> {
                 HomePageScreen(
-                    navigateToConnectionSettings = { connectionSettingsId ->
-                    appNavController.navigate(ConnectionSettingsRoute(connectionSettingsId)) {}
-                },
+                    navigateToConnectionSettings = { route ->
+                        appNavController.navigate(
+                            route
+                        ) {}
+                    },
                     navigateToAGDetails = { connectionSettingsId, anonymousGroupInternalId, anonymousGroupName ->
                         appNavController.navigate(
                             AnonymousGroupDetailsRoute(
@@ -117,6 +124,7 @@ fun LockateApp(startLocationService: () -> Unit, stopLocationService: () -> Unit
                 val connectionSettingsRoute = navBackStackEntry.toRoute<ConnectionSettingsRoute>()
                 ConnectionSettingsScreen(
                     initialConnectionId = connectionSettingsRoute.initialConnectionSettingsId,
+                    showBackButton = connectionSettingsRoute.showBackButton,
                     navigateBack = {
                         appNavController.popBackStack()
                     },

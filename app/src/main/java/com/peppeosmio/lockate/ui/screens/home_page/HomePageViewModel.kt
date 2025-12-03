@@ -6,6 +6,7 @@ import com.peppeosmio.lockate.exceptions.ConnectionSettingsNotFoundException
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
 import com.peppeosmio.lockate.service.ConnectionService
 import com.peppeosmio.lockate.service.PermissionsService
+import com.peppeosmio.lockate.ui.routes.ConnectionSettingsRoute
 import com.peppeosmio.lockate.utils.ErrorInfo
 import com.peppeosmio.lockate.utils.ErrorHandler
 import com.peppeosmio.lockate.utils.SnackbarErrorMessage
@@ -27,14 +28,20 @@ class HomePageViewModel(
     val state: StateFlow<HomePageState> = _state.asStateFlow()
     private val _snackbarEvents = Channel<SnackbarErrorMessage>()
     val snackbarEvents = _snackbarEvents.receiveAsFlow()
+    private val _navigateToConnectionSettingsEvents = Channel<ConnectionSettingsRoute>()
+    val navigateToConnectionSettingsEvents = _navigateToConnectionSettingsEvents.receiveAsFlow()
 
     init {
         viewModelScope.launch {
             val connectionSettings = connectionService.listConnectionSettings()
             if (connectionSettings.isNotEmpty()) {
-                _state.update { it.copy(connection = connectionSettings.associateBy { connectionSettings -> connectionSettings.id!! }) }
+                _state.update { it.copy(connections = connectionSettings.associateBy { connectionSettings -> connectionSettings.id!! }) }
             } else {
-                _state.update { it.copy(shouldRedirectToConnectionScreen = true) }
+                _navigateToConnectionSettingsEvents.send(
+                    ConnectionSettingsRoute(
+                        initialConnectionSettingsId = null, showBackButton = false
+                    )
+                )
             }
             try {
                 val selectedConnectionSettings = connectionService.getSelectedConnectionSettings()
@@ -91,27 +98,46 @@ class HomePageViewModel(
         return permissionsService.isPermissionGranted(permission)
     }
 
-    suspend fun disconnect(): Boolean {
+    fun disconnect() = viewModelScope.launch {
         closeLogoutDialog()
         if (state.value.selectedConnectionId == null) {
-            return false
+            return@launch
         }
         _state.update { it.copy(showLoadingOverlay = true) }
-        val result = ErrorHandler.runAndHandleException {
-            anonymousGroupService.leaveAllAG(state.value.selectedConnectionId!!)
-            connectionService.deleteConnectionSettings(state.value.selectedConnectionId!!)
-        }
-        if (result.errorInfo != null) {
+        try {
+            try {
+                anonymousGroupService.leaveAllAG(state.value.selectedConnectionId!!)
+            } catch (e: Exception) {
+                anonymousGroupService.deleteAllAG(state.value.selectedConnectionId!!)
+            }
+            connectionService.deleteConnection(state.value.selectedConnectionId!!)
+            val newSelectedConnectionId =
+                state.value.connections!!.keys.firstOrNull { connectionId ->
+                    connectionId != state.value.selectedConnectionId!!
+                }
+            val newConnections = state.value.connections!! - state.value.selectedConnectionId!!
+            if (newConnections.isEmpty()) {
+                _navigateToConnectionSettingsEvents.send(
+                    ConnectionSettingsRoute(
+                        initialConnectionSettingsId = null, showBackButton = false
+                    )
+                )
+            }
+            _state.update {
+                it.copy(
+                    showLoadingOverlay = false,
+                    connections = newConnections,
+                    selectedConnectionId = newSelectedConnectionId
+                )
+            }
+        } catch (e: Exception) {
+            _state.update { it.copy(showLoadingOverlay = false) }
             _snackbarEvents.trySend(
                 SnackbarErrorMessage(
-                    text = "Connection error", errorInfo = result.errorInfo
+                    text = "Connection error", errorInfo = ErrorInfo.fromException(e)
                 )
             )
-            _state.update { it.copy(showLoadingOverlay = false) }
-            return false
         }
-        _state.update { it.copy(showLoadingOverlay = false) }
-        return true
     }
 
     fun hideErrorDialog() {

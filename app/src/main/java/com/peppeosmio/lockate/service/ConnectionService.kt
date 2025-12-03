@@ -75,18 +75,19 @@ class ConnectionService(
 
     @Throws(ConnectionSettingsNotFoundException::class)
     suspend fun getSelectedConnectionSettings(): Connection = withContext(Dispatchers.IO) {
-        val selectedConnectionSettingsId = context.dataStore.data.map {
+        val selectedConnectionId = context.dataStore.data.map {
             it[ConfigSettings.SELECTED_CONNECTION_SETTINGS_ID]
         }.first()
-        val connectionSettingsEntity = if (selectedConnectionSettingsId != null) {
-            connectionDao.getConnectionSettingsById(selectedConnectionSettingsId)
-        } else {
-            connectionDao.getFirstConnectionSettings()
+        var connectionEntity = selectedConnectionId?.let {
+            connectionDao.getConnectionSettingsById(it)
         }
-        if (connectionSettingsEntity == null) {
+        if (connectionEntity == null) {
+            connectionEntity = connectionDao.getFirstConnection()
+        }
+        if (connectionEntity == null) {
             throw ConnectionSettingsNotFoundException()
         }
-        ConnectionMapper.toDomain(connectionSettingsEntity)
+        ConnectionMapper.toDomain(connectionEntity)
     }
 
     @Throws(ConnectionSettingsNotFoundException::class)
@@ -121,7 +122,7 @@ class ConnectionService(
         }
     }
 
-    suspend fun deleteConnectionSettings(connectionSettingsId: Long) = withContext(Dispatchers.IO) {
+    suspend fun deleteConnection(connectionSettingsId: Long) = withContext(Dispatchers.IO) {
         connectionDao.deleteConnectionSettings(connectionSettingsId)
     }
 }

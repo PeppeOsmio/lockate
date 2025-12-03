@@ -5,7 +5,6 @@ import com.peppeosmio.lockate.utils.ErrorInfo
 
 data class HomePageState(
     val showLoadingOverlay: Boolean = false,
-    val shouldRedirectToConnectionScreen: Boolean = false,
     val pageSelected: Int = 0,
     val showLogoutDialog: Boolean = false,
     val isSearchBarOpen: Boolean = false,
@@ -14,6 +13,6 @@ data class HomePageState(
     val registeredOnTapFab: (() -> Unit)? = null,
     val dialogErrorInfo: ErrorInfo? = null,
     val selectedConnectionId: Long? = null,
-    val connection: Map<Long, Connection>? = null,
+    val connections: Map<Long, Connection>? = null,
     val isConnectionsMenuOpen: Boolean = false,
 )

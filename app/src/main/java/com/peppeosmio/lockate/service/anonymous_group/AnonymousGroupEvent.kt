@@ -1,5 +1,6 @@
 package com.peppeosmio.lockate.service.anonymous_group
 
+import com.peppeosmio.lockate.domain.LocationRecord
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
@@ -40,6 +41,6 @@ sealed class AnonymousGroupEvent {
         val anonymousGroupInternalId: Long,
         val anonymousGroupId: String,
         val connectionId: Long,
-        val timestamp: Instant
+        val locationRecord: LocationRecord
     ) : AnonymousGroupEvent()
 }

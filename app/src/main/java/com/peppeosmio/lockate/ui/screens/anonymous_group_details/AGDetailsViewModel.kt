@@ -25,9 +25,6 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toLocalDateTime
-import kotlin.time.ExperimentalTime
 
 class AGDetailsViewModel(
     private val anonymousGroupService: AnonymousGroupService,
@@ -66,7 +63,6 @@ class AGDetailsViewModel(
         }
     }
 
-    @OptIn(ExperimentalTime::class)
     private suspend fun collectAGEvents() {
         anonymousGroupService.events.collect { event ->
             when (event) {
@@ -77,22 +73,11 @@ class AGDetailsViewModel(
                     if (event.anonymousGroupId != state.value.anonymousGroup!!.id) {
                         return@collect
                     }
-                    val me = state.value.members!![state.value.anonymousGroup!!.memberId]
-                        ?: return@collect
-                    if (me.lastLocationRecord == null) {
-                        return@collect
-                    }
+                    val myId = state.value.anonymousGroup!!.memberId
+                    val me = state.value.members!![myId] ?: return@collect
                     _state.update {
-                        val newMap = (it.members ?: emptyMap()).toMutableMap()
-                        newMap += me.id to me.copy(
-                            lastLocationRecord = me.lastLocationRecord.copy(
-                                timestamp = event.timestamp.toLocalDateTime(
-                                    TimeZone.UTC
-                                )
-                            )
-                        )
                         it.copy(
-                            members = newMap
+                            members = it.members!! + (myId to me.copy(lastLocationRecord = event.locationRecord))
                         )
                     }
                 }
@@ -136,6 +121,9 @@ class AGDetailsViewModel(
      * Listens for the user's location, if called multiple times the previous job is canceled
      */
     private fun listenForUserLocation() {
+        if (state.value.anonymousGroup == null) {
+            return
+        }
         listenForUserLocationJob?.cancel()
         listenForUserLocationJob = viewModelScope.launch {
             try {
@@ -239,7 +227,6 @@ class AGDetailsViewModel(
             )
             Log.d("", "Local members: $members")
             val membersMap = members.associateBy { it.id }
-
             _state.update {
                 it.copy(
                     members = membersMap
@@ -269,7 +256,16 @@ class AGDetailsViewModel(
                 )
             )
             Log.d("", "Remote members: ${members.map { it.id }}")
-            val membersMap = members.associateBy { it.id }
+            val membersMap = members.associateBy { it.id }.toMutableMap()
+            for (memberId in membersMap.keys) {
+                val oldLocationRecord =
+                    state.value.members!![memberId]?.lastLocationRecord ?: continue
+                val newLocationRecord = membersMap[memberId]!!.lastLocationRecord!!
+                if (oldLocationRecord.timestamp >= newLocationRecord.timestamp) {
+                    membersMap[memberId] =
+                        membersMap[memberId]!!.copy(lastLocationRecord = oldLocationRecord)
+                }
+            }
             _state.update {
                 it.copy(
                     members = membersMap
@@ -385,11 +381,8 @@ class AGDetailsViewModel(
             val member = state.value.members!![locationUpdate.agMemberId]
             if (member != null) {
                 _state.update {
-                    val newMembers = it.members!! + (locationUpdate.agMemberId to member.copy(
-                        lastLocationRecord = locationUpdate.locationRecord
-                    ))
                     it.copy(
-                        members = newMembers
+                        members = it.members!! + (member.id to member.copy(lastLocationRecord = locationUpdate.locationRecord))
                     )
                 }
                 if (locationUpdate.agMemberId == state.value.followedMemberId) {
@@ -470,17 +463,16 @@ class AGDetailsViewModel(
     }
 
     fun onTapLocate(agMemberId: String) = viewModelScope.launch {
-        if (state.value.members == null || state.value.anonymousGroup == null) {
+        if (state.value.anonymousGroup == null || state.value.members == null) {
             return@launch
         }
         state.value.members!![agMemberId]?.let { member ->
-            if (member.lastLocationRecord == null) {
-                // should not happen since the button should not be shown
-                return@let
-            }
-            if (member.id == state.value.anonymousGroup!!.memberId) {
+            if (agMemberId == state.value.anonymousGroup!!.memberId) {
                 onTapMyLocation()
                 _pagerEvents.send(AGDetailsTab.Map)
+                return@launch
+            }
+            if (member.lastLocationRecord == null) {
                 return@launch
             }
             _cameraPositionEvents.trySend(member.lastLocationRecord.coordinates)
@@ -494,13 +486,14 @@ class AGDetailsViewModel(
         }
         state.value.members!![agMemberId]?.let { member ->
             _state.update { it.copy(followedMemberId = agMemberId) }
+
+            _state.update { it.copy(followedMemberId = agMemberId) }
+            Log.d("", "Following member $agMemberId")
             if (member.lastLocationRecord == null) {
-                _state.update { it.copy(followedMemberId = null) }
-            } else {
-                _state.update { it.copy(followedMemberId = agMemberId) }
-                Log.d("", "Following member ${agMemberId}: ${member.lastLocationRecord}")
-                _cameraPositionEvents.trySend(member.lastLocationRecord.coordinates)
+                return@launch
             }
+            _cameraPositionEvents.trySend(member.lastLocationRecord.coordinates)
+
             _pagerEvents.send(AGDetailsTab.Map)
         }
     }

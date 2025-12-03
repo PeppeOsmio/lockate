@@ -87,41 +87,41 @@ fun AnonymousGroupDetailsScreen(
         }
     }
 
-    val membersPoints = remember(state.members, oldLocations, state.anonymousGroup) {
-        if (state.anonymousGroup == null) {
-            null
-        } else {
-            state.members?.map { (memberId, member) ->
-                if (state.anonymousGroup!!.memberId == memberId) {
-                    null
-                } else {
-                    val locationRecord = member.lastLocationRecord ?: return@map null
-                    MapPoint(
-                        coordinates = locationRecord.coordinates,
-                        name = member.name,
-                        isOld = oldLocations.contains(memberId)
-                    )
-                }
-            }?.filterNotNull()
+    val membersPoints =
+        remember(state.members, oldLocations, state.anonymousGroup) {
+            if (state.anonymousGroup == null) {
+                null
+            } else {
+                state.members?.map { (memberId, member) ->
+                    if (state.anonymousGroup!!.memberId == memberId) {
+                        return@map null
+                    } else {
+                        val locationRecord = member.lastLocationRecord ?: return@map null
+                        MapPoint(
+                            coordinates = locationRecord.coordinates,
+                            name = member.name,
+                            isOld = oldLocations.contains(memberId),
+                            id = memberId
+                        )
+                    }
+                }?.filterNotNull()
+            }
         }
+
+    val myPoint = remember(state.myCoordinates, state.anonymousGroup, isMyLocationOld) {
+        if (state.myCoordinates == null || state.anonymousGroup == null) {
+            return@remember null
+        }
+        MapPoint(
+            coordinates = state.myCoordinates!!,
+            name = "You",
+            isOld = isMyLocationOld,
+            id = state.anonymousGroup!!.memberId
+        )
     }
 
-    val myPoint =
-        remember(state.anonymousGroup, state.members, state.myCoordinates, isMyLocationOld) {
-            if (state.members == null || state.anonymousGroup == null || state.myCoordinates == null) {
-                return@remember null
-            }
-            val me = state.members!![state.anonymousGroup!!.memberId]
-            if (me == null) {
-                Log.e(
-                    "", "Can't find own user in members list! id=${state.anonymousGroup!!.memberId}"
-                )
-                return@remember null
-            }
-            MapPoint(
-                coordinates = state.myCoordinates!!, name = "You", isOld = isMyLocationOld
-            )
-        }
+    Log.d("points", membersPoints?.size.toString())
+    Log.d("points", myPoint.toString())
 
     LaunchedEffect(state.members) {
         state.members?.forEach { (memberId, member) ->

@@ -11,7 +11,7 @@ interface ConnectionDao {
     suspend fun getConnectionSettingsById(connectionId: Long): ConnectionEntity?
 
     @Query("SELECT * FROM connection ORDER BY id ASC LIMIT 1")
-    suspend fun getFirstConnectionSettings(): ConnectionEntity?
+    suspend fun getFirstConnection(): ConnectionEntity?
 
     @Query("SELECT * FROM connection ORDER BY id")
     suspend fun listConnectionSettings(): List<ConnectionEntity>

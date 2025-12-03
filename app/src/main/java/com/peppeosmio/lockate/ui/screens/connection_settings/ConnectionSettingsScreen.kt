@@ -42,6 +42,7 @@ import org.koin.compose.viewmodel.koinViewModel
 @Composable
 fun ConnectionSettingsScreen(
     initialConnectionId: Long?,
+    showBackButton: Boolean,
     navigateToHome: () -> Unit,
     navigateBack: () -> Unit,
     viewModel: ConnectionSettingsViewModel = koinViewModel()
@@ -95,7 +96,7 @@ fun ConnectionSettingsScreen(
             hostState = snackbarHostState
         )
     }, topBar = {
-        if (initialConnectionId == null) {
+        if (!showBackButton) {
             return@Scaffold
         }
         TopAppBar(title = {}, navigationIcon = {

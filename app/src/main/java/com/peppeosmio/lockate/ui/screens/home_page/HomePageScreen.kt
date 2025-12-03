@@ -4,6 +4,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,6 +18,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalFocusManager
@@ -33,6 +35,7 @@ import com.peppeosmio.lockate.ui.routes.AnonymousGroupsRoute
 import com.peppeosmio.lockate.ui.routes.GroupsRoute
 import com.peppeosmio.lockate.ui.composables.PermissionsRequester
 import com.peppeosmio.lockate.ui.composables.RoundedSearchAppBar
+import com.peppeosmio.lockate.ui.routes.ConnectionSettingsRoute
 import com.peppeosmio.lockate.ui.screens.anonymous_groups.AnonymousGroupsScreen
 import com.peppeosmio.lockate.utils.LockatePermissions
 import kotlinx.coroutines.launch
@@ -41,7 +44,7 @@ import org.koin.compose.viewmodel.koinViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomePageScreen(
-    navigateToConnectionSettings: (connectionSettingsId: Long?) -> Unit,
+    navigateToConnectionSettings: (route: ConnectionSettingsRoute) -> Unit,
     navigateToCreateAG: (connectionSettingsId: Long) -> Unit,
     navigateToJoinAG: (connectionSettingsId: Long) -> Unit,
     navigateToAGDetails: (connectionSettingsId: Long, anonymousGroupInternalId: Long, anonymousGroupName: String) -> Unit,
@@ -63,13 +66,6 @@ fun HomePageScreen(
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // Redirect to settings if needed, should never happen
-    LaunchedEffect(state.shouldRedirectToConnectionScreen) {
-        if (state.shouldRedirectToConnectionScreen) {
-            navigateToConnectionSettings(null)
-        }
-    }
-
     LaunchedEffect(true) {
         viewModel.snackbarEvents.collect { snackbarMessage ->
             val result = snackbarHostState.showSnackbar(
@@ -86,6 +82,12 @@ fun HomePageScreen(
         }
     }
 
+    LaunchedEffect(true) {
+        viewModel.navigateToConnectionSettingsEvents.collect {
+            navigateToConnectionSettings(it)
+        }
+    }
+
     // Error dialog
     state.dialogErrorInfo?.let { error ->
         AlertDialog(title = { Text(error.title) }, text = { Text(error.body) }, dismissButton = {
@@ -93,18 +95,13 @@ fun HomePageScreen(
         }, confirmButton = {}, onDismissRequest = { viewModel.hideErrorDialog() })
     }
 
-    if (state.showLogoutDialog) {
+    if (state.showLogoutDialog && state.connections != null && state.selectedConnectionId != null) {
         AlertDialog(
-            title = { Text("Disconnect") },
+            title = { Text("Disconnect from ${state.connections!![state.selectedConnectionId]!!.url}") },
             text = { Text("Do you want to disconnect? You will leave all groups and anonymous groups!") },
             confirmButton = {
                 TextButton(onClick = {
-                    coroutineScope.launch {
-                        if (viewModel.disconnect()) {
-                            stopLocationService()
-                            navigateToConnectionSettings(null)
-                        }
-                    }
+                    viewModel.disconnect()
                 }) { Text("Yes, disconnect") }
             },
             dismissButton = {
@@ -163,7 +160,12 @@ fun HomePageScreen(
                         contentDescription = "Connection settings"
                     )
                 }, label = { Text("Connection settings") }, selected = false, onClick = {
-                    navigateToConnectionSettings(state.selectedConnectionId)
+                    navigateToConnectionSettings(
+                        ConnectionSettingsRoute(
+                            initialConnectionSettingsId = state.selectedConnectionId,
+                            showBackButton = true
+                        )
+                    )
                     coroutineScope.launch {
                         drawerState.close()
                     }
@@ -205,7 +207,7 @@ fun HomePageScreen(
                         }
                     },
                     actions = {
-                        if (state.connection == null) {
+                        if (state.connections == null) {
                             return@RoundedSearchAppBar
                         }
                         Box {
@@ -238,9 +240,14 @@ fun HomePageScreen(
                                     },
                                     onClick = {
                                         viewModel.closeConnectionsMenu()
-                                        navigateToConnectionSettings(null)
+                                        navigateToConnectionSettings(
+                                            ConnectionSettingsRoute(
+                                                initialConnectionSettingsId = null,
+                                                showBackButton = true
+                                            )
+                                        )
                                     })
-                                state.connection!!.map { (connectionSettingsId, connectionSettings) ->
+                                state.connections!!.map { (connectionSettingsId, connectionSettings) ->
                                     val connectionName = if (connectionSettings.username != null) {
                                         "${connectionSettings.username}@${connectionSettings.url}"
                                     } else {
@@ -300,8 +307,12 @@ fun HomePageScreen(
                     }, icon = { Icon(Icons.Default.AccountBox, null) }, label = { Text("Groups") })
                 }
             }) { innerPadding ->
-            if (state.connection == null || state.selectedConnectionId == null) {
-                Column(modifier = Modifier.fillMaxSize()) {
+            if (state.connections == null || state.selectedConnectionId == null) {
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(innerPadding),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
                     CircularProgressIndicator()
                 }
             } else {

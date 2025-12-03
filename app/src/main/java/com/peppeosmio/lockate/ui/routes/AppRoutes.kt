@@ -9,7 +9,7 @@ sealed interface Route
 data object LoadingRoute : Route
 
 @Serializable
-data class ConnectionSettingsRoute(val initialConnectionSettingsId: Long?) : Route
+data class ConnectionSettingsRoute(val initialConnectionSettingsId: Long?, val showBackButton: Boolean) : Route
 
 @Serializable
 data object HomeRoute : Route
