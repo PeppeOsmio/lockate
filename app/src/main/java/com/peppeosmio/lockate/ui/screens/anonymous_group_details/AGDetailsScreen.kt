@@ -108,20 +108,17 @@ fun AnonymousGroupDetailsScreen(
             }
         }
 
-    val myPoint = remember(state.myCoordinates, state.anonymousGroup, isMyLocationOld) {
-        if (state.myCoordinates == null || state.anonymousGroup == null) {
+    val myPoint = remember(state.myLocationRecordFromGPS, state.anonymousGroup, isMyLocationOld) {
+        if (state.myLocationRecordFromGPS == null || state.anonymousGroup == null) {
             return@remember null
         }
         MapPoint(
-            coordinates = state.myCoordinates!!,
+            coordinates = state.myLocationRecordFromGPS!!.coordinates,
             name = "You",
             isOld = isMyLocationOld,
             id = state.anonymousGroup!!.memberId
         )
     }
-
-    Log.d("points", membersPoints?.size.toString())
-    Log.d("points", myPoint.toString())
 
     LaunchedEffect(state.members) {
         state.members?.forEach { (memberId, member) ->
@@ -145,8 +142,8 @@ fun AnonymousGroupDetailsScreen(
         }
     }
 
-    LaunchedEffect(state.myCoordinates) {
-        state.myCoordinates?.let {
+    LaunchedEffect(state.myLocationRecordFromGPS) {
+        state.myLocationRecordFromGPS?.let {
             isMyLocationOldJob?.cancel()
             isMyLocationOld = false
             isMyLocationOldJob = launch {

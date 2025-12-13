@@ -1,6 +1,7 @@
 package com.peppeosmio.lockate.ui.screens.anonymous_group_details
 
 import com.peppeosmio.lockate.domain.Coordinates
+import com.peppeosmio.lockate.domain.LocationRecord
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.domain.anonymous_group.AnonymousGroup
 import com.peppeosmio.lockate.utils.ErrorInfo
@@ -18,6 +19,8 @@ data class AGDetailsState(
     val dialogErrorInfo: ErrorInfo? = null,
     val remoteDataLoadingState: LoadingState = LoadingState.IsLoading,
     val isDropdownMenuOpen: Boolean = false,
-    val myCoordinates: Coordinates? = null,
+    // this is LocationRecord and not Coordinates so that we can understand if the
+    // coordinates are newer even if they are equal to the previous ones
+    val myLocationRecordFromGPS: LocationRecord? = null,
     val followedMemberId: String? = null
 )

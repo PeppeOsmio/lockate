@@ -3,14 +3,15 @@ package com.peppeosmio.lockate.ui.screens.anonymous_group_details
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.peppeosmio.lockate.domain.anonymous_group.AGMember
-import com.peppeosmio.lockate.exceptions.UnauthorizedException
-import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
 import com.peppeosmio.lockate.domain.Coordinates
+import com.peppeosmio.lockate.domain.LocationRecord
+import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.exceptions.LocationDisabledException
 import com.peppeosmio.lockate.exceptions.NoPermissionException
+import com.peppeosmio.lockate.exceptions.UnauthorizedException
 import com.peppeosmio.lockate.platform_service.LocationService
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupEvent
+import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
 import com.peppeosmio.lockate.utils.ErrorHandler
 import com.peppeosmio.lockate.utils.ErrorInfo
 import com.peppeosmio.lockate.utils.LoadingState
@@ -25,6 +26,10 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Clock
+import kotlin.time.ExperimentalTime
 
 class AGDetailsViewModel(
     private val anonymousGroupService: AnonymousGroupService,
@@ -120,6 +125,7 @@ class AGDetailsViewModel(
     /**
      * Listens for the user's location, if called multiple times the previous job is canceled
      */
+    @OptIn(ExperimentalTime::class)
     private fun listenForUserLocation() {
         if (state.value.anonymousGroup == null) {
             return
@@ -129,10 +135,19 @@ class AGDetailsViewModel(
             try {
                 Log.d("", "Streaming my position")
                 locationService.getLocationUpdates().collect { coordinates ->
-                    if (state.value.myCoordinates == null) {
+                    if (state.value.myLocationRecordFromGPS == null) {
                         _cameraPositionEvents.trySend(coordinates)
                     }
-                    _state.update { it.copy(myCoordinates = coordinates) }
+                    _state.update {
+                        it.copy(
+                            myLocationRecordFromGPS = LocationRecord(
+                                coordinates = coordinates,
+                                timestamp = Clock.System.now().toLocalDateTime(
+                                    TimeZone.UTC
+                                )
+                            )
+                        )
+                    }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -144,20 +159,30 @@ class AGDetailsViewModel(
      * Get the newest current location if possible otherwise move to the old one if available.
      * If there is an exception propagate it.
      */
+    @OptIn(ExperimentalTime::class)
     @Throws
     private suspend fun getAndMoveToMyLocation() {
         Log.d("", "Getting my location")
         try {
             val coordinates = locationService.getCurrentLocation()
             if (coordinates != null) {
-                _state.update { it.copy(myCoordinates = coordinates) }
+                _state.update {
+                    it.copy(
+                        myLocationRecordFromGPS = LocationRecord(
+                            coordinates = coordinates,
+                            timestamp = Clock.System.now().toLocalDateTime(
+                                timeZone = TimeZone.UTC
+                            )
+                        )
+                    )
+                }
                 _cameraPositionEvents.trySend(coordinates)
-            } else if (state.value.myCoordinates != null) {
-                _cameraPositionEvents.trySend(state.value.myCoordinates!!)
+            } else if (state.value.myLocationRecordFromGPS != null) {
+                _cameraPositionEvents.trySend(state.value.myLocationRecordFromGPS!!.coordinates)
             }
         } catch (e: Exception) {
-            if (state.value.myCoordinates != null) {
-                _cameraPositionEvents.trySend(state.value.myCoordinates!!)
+            if (state.value.myLocationRecordFromGPS != null) {
+                _cameraPositionEvents.trySend(state.value.myLocationRecordFromGPS!!.coordinates)
             }
             throw e
         }

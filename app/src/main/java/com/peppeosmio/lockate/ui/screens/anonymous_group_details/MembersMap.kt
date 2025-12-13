@@ -6,9 +6,11 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -22,9 +24,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.IntSize
@@ -151,7 +156,7 @@ fun MembersMap(
     }
 
 
-    Box(modifier = modifier) {
+    Box(modifier = modifier.clipToBounds()) {
         MaplibreMap(
             cameraState = cameraState,
             styleState = styleState,
@@ -173,15 +178,17 @@ fun MembersMap(
 
         pointsClusters.forEach { cluster ->
             var size by remember { mutableStateOf(IntSize.Zero) }
-            val pointModifier = Modifier
-                .offset(
-                    x = cluster.center.x, y = cluster.center.y
-                )
-                .onGloballyPositioned { size = it.size }
-                .graphicsLayer {
-                    translationX = -size.width / 2f
-                    translationY = -size.height / 2f
-                }
+            val positioningModifier = fun(modifier: Modifier): Modifier {
+                return modifier
+                    .offset(
+                        x = cluster.center.x, y = cluster.center.y
+                    )
+                    .onGloballyPositioned { size = it.size }
+                    .graphicsLayer {
+                        translationX = -size.width / 2f
+                        translationY = -size.height / 2f
+                    }
+            }
             val containsMe = cluster.members.any {
                 it.id == myPoint?.id
             }
@@ -189,12 +196,16 @@ fun MembersMap(
                 // Draw normal single person
                 val member = cluster.members.first()
                 Column(
-                    modifier = pointModifier, horizontalAlignment = Alignment.CenterHorizontally
+                    modifier = positioningModifier(Modifier.width(120.dp)),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    val backgroundColor = if (containsMe) {
+                    var backgroundColor = if (containsMe) {
                         MaterialTheme.colorScheme.primary
                     } else {
                         MaterialTheme.colorScheme.secondary
+                    }
+                    if(member.isOld) {
+                        backgroundColor = backgroundColor.copy(alpha = 0.5f)
                     }
                     val textColor = if (containsMe) {
                         MaterialTheme.colorScheme.primary
@@ -206,12 +217,21 @@ fun MembersMap(
                             .size(16.dp)
                             .background(backgroundColor, CircleShape)
                     )
-                    Text(member.name, color = textColor)
+                    Text(
+                        text = member.name,
+                        maxLines = 1,
+                        modifier = Modifier.fillMaxWidth(),
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                        color = textColor,
+                    )
                 }
             } else {
                 // Draw cluster bubble
                 ClusterBubble(
-                    modifier = pointModifier, count = cluster.members.size, containsMe = containsMe
+                    modifier = positioningModifier(Modifier),
+                    count = cluster.members.size,
+                    containsMe = containsMe
                 )
             }
         }
