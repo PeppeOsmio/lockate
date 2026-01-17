@@ -12,7 +12,6 @@ data class AGDetailsState(
     val anonymousGroup: AnonymousGroup? = null,
     val members: Map<String, AGMember>? = null,
     val membersCoordinates: Map<String, Coordinates>? = null,
-    val isAdminTokenValid: Boolean? = null,
     val showLoadingOverlay: Boolean = false,
     val adminPasswordText: String = "",
     val showDeleteAGDialog: Boolean = false,

@@ -8,6 +8,5 @@ data class AGCreateReqDto(
     val encryptedGroupName: EncryptedDataDto,
     val memberPasswordSrpVerifier: String,
     val memberPasswordSrpSalt: String,
-    val adminPassword: String,
     val keySalt: String
 )

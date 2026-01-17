@@ -25,5 +25,6 @@ data class AGMemberEntity(
     val lastLatitude: Double?,
     val lastLongitude: Double?,
     val lastSeen: Long?,
+    val isAGAdmin: Boolean,
     val anonymousGroupInternalId: Long,
 ) {}

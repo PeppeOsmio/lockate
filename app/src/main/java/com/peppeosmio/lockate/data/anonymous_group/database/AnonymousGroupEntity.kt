@@ -29,9 +29,7 @@ data class AnonymousGroupEntity(
     val memberId: String,
     val memberTokenCipher: ByteArray,
     val memberTokenIv: ByteArray,
-
-    val adminTokenCipher: ByteArray?,
-    val adminTokenIv: ByteArray?,
+    val memberIsAGAdmin : Boolean,
 
     val keyCipher: ByteArray,
     val keyIv: ByteArray,
@@ -49,20 +47,13 @@ data class AnonymousGroupEntity(
         if (existsRemote != other.existsRemote) return false
         if (sendLocation != other.sendLocation) return false
         if (connectionId != other.connectionId) return false
+        if (memberIsAGAdmin != other.memberIsAGAdmin) return false
         if (id != other.id) return false
         if (name != other.name) return false
         if (memberName != other.memberName) return false
         if (memberId != other.memberId) return false
         if (!memberTokenCipher.contentEquals(other.memberTokenCipher)) return false
         if (!memberTokenIv.contentEquals(other.memberTokenIv)) return false
-        if (adminTokenCipher != null) {
-            if (other.adminTokenCipher == null) return false
-            if (!adminTokenCipher.contentEquals(other.adminTokenCipher)) return false
-        } else if (other.adminTokenCipher != null) return false
-        if (adminTokenIv != null) {
-            if (other.adminTokenIv == null) return false
-            if (!adminTokenIv.contentEquals(other.adminTokenIv)) return false
-        } else if (other.adminTokenIv != null) return false
         if (!keyCipher.contentEquals(other.keyCipher)) return false
         if (!keyIv.contentEquals(other.keyIv)) return false
 
@@ -77,16 +68,16 @@ data class AnonymousGroupEntity(
         result = 31 * result + existsRemote.hashCode()
         result = 31 * result + sendLocation.hashCode()
         result = 31 * result + connectionId.hashCode()
+        result = 31 * result + memberIsAGAdmin.hashCode()
         result = 31 * result + id.hashCode()
         result = 31 * result + name.hashCode()
         result = 31 * result + memberName.hashCode()
         result = 31 * result + memberId.hashCode()
         result = 31 * result + memberTokenCipher.contentHashCode()
         result = 31 * result + memberTokenIv.contentHashCode()
-        result = 31 * result + (adminTokenCipher?.contentHashCode() ?: 0)
-        result = 31 * result + (adminTokenIv?.contentHashCode() ?: 0)
         result = 31 * result + keyCipher.contentHashCode()
         result = 31 * result + keyIv.contentHashCode()
         return result
     }
+
 }

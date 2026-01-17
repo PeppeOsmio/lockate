@@ -37,7 +37,7 @@ class AGDetailsViewModel(
 ) : ViewModel() {
 
     enum class AGDetailsTab {
-        Map, Members, Admin
+        Map, Members
     }
 
     private val _state = MutableStateFlow(AGDetailsState())
@@ -99,17 +99,16 @@ class AGDetailsViewModel(
                     _state.update { it.copy(remoteDataLoadingState = LoadingState.IsLoading) }
                     joinAll(launch {
                         getRemoteMembers(connectionSettingsId)
-                    }, launch {
-                        verifyAdminAuth(connectionSettingsId)
                     })
                     _state.update { it.copy(remoteDataLoadingState = LoadingState.Success) }
                     while (true) {
                         try {
                             streamLocations(connectionSettingsId)
                         } catch (e: Exception) {
+                            e.printStackTrace()
                             Log.e(
                                 "",
-                                "Streaming location for $connectionSettingsId failed, retrying in 10 s"
+                                "Streaming location for connectionSettingsId=$connectionSettingsId failed, retrying in 10 s"
                             )
                             delay(10000L)
                         }
@@ -318,70 +317,6 @@ class AGDetailsViewModel(
             }
         }
     }
-
-    @Throws
-    private suspend fun verifyAdminAuth(connectionSettingsId: Long) {
-        if (state.value.anonymousGroup == null) {
-            return
-        }
-        Log.d("", "verifying admin auth")
-        val result = ErrorHandler.runAndHandleException(customHandler = { e ->
-            when (e) {
-                is UnauthorizedException -> null
-
-                else -> throw e
-            }
-        }) {
-            anonymousGroupService.verifyAdminAuth(
-                anonymousGroupInternalId = state.value.anonymousGroup!!.internalId,
-                connectionSettingsId = connectionSettingsId
-            )
-            true
-        }
-        val isAdminTokenValid = result.value != null
-        _state.update {
-            it.copy(isAdminTokenValid = isAdminTokenValid)
-        }
-        if (result.errorInfo != null) {
-            result.errorInfo.exception?.let { throw it }
-        }
-    }
-
-    fun authAdmin(connectionSettingsId: Long) {
-        viewModelScope.launch {
-            if (state.value.anonymousGroup == null || state.value.adminPasswordText.isBlank()) {
-                return@launch
-            }
-            _state.update { it.copy(showLoadingOverlay = true) }
-            try {
-                anonymousGroupService.getAdminToken(
-                    connectionSettingsId = connectionSettingsId,
-                    anonymousGroupInternalId = state.value.anonymousGroup!!.internalId,
-                    adminPassword = state.value.adminPasswordText
-                )
-            } catch (e: Exception) {
-                when (e) {
-                    is UnauthorizedException -> _snackbarEvents.trySend(
-                        SnackbarErrorMessage(
-                            text = "Incorrect admin password"
-                        )
-                    )
-
-                    else -> _snackbarEvents.trySend(
-                        SnackbarErrorMessage(
-                            text = "Connection error", errorInfo = ErrorInfo.fromException(e)
-                        )
-                    )
-                }
-                _state.update { it.copy(showLoadingOverlay = false) }
-                return@launch
-
-            }
-            _state.update { it.copy(showLoadingOverlay = false, isAdminTokenValid = true) }
-            getLocalAG(anonymousGroupInternalId = state.value.anonymousGroup!!.internalId)
-        }
-    }
-
 
     fun setAdminPasswordText(text: String) {
         _state.update { it.copy(adminPasswordText = text) }

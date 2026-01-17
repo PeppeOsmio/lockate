@@ -8,8 +8,6 @@ data class CreateAnonymousGroupState(
     val groupNameError: String? = null,
     val memberPasswordText: String = "",
     val memberPasswordError: String? = null,
-    val adminPasswordText: String = "",
-    val adminPasswordError: String? = null,
     val userNameText: String = "",
     val userNameError: String? = null,
     val errorInfo: ErrorInfo? = null

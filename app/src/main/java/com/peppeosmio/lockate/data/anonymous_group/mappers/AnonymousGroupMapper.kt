@@ -16,9 +16,6 @@ object AnonymousGroupMapper {
         anonymousGroup: AnonymousGroup, keyStoreService: KeyStoreService
     ): AnonymousGroupEntity {
         val encryptedMemberToken = keyStoreService.encrypt(anonymousGroup.memberToken)
-        val encryptedAdminToken = anonymousGroup.adminToken?.let {
-            keyStoreService.encrypt(it)
-        }
         val encryptedKey = keyStoreService.encrypt(anonymousGroup.key)
         return AnonymousGroupEntity(
             internalId = anonymousGroup.internalId,
@@ -38,9 +35,7 @@ object AnonymousGroupMapper {
             memberId = anonymousGroup.memberId,
             memberTokenCipher = encryptedMemberToken.cipherText,
             memberTokenIv = encryptedMemberToken.iv,
-
-            adminTokenCipher = encryptedAdminToken?.cipherText,
-            adminTokenIv = encryptedAdminToken?.iv,
+            memberIsAGAdmin = anonymousGroup.memberIsAGAdmin,
 
             keyCipher = encryptedKey.cipherText,
             keyIv = encryptedKey.iv,
@@ -62,13 +57,6 @@ object AnonymousGroupMapper {
                 cipherText = entity.memberTokenCipher, iv = entity.memberTokenIv
             )
         )
-        val adminToken = entity.adminTokenCipher?.let {
-            keyStoreService.decrypt(
-                EncryptedData(
-                    cipherText = entity.adminTokenCipher, iv = entity.adminTokenIv!!
-                )
-            )
-        }
         return AnonymousGroup(
             internalId = entity.internalId,
             id = entity.id,
@@ -80,7 +68,7 @@ object AnonymousGroupMapper {
             memberName = entity.memberName,
             memberId = entity.memberId,
             memberToken = memberToken,
-            adminToken = adminToken,
+            memberIsAGAdmin = entity.memberIsAGAdmin,
             isMember = entity.isMember,
             existsRemote = entity.existsRemote,
             sendLocation = entity.sendLocation,

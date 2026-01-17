@@ -37,7 +37,7 @@ sealed class AnonymousGroupEvent {
         val anonymousGroupInternalId: Long, val anonymousGroupId: String, val connectionId: Long
     ) : AnonymousGroupEvent()
 
-    data class AGLocationSentEvent @OptIn(ExperimentalTime::class) constructor(
+    data class AGLocationSentEvent(
         val anonymousGroupInternalId: Long,
         val anonymousGroupId: String,
         val connectionId: Long,

@@ -12,7 +12,8 @@ data class EncryptedAGMemberDto(
     val id: String,
     val encryptedName: EncryptedDataDto,
     val createdAt: LocalDateTime,
-    val encryptedLastLocationRecord: EncryptedLocationRecordDto?
+    val encryptedLastLocationRecord: EncryptedLocationRecordDto?,
+    val isAGAdmin: Boolean
 ) {
 //    suspend fun toDecrypted(
 //        cryptoService: CryptoService, memberPassword: String

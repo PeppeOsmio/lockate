@@ -33,7 +33,8 @@ object AGMemberMapper {
                     timestamp = Instant.fromEpochMilliseconds(entity.lastSeen!!)
                         .toLocalDateTime(TimeZone.UTC)
                 )
-            })
+            },
+            isAGAdmin = entity.isAGAdmin)
     }
 
     @OptIn(ExperimentalTime::class)
@@ -50,7 +51,8 @@ object AGMemberMapper {
             lastLongitude = agMember.lastLocationRecord?.coordinates?.longitude,
             lastSeen = agMember.lastLocationRecord?.timestamp?.toInstant(TimeZone.UTC)
                 ?.toEpochMilliseconds(),
-            anonymousGroupInternalId = anonymousGroupInternalId
+            anonymousGroupInternalId = anonymousGroupInternalId,
+            isAGAdmin = agMember.isAGAdmin
         )
     }
 
@@ -72,7 +74,8 @@ object AGMemberMapper {
             id = encryptedAGMemberDto.id,
             name = name,
             createdAt = encryptedAGMemberDto.createdAt,
-            lastLocationRecord = lastLocation
+            lastLocationRecord = lastLocation,
+            isAGAdmin = encryptedAGMemberDto.isAGAdmin
         )
     }
 }

@@ -1,22 +1,32 @@
 package com.peppeosmio.lockate.ui.screens.anonymous_group_details
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -58,7 +68,11 @@ fun AGMembersList(
 
 @Composable
 fun MemberRow(
-    modifier: Modifier = Modifier, member: AGMember, isMe: Boolean, onTapLocate: () -> Unit, onTapFollow: () -> Unit
+    modifier: Modifier = Modifier,
+    member: AGMember,
+    isMe: Boolean,
+    onTapLocate: () -> Unit,
+    onTapFollow: () -> Unit
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -77,16 +91,36 @@ fun MemberRow(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.Start
             ) {
-                Text(
-                    modifier = Modifier.weight(1f), text = if (isMe) {
+                Text(text = if (isMe) {
                         "(You) - ${member.name}"
                     } else {
                         member.name
                     }, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold
                 )
-                if(!isMe) {
+                Spacer(Modifier.size(8.dp))
+                if (member.isAGAdmin) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(size = 12.dp))
+                            .border(
+                                width = 1.dp,
+                                color = MaterialTheme.colorScheme.primary,
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .background(MaterialTheme.colorScheme.primaryContainer)
+                            .padding(8.dp)
+                    ) {
+                        Text(
+                            "Admin",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+                if (!isMe) {
                     IconButton(onClick = onTapFollow) {
                         Icon(
                             painter = painterResource(R.drawable.outline_navigation_24),

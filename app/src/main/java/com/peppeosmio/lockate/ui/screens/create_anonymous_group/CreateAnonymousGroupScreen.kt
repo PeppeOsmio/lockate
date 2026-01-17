@@ -141,20 +141,6 @@ fun CreateAnonymousGroupScreen(
                 })
             OutlinedTextField(
                 modifier = Modifier.fillMaxWidth(),
-                value = state.adminPasswordText,
-                onValueChange = { text -> viewModel.setAdminPasswordText(text) },
-                label = { Text("Admin password") },
-                isError = state.adminPasswordError != null,
-                supportingText = {
-                    if (state.adminPasswordError != null) {
-                        Text(
-                            text = state.adminPasswordError!!,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
-                })
-            OutlinedTextField(
-                modifier = Modifier.fillMaxWidth(),
                 value = state.userNameText,
                 onValueChange = { text -> viewModel.setUserNameText(text) },
                 label = { Text("Your member name") },

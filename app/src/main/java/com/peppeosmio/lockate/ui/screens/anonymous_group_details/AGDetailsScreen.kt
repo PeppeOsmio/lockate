@@ -366,59 +366,6 @@ fun AnonymousGroupDetailsScreen(
                                 })
                         }
                     }
-
-                    AGDetailsViewModel.AGDetailsTab.Admin -> {
-                        if (state.isAdminTokenValid == null) {
-                            Column(
-                                modifier = Modifier.fillMaxSize(),
-                                verticalArrangement = Arrangement.Center,
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                CircularProgressIndicator()
-                            }
-                        } else {
-                            if (state.isAdminTokenValid!!) {
-                                Column(modifier = Modifier.fillMaxSize()) {
-                                    SettingsMenuLink(
-                                        title = { Text(text = "Delete anonymous group") },
-                                        subtitle = { Text(text = "This action is not reversible!") },
-                                        modifier = Modifier,
-                                        enabled = true,
-                                        action = {
-                                            Icon(
-                                                Icons.Default.Delete,
-                                                contentDescription = "Delete anonymous group"
-                                            )
-                                        },
-                                        onClick = {
-                                            viewModel.showDeleteAGDialog()
-                                        })
-                                }
-                            } else {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(16.dp),
-                                    verticalArrangement = Arrangement.Top,
-                                    horizontalAlignment = Alignment.End
-                                ) {
-                                    OutlinedTextField(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        value = state.adminPasswordText,
-                                        onValueChange = { text ->
-                                            viewModel.setAdminPasswordText(text)
-                                        },
-                                        label = { Text("Admin password") })
-                                    Spacer(modifier = Modifier.padding(4.dp))
-                                    Button(onClick = {
-                                        coroutineScope.launch {
-                                            viewModel.authAdmin(connectionId)
-                                        }
-                                    }) { Text("Authenticate") }
-                                }
-                            }
-                        }
-                    }
                 }
             }
         }

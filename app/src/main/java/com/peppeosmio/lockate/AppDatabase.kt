@@ -9,7 +9,7 @@ import com.peppeosmio.lockate.data.anonymous_group.database.AnonymousGroupEntity
 import com.peppeosmio.lockate.data.anonymous_group.database.ConnectionEntity
 
 @Database(
-    version = 5,
+    version = 1,
     entities = [ConnectionEntity::class, AnonymousGroupEntity::class, AGMemberEntity::class],
     exportSchema = true,
     autoMigrations = []

@@ -82,19 +82,6 @@ interface AnonymousGroupDao {
     @Query("UPDATE anonymous_group SET sendLocation = :sendLocation WHERE internalId = :anonymousGroupInternalId")
     suspend fun setAGSendLocation(anonymousGroupInternalId: Long, sendLocation: Boolean)
 
-    @Query(
-        """
-        UPDATE anonymous_group 
-        SET adminTokenCipher = :adminTokenCipher, 
-        adminTokenIv = :adminTokenIv
-        WHERE internalId = :anonymousGroupInternalId
-        """
-    )
-    suspend fun setAGAdminToken(
-        anonymousGroupInternalId: Long,
-        adminTokenCipher: ByteArray,
-        adminTokenIv: ByteArray,
-    )
 
     @Query(
         """

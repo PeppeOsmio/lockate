@@ -156,7 +156,8 @@ fun MembersMap(
     }
 
 
-    Box(modifier = modifier.clipToBounds()) {
+    Box(modifier = modifier.clipToBounds()
+    ) {
         MaplibreMap(
             cameraState = cameraState,
             styleState = styleState,

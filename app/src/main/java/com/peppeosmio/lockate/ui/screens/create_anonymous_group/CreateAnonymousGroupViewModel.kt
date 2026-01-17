@@ -30,10 +30,6 @@ class CreateAnonymousGroupViewModel(
         _state.update { it.copy(memberPasswordText = text) }
     }
 
-    fun setAdminPasswordText(text: String) {
-        _state.update { it.copy(adminPasswordText = text) }
-    }
-
     fun setUserNameText(text: String) {
         _state.update { it.copy(userNameText = text) }
     }
@@ -41,7 +37,6 @@ class CreateAnonymousGroupViewModel(
     private fun canConfirm(): Boolean {
         val groupNameBlank = state.value.groupNameText.isBlank()
         val memberPasswordBlank = state.value.memberPasswordText.isBlank()
-        val adminPasswordBlank = state.value.adminPasswordText.isBlank()
         val userNameBlank = state.value.userNameText.isBlank()
         if (groupNameBlank) {
             _state.update { it.copy(groupNameError = "Please enter the group name") }
@@ -49,14 +44,11 @@ class CreateAnonymousGroupViewModel(
         if (memberPasswordBlank) {
             _state.update { it.copy(memberPasswordError = "Please enter the member password") }
         }
-        if (adminPasswordBlank) {
-            _state.update { it.copy(adminPasswordError = "Please enter the admin password") }
-        }
         if (userNameBlank) {
             _state.update { it.copy(userNameError = "Please enter the user name") }
         }
         val canConfirm =
-            !(groupNameBlank || memberPasswordBlank || adminPasswordBlank || userNameBlank)
+            !(groupNameBlank || memberPasswordBlank || userNameBlank)
         return canConfirm
     }
 
@@ -65,7 +57,6 @@ class CreateAnonymousGroupViewModel(
             it.copy(
                 groupNameError = null,
                 memberPasswordError = null,
-                adminPasswordError = null,
                 userNameError = null
             )
         }
@@ -84,7 +75,6 @@ class CreateAnonymousGroupViewModel(
                     groupName = state.value.groupNameText,
                     memberName = state.value.userNameText,
                     memberPassword = state.value.memberPasswordText,
-                    adminPassword = state.value.adminPasswordText
                 )
                 _state.update { it.copy(showLoadingOverlay = false) }
                 _navigateBackEvents.trySend(Unit)
