@@ -4,9 +4,7 @@ import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -19,20 +17,15 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.peppeosmio.lockate.R
 import dev.sargunv.maplibrecompose.compose.CameraState
@@ -42,6 +35,7 @@ import dev.sargunv.maplibrecompose.core.BaseStyle
 import dev.sargunv.maplibrecompose.core.MapOptions
 import dev.sargunv.maplibrecompose.core.OrnamentOptions
 import dev.sargunv.maplibrecompose.material3.controls.DisappearingCompassButton
+import kotlin.math.sqrt
 
 data class MembersCluster(
     val center: DpOffset, val members: List<MapPoint>
@@ -59,7 +53,7 @@ fun clusterPoints(
     fun distance(a: DpOffset, b: DpOffset): Float {
         val dx = a.x.value - b.x.value
         val dy = a.y.value - b.y.value
-        return kotlin.math.sqrt(dx * dx + dy * dy)
+        return sqrt(dx * dx + dy * dy)
     }
 
     for ((point, screenPos) in points) {
@@ -95,7 +89,9 @@ fun clusterPoints(
 }
 
 @Composable
-fun ClusterBubble(modifier: Modifier, count: Int, containsMe: Boolean) {
+fun ClusterBubble(center: DpOffset, count: Int, containsMe: Boolean) {
+    val circleSize = 36.dp
+    val halfCircleSize = circleSize / 2
     val backgroundColor = if (containsMe) {
         MaterialTheme.colorScheme.primary
     } else {
@@ -112,14 +108,60 @@ fun ClusterBubble(modifier: Modifier, count: Int, containsMe: Boolean) {
         "99+"
     }
     Box(
-        modifier = modifier
-            .size(36.dp)
+        modifier = Modifier
+            .offset(center.x - halfCircleSize, center.y - halfCircleSize)
+            .size(circleSize)
             .background(backgroundColor, CircleShape),
         contentAlignment = Alignment.Center
     ) {
         Text(text = text, color = textColor)
     }
 }
+
+@Composable
+fun MemberMarker(
+    center: DpOffset, member: MapPoint, containsMe: Boolean, isOld: Boolean
+) {
+    var backgroundColor = if (containsMe) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.secondary
+    }
+    if (member.isOld) {
+        backgroundColor = backgroundColor.copy(alpha = 0.5f)
+    }
+    val textColor = if (containsMe) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.secondary
+    }
+    // Circle is exactly on the coordinate
+    val circleSize = 16.dp
+    val halfCircleSize = circleSize / 2
+    Box(modifier = Modifier.offset(x = center.x - halfCircleSize, y = center.y - halfCircleSize)) {
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .size(circleSize)
+                .background(
+                    if (isOld) backgroundColor.copy(alpha = 0.5f) else backgroundColor, CircleShape
+                )
+        )
+
+        Text(
+            text = member.name,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .width(120.dp)
+                .offset(x = (-60).dp + halfCircleSize, y = 16.dp),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+            color = textColor
+        )
+    }
+}
+
 
 @Composable
 fun MembersMap(
@@ -156,7 +198,8 @@ fun MembersMap(
     }
 
 
-    Box(modifier = modifier.clipToBounds()
+    Box(
+        modifier = modifier.clipToBounds()
     ) {
         MaplibreMap(
             cameraState = cameraState,
@@ -178,63 +221,35 @@ fun MembersMap(
         Log.d("Clusters", "clusters count: ${pointsClusters.size}")
 
         pointsClusters.forEach { cluster ->
-            var size by remember { mutableStateOf(IntSize.Zero) }
-            val positioningModifier = fun(modifier: Modifier): Modifier {
-                return modifier
-                    .offset(
-                        x = cluster.center.x, y = cluster.center.y
-                    )
-                    .onGloballyPositioned { size = it.size }
-                    .graphicsLayer {
-                        translationX = -size.width / 2f
-                        translationY = -size.height / 2f
-                    }
-            }
             val containsMe = cluster.members.any {
                 it.id == myPoint?.id
             }
+
             if (cluster.members.size == 1) {
-                // Draw normal single person
                 val member = cluster.members.first()
-                Column(
-                    modifier = positioningModifier(Modifier.width(120.dp)),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    var backgroundColor = if (containsMe) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.secondary
-                    }
-                    if(member.isOld) {
-                        backgroundColor = backgroundColor.copy(alpha = 0.5f)
-                    }
-                    val textColor = if (containsMe) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.secondary
-                    }
-                    Box(
-                        modifier = Modifier
-                            .size(16.dp)
-                            .background(backgroundColor, CircleShape)
-                    )
-                    Text(
-                        text = member.name,
-                        maxLines = 1,
-                        modifier = Modifier.fillMaxWidth(),
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Center,
-                        color = textColor,
-                    )
-                }
+                MemberMarker(
+                    center = cluster.center,
+                    containsMe = containsMe,
+                    member = member,
+                    isOld = member.isOld,
+                )
             } else {
-                // Draw cluster bubble
                 ClusterBubble(
-                    modifier = positioningModifier(Modifier),
-                    count = cluster.members.size,
-                    containsMe = containsMe
+                    center = cluster.center, count = cluster.members.size, containsMe = containsMe
                 )
             }
+//          This is a debug yellow dot positioned exactly on the coordinates.
+//          Box(
+//              modifier = Modifier
+//                  .size(4.dp)
+//                  .offset(cluster.center.x, cluster.center.y)
+//                      // anchor = center of the circle (16.dp)
+//                      translationX = -2.dp.toPx()
+//                      translationY = -2.dp.toPx()
+//                  }
+//                  .background(
+//                      Color.Yellow, CircleShape
+//                  ))
         }
 
         Box(
