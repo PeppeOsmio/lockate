@@ -42,7 +42,7 @@ class AndroidSendLocationService : Service() {
             ACTION_STOP -> stop()
             ACTION_RESTART -> if (isRunning) restart()
         }
-        return START_NOT_STICKY
+        return START_STICKY
     }
 
     @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])

@@ -2,6 +2,7 @@ package com.peppeosmio.lockate.ui.screens.anonymous_groups
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.peppeosmio.lockate.exceptions.RemoteAGNotFoundException
 import com.peppeosmio.lockate.exceptions.UnauthorizedException
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupEvent
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
@@ -11,6 +12,7 @@ import com.peppeosmio.lockate.utils.SnackbarErrorMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -35,11 +37,13 @@ class AnonymousGroupsViewModel(
     fun getInitialData(connectionSettingsId: Long) {
         viewModelScope.launch {
             runCatching {
+                _state.update { it.copy(isLoading = true) }
                 coroutineScope {
                     getAnonymousGroups(connectionSettingsId)
                     verifyAGsMemberAuth(connectionSettingsId)
                 }
             }
+            _state.update { it.copy(isLoading = false) }
         }
     }
 
@@ -154,8 +158,9 @@ class AnonymousGroupsViewModel(
                     anonymousGroupInternalId = anonymousGroup.internalId
                 )
             } catch (e: Exception) {
+                e.printStackTrace()
                 when (e) {
-                    is UnauthorizedException -> Unit
+                    is UnauthorizedException, is RemoteAGNotFoundException -> Unit
                     else -> {
                         _snackbarEvents.trySend(
                             SnackbarErrorMessage(

@@ -89,19 +89,11 @@ fun clusterPoints(
 }
 
 @Composable
-fun ClusterBubble(center: DpOffset, count: Int, containsMe: Boolean) {
+fun ClusterBubble(center: DpOffset, count: Int) {
     val circleSize = 36.dp
     val halfCircleSize = circleSize / 2
-    val backgroundColor = if (containsMe) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        MaterialTheme.colorScheme.secondary
-    }
-    val textColor = if (containsMe) {
-        MaterialTheme.colorScheme.onPrimary
-    } else {
-        MaterialTheme.colorScheme.onSurface
-    }
+    val backgroundColor = MaterialTheme.colorScheme.secondary
+    val textColor = MaterialTheme.colorScheme.onSurface
     val text = if (count < 100) {
         "$count"
     } else {
@@ -120,9 +112,9 @@ fun ClusterBubble(center: DpOffset, count: Int, containsMe: Boolean) {
 
 @Composable
 fun MemberMarker(
-    center: DpOffset, member: MapPoint, containsMe: Boolean, isOld: Boolean
+    center: DpOffset, member: MapPoint, isMe: Boolean, isOld: Boolean
 ) {
-    var backgroundColor = if (containsMe) {
+    var backgroundColor = if (isMe) {
         MaterialTheme.colorScheme.primary
     } else {
         MaterialTheme.colorScheme.secondary
@@ -130,7 +122,7 @@ fun MemberMarker(
     if (member.isOld) {
         backgroundColor = backgroundColor.copy(alpha = 0.5f)
     }
-    val textColor = if (containsMe) {
+    val textColor = if (isMe) {
         MaterialTheme.colorScheme.primary
     } else {
         MaterialTheme.colorScheme.secondary
@@ -162,6 +154,29 @@ fun MemberMarker(
     }
 }
 
+@Composable
+fun MyMarker(
+    center: DpOffset, isOld: Boolean
+) {
+    var backgroundColor = MaterialTheme.colorScheme.primary
+    if (isOld) {
+        backgroundColor = backgroundColor.copy(alpha = 0.5f)
+    }
+    // Circle is exactly on the coordinate
+    val circleSize = 16.dp
+    val halfCircleSize = circleSize / 2
+    Box(modifier = Modifier.offset(x = center.x - halfCircleSize, y = center.y - halfCircleSize)) {
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .size(circleSize)
+                .background(
+                    if (isOld) backgroundColor.copy(alpha = 0.5f) else backgroundColor, CircleShape
+                )
+        )
+    }
+}
+
 
 @Composable
 fun MembersMap(
@@ -178,15 +193,12 @@ fun MembersMap(
         BaseStyle.Uri("https://api.protomaps.com/styles/v4/$variant/en.json?key=$apiKey")
     }
 
-    val pointsClusters by remember(cameraState.position, membersPoints, myPoint) {
+    val pointsClusters by remember(cameraState.position, myPoint) {
         Log.d("Clusters", cameraState.position.toString())
         derivedStateOf {
             Log.d("Clusters", "Computing clusters")
             val proj = cameraState.projection ?: return@derivedStateOf emptyList()
             val points = membersPoints?.toMutableList() ?: mutableListOf()
-            myPoint?.let {
-                points.add(it)
-            }
             clusterPoints(points.map { point ->
                 val screen =
                     proj.screenLocationFromPosition(point.coordinates.toMapLibreComposePosition())
@@ -194,6 +206,15 @@ fun MembersMap(
                 Log.d("Clusters", screen.toString())
                 point to screen
             })
+        }
+    }
+
+    val myPointProjection by remember(cameraState.position, myPoint) {
+        derivedStateOf {
+            val proj = cameraState.projection ?: return@derivedStateOf null
+            myPoint?.let {
+                proj.screenLocationFromPosition(it.coordinates.toMapLibreComposePosition())
+            }
         }
     }
 
@@ -229,13 +250,13 @@ fun MembersMap(
                 val member = cluster.members.first()
                 MemberMarker(
                     center = cluster.center,
-                    containsMe = containsMe,
+                    isMe = containsMe,
                     member = member,
                     isOld = member.isOld,
                 )
             } else {
                 ClusterBubble(
-                    center = cluster.center, count = cluster.members.size, containsMe = containsMe
+                    center = cluster.center, count = cluster.members.size
                 )
             }
 //          This is a debug yellow dot positioned exactly on the coordinates.
@@ -250,6 +271,9 @@ fun MembersMap(
 //                  .background(
 //                      Color.Yellow, CircleShape
 //                  ))
+        }
+        myPointProjection?.let {
+            MyMarker(center = DpOffset(x = it.x, y = it.y), isOld = myPoint!!.isOld)
         }
 
         Box(

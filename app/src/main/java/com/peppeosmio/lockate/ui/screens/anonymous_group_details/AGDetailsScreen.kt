@@ -278,6 +278,18 @@ fun AnonymousGroupDetailsScreen(
                         }, text = { Text("Leave") }, onClick = {
                             viewModel.closeDropdownMenu()
                         })
+                        state.anonymousGroup?.let {
+                            if(it.memberIsAGAdmin) {
+                                DropdownMenuItem(leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Delete anonymous group"
+                                    )
+                                }, text = { Text("Delete") }, onClick = {
+                                    viewModel.showDeleteAGDialog()
+                                })
+                            }
+                        }
 
                     }
                 }

@@ -8,7 +8,6 @@ import com.peppeosmio.lockate.service.ConnectionService
 import com.peppeosmio.lockate.service.PermissionsService
 import com.peppeosmio.lockate.ui.routes.ConnectionSettingsRoute
 import com.peppeosmio.lockate.utils.ErrorInfo
-import com.peppeosmio.lockate.utils.ErrorHandler
 import com.peppeosmio.lockate.utils.SnackbarErrorMessage
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -157,11 +156,11 @@ class HomePageViewModel(
     }
 
     fun toggleConnectionsMenu() {
-        _state.update { it.copy(isConnectionsMenuOpen = !it.isConnectionsMenuOpen) }
+        _state.update { it.copy(isConnectionsDialogOpen = !it.isConnectionsDialogOpen) }
     }
 
     fun closeConnectionsMenu() {
-        _state.update { it.copy(isConnectionsMenuOpen = false) }
+        _state.update { it.copy(isConnectionsDialogOpen = false) }
     }
 
     suspend fun onConnectionSelected(connectionSettingsId: Long) {

@@ -8,5 +8,7 @@ data class AnonymousGroupsState(
     val showAddBottomSheet: Boolean = false,
     val showSureLeaveDialog: Boolean = false,
 
+    val isLoading: Boolean = true,
+
     val anonymousGroups: List<AnonymousGroup>? = null,
 )

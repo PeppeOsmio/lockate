@@ -117,7 +117,11 @@ fun ConnectionSettingsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Spacer(modifier = Modifier.weight(1.0f))
-            Text("Welcome to Lockate", style = MaterialTheme.typography.titleLarge)
+            Text(if(initialConnectionId != null) {
+                "Edit connection"
+            } else {
+                "Welcome to Lockate"
+            }, style = MaterialTheme.typography.titleLarge)
             OutlinedTextField(
                 value = state.url,
                 onValueChange = { text -> viewModel.onUrlChanged(text) },
@@ -138,7 +142,7 @@ fun ConnectionSettingsScreen(
             FilledTonalButton(
                 onClick = {
                     coroutineScope.launch {
-                        viewModel.onConnectClicked()
+                        viewModel.onConnectClicked(initialConnectionId)
                         focusManager.clearFocus()
                     }
                 }, enabled = !state.showLoadingOverlay, modifier = Modifier.align(Alignment.End)

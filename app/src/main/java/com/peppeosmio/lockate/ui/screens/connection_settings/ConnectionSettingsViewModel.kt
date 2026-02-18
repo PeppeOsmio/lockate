@@ -58,7 +58,7 @@ class ConnectionSettingsViewModel(
         _state.update { it.copy(apiKey = apiKey) }
     }
 
-    fun onConnectClicked() {
+    fun onConnectClicked(initialConnectionId: Long?) {
         viewModelScope.launch {
             if (state.value.url.isBlank()) {
                 _snackbarEvents.trySend(SnackbarErrorMessage(text = "Please enter url"))
@@ -92,7 +92,7 @@ class ConnectionSettingsViewModel(
                 }
             }
             val connection = Connection(
-                id = null,
+                id = initialConnectionId,
                 url = _state.value.url,
                 apiKey = if(state.value.requireApiKey) state.value.apiKey else null ,
                 username = null,
@@ -120,15 +120,20 @@ class ConnectionSettingsViewModel(
                 _state.update { it.copy(showLoadingOverlay = false) }
                 return@launch
             }
-            val result = ErrorHandler.runAndHandleException {
-                connectionService.saveConnectionSettings(
-                    connection
-                )
-            }
-            if (result.errorInfo != null) {
+            try {
+               if(initialConnectionId != null) {
+                   connectionService.updateConnection(
+                       connection
+                   )
+               } else {
+                   connectionService.saveConnectionSettings(
+                       connection
+                   )
+               }
+            } catch (e: Exception) {
                 _snackbarEvents.trySend(
                     SnackbarErrorMessage(
-                        text = "Connection error", errorInfo = result.errorInfo
+                        text = "Connection error", errorInfo = ErrorInfo.fromException(e)
                     )
                 )
                 _state.update { it.copy(showLoadingOverlay = false) }

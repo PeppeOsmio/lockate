@@ -14,5 +14,5 @@ data class HomePageState(
     val dialogErrorInfo: ErrorInfo? = null,
     val selectedConnectionId: Long? = null,
     val connections: Map<Long, Connection>? = null,
-    val isConnectionsMenuOpen: Boolean = false,
+    val isConnectionsDialogOpen: Boolean = false,
 )

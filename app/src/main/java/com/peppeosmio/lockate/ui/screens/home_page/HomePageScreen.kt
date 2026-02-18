@@ -133,6 +133,15 @@ fun HomePageScreen(
             startLocationService()
         })
 
+    if (state.isConnectionsDialogOpen && state.connections != null && state.selectedConnectionId != null) {
+        ConnectionsDialog(
+            connections = state.connections!!.map { it.value },
+            selectedConnectionId = state.selectedConnectionId!!,
+            onDismiss = viewModel::closeConnectionsMenu,
+            onAddNew = {},
+            onEdit = {},
+            onSelect = {})
+    }
 
     ModalNavigationDrawer(
         drawerState = drawerState, drawerContent = {
@@ -220,7 +229,7 @@ fun HomePageScreen(
                                 )
                             }
                             DropdownMenu(
-                                expanded = state.isConnectionsMenuOpen,
+                                expanded = false,
                                 onDismissRequest = {
                                     viewModel.closeConnectionsMenu()
                                 }) {
@@ -309,7 +318,9 @@ fun HomePageScreen(
             }) { innerPadding ->
             if (state.connections == null || state.selectedConnectionId == null) {
                 Column(
-                    modifier = Modifier.fillMaxSize().padding(innerPadding),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
@@ -317,7 +328,7 @@ fun HomePageScreen(
                 }
             } else {
                 NavHost(
-                    modifier = Modifier.padding(paddingValues = innerPadding),
+                    modifier = Modifier.fillMaxSize().padding(paddingValues = innerPadding),
                     navController = navController,
                     startDestination = AnonymousGroupsRoute,
                     enterTransition = { EnterTransition.None },

@@ -76,6 +76,7 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
 import java.net.ConnectException
+import java.net.ProtocolException
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.concurrent.atomics.decrementAndFetch
@@ -745,6 +746,7 @@ class AnonymousGroupService(
                     }
                 }
             } catch (e: Exception) {
+                e.printStackTrace()
                 if (isConnected) {
                     onDisconnected()
                 }

@@ -110,14 +110,19 @@ class ConnectionService(
             if (connection.id != null) {
                 throw IllegalArgumentException("id must be null")
             }
-            val id = connectionDao.insertConnectionSettings(ConnectionMapper.toEntity(connection))
+            val id = connectionDao.insertConnection(ConnectionMapper.toEntity(connection))
             val connectionSettingsEntity = connectionDao.getConnectionSettingsById(id)
                 ?: throw ConnectionSettingsNotFoundException()
             ConnectionMapper.toDomain(connectionSettingsEntity)
         }
 
+    suspend fun updateConnection(connection: Connection): Connection = withContext(Dispatchers.IO) {
+        connectionDao.updateConnection(ConnectionMapper.toEntity(connection))
+        connection
+    }
+
     suspend fun listConnectionSettings(): List<Connection> = withContext(Dispatchers.IO) {
-        connectionDao.listConnectionSettings().map {
+        connectionDao.listConnections().map {
             ConnectionMapper.toDomain(it)
         }
     }

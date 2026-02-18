@@ -354,7 +354,7 @@ class AGDetailsViewModel(
 
 
     fun showDeleteAGDialog() {
-        _state.update { it.copy(showDeleteAGDialog = true) }
+        _state.update { it.copy(showDeleteAGDialog = true, isDropdownMenuOpen = false) }
     }
 
     fun hideDeleteAGDialog() {
@@ -372,10 +372,10 @@ class AGDetailsViewModel(
                     connectionSettingsId = connectionSettingsId,
                     anonymousGroupInternalId = anonymousGroupInternalId
                 )
-                _state.update { it.copy(showLoadingOverlay = false) }
+                _state.update { it.copy(showLoadingOverlay = false, showDeleteAGDialog = false) }
                 _navigateBackEvents.trySend(Unit)
             } catch (e: Exception) {
-                _state.update { it.copy(showLoadingOverlay = false) }
+                _state.update { it.copy(showLoadingOverlay = false, showDeleteAGDialog = false) }
                 _snackbarEvents.trySend(
                     SnackbarErrorMessage(
                         text = "Connection error", errorInfo = ErrorInfo.fromException(e)
