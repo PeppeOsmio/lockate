@@ -100,6 +100,8 @@ fun RoundedSearchAppBar(
         }
     }
 
+    val statusBarPadding = WindowInsets.statusBars.asPaddingValues()
+
     Box(
         modifier = Modifier
             .background(color = boxColor)
@@ -108,7 +110,7 @@ fun RoundedSearchAppBar(
         TextField(
             modifier = modifier
                 .fillMaxWidth()
-                .padding(WindowInsets.statusBars.asPaddingValues())
+                .padding(statusBarPadding)
                 .padding(top = 16.dp, bottom = 8.dp)
                 .height(56.dp)
                 .focusRequester(focusRequester),

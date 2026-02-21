@@ -36,8 +36,8 @@ class AnonymousGroupsViewModel(
 
     fun getInitialData(connectionSettingsId: Long) {
         viewModelScope.launch {
+            _state.update { it.copy(isLoading = true) }
             runCatching {
-                _state.update { it.copy(isLoading = true) }
                 coroutineScope {
                     getAnonymousGroups(connectionSettingsId)
                     verifyAGsMemberAuth(connectionSettingsId)

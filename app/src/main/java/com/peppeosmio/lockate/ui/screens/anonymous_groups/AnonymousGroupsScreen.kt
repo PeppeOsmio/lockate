@@ -165,13 +165,11 @@ fun AnonymousGroupsScreen(
         isRefreshing = state.isLoading,
         onRefresh = { viewModel.getInitialData(connectionSettingsId) },
     ) {
-        if (state.isLoading) {
-            return@PullToRefreshBox
-        }
+        val anonymousGroups = state.anonymousGroups ?: return@PullToRefreshBox
         LazyColumn() {
             item { Spacer(Modifier.size(8.dp)) }
             itemsIndexed(
-                state.anonymousGroups!!,
+                anonymousGroups,
                 key = { _, agWithMembersCount -> agWithMembersCount.id }) { i, anonymousGroup ->
                 AnonymousGroupCard(
                     modifier = Modifier.animateItem(),
