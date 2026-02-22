@@ -113,7 +113,7 @@ fun AnonymousGroupDetailsScreen(
             return@remember null
         }
         MapPoint(
-            coordinates = state.myLocationRecordFromGPS!!.coordinates,
+            coordinates = state.myLocationRecordFromGPS!!.first.coordinates,
             name = "You",
             isOld = isMyLocationOld,
             id = state.anonymousGroup!!.memberId
@@ -332,6 +332,7 @@ fun AnonymousGroupDetailsScreen(
                                 cameraState = mapCameraState,
                                 membersPoints = membersPoints,
                                 myPoint = myPoint,
+                                myHeading = state.myLocationRecordFromGPS?.second,
                                 onTapMyLocation = {
                                     viewModel.onTapMyLocation()
                                 })

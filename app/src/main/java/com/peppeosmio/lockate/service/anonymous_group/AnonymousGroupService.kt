@@ -712,7 +712,7 @@ class AnonymousGroupService(
                             timeoutJob = launch {
                                 getTimeoutJob()
                             }
-                            val coordinatesBytes = coordinates.toByteArray()
+                            val coordinatesBytes = coordinates.first.toByteArray()
                             val encryptedCoordinates = cryptoService.encrypt(
                                 data = coordinatesBytes, key = anonymousGroup.key
                             )
@@ -737,7 +737,7 @@ class AnonymousGroupService(
                                     anonymousGroupId = anonymousGroup.id,
                                     connectionId = anonymousGroup.connectionId,
                                     locationRecord = LocationRecord(
-                                        coordinates = coordinates,
+                                        coordinates = coordinates.first,
                                         timestamp = Clock.System.now().toLocalDateTime(TimeZone.UTC)
                                     )
                                 )

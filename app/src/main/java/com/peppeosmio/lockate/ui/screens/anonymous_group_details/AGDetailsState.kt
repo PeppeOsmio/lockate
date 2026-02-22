@@ -20,6 +20,6 @@ data class AGDetailsState(
     val isDropdownMenuOpen: Boolean = false,
     // this is LocationRecord and not Coordinates so that we can understand if the
     // coordinates are newer even if they are equal to the previous ones
-    val myLocationRecordFromGPS: LocationRecord? = null,
+    val myLocationRecordFromGPS: Pair<LocationRecord, Float>? = null,
     val followedMemberId: String? = null
 )

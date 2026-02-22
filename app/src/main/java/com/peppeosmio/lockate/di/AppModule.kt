@@ -2,6 +2,7 @@ package com.peppeosmio.lockate.di
 
 import android.util.Log
 import androidx.room.Room
+import com.google.android.gms.location.DeviceOrientation
 import com.google.android.gms.location.LocationServices
 import com.peppeosmio.lockate.AppDatabase
 import com.peppeosmio.lockate.dao.AnonymousGroupDao
@@ -91,6 +92,9 @@ val appModule = module {
         LocationService(
             context = androidContext(),
             fusedLocationClient = LocationServices.getFusedLocationProviderClient(
+                androidContext()
+            ),
+            fusedOrientationProviderClient = LocationServices.getFusedOrientationProviderClient(
                 androidContext()
             ),
             permissionsService = get<PermissionsService>()

@@ -135,15 +135,17 @@ class AGDetailsViewModel(
                 Log.d("", "Streaming my position")
                 locationService.getLocationUpdates().collect { coordinates ->
                     if (state.value.myLocationRecordFromGPS == null) {
-                        _cameraPositionEvents.trySend(coordinates)
+                        _cameraPositionEvents.trySend(coordinates.first)
                     }
                     _state.update {
                         it.copy(
-                            myLocationRecordFromGPS = LocationRecord(
-                                coordinates = coordinates,
-                                timestamp = Clock.System.now().toLocalDateTime(
-                                    TimeZone.UTC
-                                )
+                            myLocationRecordFromGPS = Pair(
+                                LocationRecord(
+                                    coordinates = coordinates.first,
+                                    timestamp = Clock.System.now().toLocalDateTime(
+                                        TimeZone.UTC
+                                    )
+                                ), coordinates.second
                             )
                         )
                     }
@@ -167,21 +169,23 @@ class AGDetailsViewModel(
             if (coordinates != null) {
                 _state.update {
                     it.copy(
-                        myLocationRecordFromGPS = LocationRecord(
-                            coordinates = coordinates,
-                            timestamp = Clock.System.now().toLocalDateTime(
-                                timeZone = TimeZone.UTC
-                            )
+                        myLocationRecordFromGPS = Pair(
+                            LocationRecord(
+                                coordinates = coordinates,
+                                timestamp = Clock.System.now().toLocalDateTime(
+                                    timeZone = TimeZone.UTC
+                                )
+                            ), it.myLocationRecordFromGPS?.second ?: 0f
                         )
                     )
                 }
                 _cameraPositionEvents.trySend(coordinates)
             } else if (state.value.myLocationRecordFromGPS != null) {
-                _cameraPositionEvents.trySend(state.value.myLocationRecordFromGPS!!.coordinates)
+                _cameraPositionEvents.trySend(state.value.myLocationRecordFromGPS!!.first.coordinates)
             }
         } catch (e: Exception) {
             if (state.value.myLocationRecordFromGPS != null) {
-                _cameraPositionEvents.trySend(state.value.myLocationRecordFromGPS!!.coordinates)
+                _cameraPositionEvents.trySend(state.value.myLocationRecordFromGPS!!.first.coordinates)
             }
             throw e
         }

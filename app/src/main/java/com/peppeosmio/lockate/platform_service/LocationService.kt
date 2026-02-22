@@ -5,7 +5,12 @@ import android.content.Context
 import android.os.Build
 import android.os.Looper
 import android.util.Log
+import androidx.core.content.ContextCompat
+import com.google.android.gms.location.DeviceOrientation
+import com.google.android.gms.location.DeviceOrientationListener
+import com.google.android.gms.location.DeviceOrientationRequest
 import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.FusedOrientationProviderClient
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
@@ -24,7 +29,9 @@ import com.peppeosmio.lockate.service.dataStore
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.suspendCancellableCoroutine
+import java.util.concurrent.Executor
 import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.AtomicReference
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.concurrent.atomics.decrementAndFetch
 import kotlin.concurrent.atomics.incrementAndFetch
@@ -34,14 +41,23 @@ import kotlin.io.encoding.Base64
 class LocationService(
     private val context: Context,
     private val fusedLocationClient: FusedLocationProviderClient,
+    private val fusedOrientationProviderClient: FusedOrientationProviderClient,
     private val permissionsService: PermissionsService,
 ) {
 
-    private val _coordinatesUpdates = MutableSharedFlow<Coordinates>(extraBufferCapacity = 1)
+    private val _coordinatesUpdates =
+        MutableSharedFlow<Pair<Coordinates, Float>>(extraBufferCapacity = 1)
 
     @OptIn(ExperimentalAtomicApi::class)
     private val activeCollectors = AtomicInt(0)
     private var locationCallback: LocationCallback? = null
+    private var orientationListener: DeviceOrientationListener? = null
+
+    @OptIn(ExperimentalAtomicApi::class)
+    private val latestHeading = AtomicReference<Float?>(null)
+
+    private val mainExecutor: Executor by lazy { ContextCompat.getMainExecutor(context) }
+
 
     private fun checkPermissions() {
         if (permissionsService.isPermissionDenied(Manifest.permission.ACCESS_COARSE_LOCATION) || permissionsService.isPermissionDenied(
@@ -84,13 +100,13 @@ class LocationService(
         }
     }
 
-    suspend fun checkPermissionsAndLocationEnabled() : Unit {
+    suspend fun checkPermissionsAndLocationEnabled(): Unit {
         checkPermissions()
         checkLocationEnabled()
     }
 
     @Throws
-    fun getLocationUpdates(): Flow<Coordinates> = flow {
+    fun getLocationUpdates(): Flow<Pair<Coordinates, Float>> = flow {
         onCollectorAdded()
         try {
             emitAll(_coordinatesUpdates)
@@ -113,17 +129,36 @@ class LocationService(
         }
     }
 
+    @OptIn(ExperimentalAtomicApi::class)
+    private fun startOrientationUpdates() {
+        val request = DeviceOrientationRequest.Builder(20_000L).build()
+
+        orientationListener = DeviceOrientationListener { deviceOrientation ->
+            latestHeading.store(deviceOrientation.headingDegrees)
+        }
+
+        fusedOrientationProviderClient.requestOrientationUpdates(
+            request,
+            mainExecutor,
+            orientationListener!!
+        )
+    }
+
+    @OptIn(ExperimentalAtomicApi::class)
     @Throws(NoPermissionException::class)
     private fun startLocationUpdates() {
         val request = LocationRequest.Builder(
             Priority.PRIORITY_HIGH_ACCURACY, 2000L
         ).build()
 
+        startOrientationUpdates()
+
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 result.lastLocation?.let { loc ->
                     val coordinates = Coordinates(loc.latitude, loc.longitude)
-                    val emitted = _coordinatesUpdates.tryEmit(coordinates)
+                    val emitted =
+                        _coordinatesUpdates.tryEmit(Pair(coordinates, latestHeading.load() ?: 0f))
                 }
             }
         }
@@ -142,6 +177,9 @@ class LocationService(
             fusedLocationClient.removeLocationUpdates(it)
         }
         locationCallback = null
+        orientationListener?.let {
+            fusedOrientationProviderClient.removeOrientationUpdates(it)
+        }
     }
 
     suspend fun getCurrentLocation(): Coordinates? {

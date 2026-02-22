@@ -1,6 +1,7 @@
 package com.peppeosmio.lockate.ui.screens.anonymous_group_details
 
 import android.util.Log
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
@@ -21,6 +22,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -35,6 +38,8 @@ import dev.sargunv.maplibrecompose.core.BaseStyle
 import dev.sargunv.maplibrecompose.core.MapOptions
 import dev.sargunv.maplibrecompose.core.OrnamentOptions
 import dev.sargunv.maplibrecompose.material3.controls.DisappearingCompassButton
+import kotlin.math.cos
+import kotlin.math.sin
 import kotlin.math.sqrt
 
 data class MembersCluster(
@@ -155,24 +160,53 @@ fun MemberMarker(
 }
 
 @Composable
-fun MyMarker(
-    center: DpOffset, isOld: Boolean
-) {
-    var backgroundColor = MaterialTheme.colorScheme.primary
-    if (isOld) {
-        backgroundColor = backgroundColor.copy(alpha = 0.5f)
-    }
-    // Circle is exactly on the coordinate
+fun MyMarker(center: DpOffset, heading: Float, isOld: Boolean) {
+    var color = MaterialTheme.colorScheme.primary
+    if (isOld) color = color.copy(alpha = 0.5f)
+
     val circleSize = 16.dp
-    val halfCircleSize = circleSize / 2
-    Box(modifier = Modifier.offset(x = center.x - halfCircleSize, y = center.y - halfCircleSize)) {
+    val coneSize = 60.dp     // overall box for the cone
+    val coneLength = 26.dp   // how far the tip is from center
+    val coneWidth = 22.dp    // how wide the base is (at the center)
+
+    Box(
+        modifier = Modifier
+            .offset(x = center.x - coneSize / 2, y = center.y - coneSize / 2)
+            .size(coneSize)
+    ) {
+        Canvas(Modifier.matchParentSize()) {
+            val c = Offset(size.width / 2f, size.height / 2f)
+
+            // 0° = up (north)
+            val rad = Math.toRadians((heading - 90f).toDouble()).toFloat()
+
+            val len = coneLength.toPx()
+            val halfW = (coneWidth.toPx() / 2f)
+
+            // tip point in heading direction
+            val tip = Offset(c.x + len * cos(rad), c.y + len * sin(rad))
+
+            // base points (perpendicular to heading)
+            val perp = rad + (Math.PI.toFloat() / 2f)
+            val left = Offset(c.x + halfW * cos(perp), c.y + halfW * sin(perp))
+            val right = Offset(c.x - halfW * cos(perp), c.y - halfW * sin(perp))
+
+            val path = Path().apply {
+                moveTo(tip.x, tip.y)
+                lineTo(left.x, left.y)
+                lineTo(right.x, right.y)
+                close()
+            }
+
+            drawPath(path, color = color.copy(alpha = if (isOld) 0.18f else 0.25f))
+        }
+
+        // circle on top
         Box(
             modifier = Modifier
-                .align(Alignment.TopStart)
+                .align(Alignment.Center)
                 .size(circleSize)
-                .background(
-                    if (isOld) backgroundColor.copy(alpha = 0.5f) else backgroundColor, CircleShape
-                )
+                .background(color, CircleShape)
         )
     }
 }
@@ -184,6 +218,7 @@ fun MembersMap(
     cameraState: CameraState,
     membersPoints: List<MapPoint>?,
     myPoint: MapPoint?,
+    myHeading: Float?,
     onTapMyLocation: () -> Unit
 ) {
     val styleState = rememberStyleState()
@@ -213,7 +248,7 @@ fun MembersMap(
         derivedStateOf {
             val proj = cameraState.projection ?: return@derivedStateOf null
             myPoint?.let {
-                proj.screenLocationFromPosition(it.coordinates.toMapLibreComposePosition())
+                proj.screenLocationFromPosition(it.coordinates .toMapLibreComposePosition())
             }
         }
     }
@@ -273,7 +308,11 @@ fun MembersMap(
 //                  ))
         }
         myPointProjection?.let {
-            MyMarker(center = DpOffset(x = it.x, y = it.y), isOld = myPoint!!.isOld)
+            MyMarker(
+                center = DpOffset(x = it.x, y = it.y),
+                heading = myHeading!!,
+                isOld = myPoint!!.isOld
+            )
         }
 
         Box(
