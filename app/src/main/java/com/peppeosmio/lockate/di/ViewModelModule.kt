@@ -1,5 +1,6 @@
 package com.peppeosmio.lockate.di
 
+import com.peppeosmio.lockate.platform_service.DeviceOrientationService
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
 import com.peppeosmio.lockate.service.ConnectionService
 import com.peppeosmio.lockate.service.PermissionsService
@@ -46,7 +47,8 @@ val viewModelModule = module {
     viewModel<AGDetailsViewModel> {
         AGDetailsViewModel(
             anonymousGroupService = get<AnonymousGroupService>(),
-            locationService = get<LocationService>()
+            locationService = get<LocationService>(),
+            deviceOrientationService = get<DeviceOrientationService>()
         )
     }
 }

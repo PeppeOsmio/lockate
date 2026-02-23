@@ -1,10 +1,8 @@
 package com.peppeosmio.lockate.ui.screens.anonymous_group_details
 
-import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -30,7 +28,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import com.alorma.compose.settings.ui.SettingsMenuLink
 import com.peppeosmio.lockate.domain.Coordinates
 import com.peppeosmio.lockate.ui.composables.SmallCircularProgressIndicator
 import com.peppeosmio.lockate.utils.LoadingState
@@ -113,7 +110,7 @@ fun AnonymousGroupDetailsScreen(
             return@remember null
         }
         MapPoint(
-            coordinates = state.myLocationRecordFromGPS!!.first.coordinates,
+            coordinates = state.myLocationRecordFromGPS!!.coordinates,
             name = "You",
             isOld = isMyLocationOld,
             id = state.anonymousGroup!!.memberId
@@ -332,7 +329,7 @@ fun AnonymousGroupDetailsScreen(
                                 cameraState = mapCameraState,
                                 membersPoints = membersPoints,
                                 myPoint = myPoint,
-                                myHeading = state.myLocationRecordFromGPS?.second,
+                                myDeviceOrientation = state.myDeviceOrientation,
                                 onTapMyLocation = {
                                     viewModel.onTapMyLocation()
                                 })

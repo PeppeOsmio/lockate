@@ -160,7 +160,7 @@ fun MemberMarker(
 }
 
 @Composable
-fun MyMarker(center: DpOffset, heading: Float, isOld: Boolean) {
+fun MyMarker(center: DpOffset, orientation: Float?, isOld: Boolean) {
     var color = MaterialTheme.colorScheme.primary
     if (isOld) color = color.copy(alpha = 0.5f)
 
@@ -174,31 +174,33 @@ fun MyMarker(center: DpOffset, heading: Float, isOld: Boolean) {
             .offset(x = center.x - coneSize / 2, y = center.y - coneSize / 2)
             .size(coneSize)
     ) {
-        Canvas(Modifier.matchParentSize()) {
-            val c = Offset(size.width / 2f, size.height / 2f)
+        orientation?.let {
+            Canvas(Modifier.matchParentSize()) {
+                val c = Offset(size.width / 2f, size.height / 2f)
 
-            // 0° = up (north)
-            val rad = Math.toRadians((heading - 90f).toDouble()).toFloat()
+                // 0° = up (north)
+                val rad = Math.toRadians((orientation - 90f).toDouble()).toFloat()
 
-            val len = coneLength.toPx()
-            val halfW = (coneWidth.toPx() / 2f)
+                val len = coneLength.toPx()
+                val halfW = (coneWidth.toPx() / 2f)
 
-            // tip point in heading direction
-            val tip = Offset(c.x + len * cos(rad), c.y + len * sin(rad))
+                // tip point in heading direction
+                val tip = Offset(c.x + len * cos(rad), c.y + len * sin(rad))
 
-            // base points (perpendicular to heading)
-            val perp = rad + (Math.PI.toFloat() / 2f)
-            val left = Offset(c.x + halfW * cos(perp), c.y + halfW * sin(perp))
-            val right = Offset(c.x - halfW * cos(perp), c.y - halfW * sin(perp))
+                // base points (perpendicular to heading)
+                val perp = rad + (Math.PI.toFloat() / 2f)
+                val left = Offset(c.x + halfW * cos(perp), c.y + halfW * sin(perp))
+                val right = Offset(c.x - halfW * cos(perp), c.y - halfW * sin(perp))
 
-            val path = Path().apply {
-                moveTo(tip.x, tip.y)
-                lineTo(left.x, left.y)
-                lineTo(right.x, right.y)
-                close()
+                val path = Path().apply {
+                    moveTo(tip.x, tip.y)
+                    lineTo(left.x, left.y)
+                    lineTo(right.x, right.y)
+                    close()
+                }
+
+                drawPath(path, color = color.copy(alpha = if (isOld) 0.18f else 0.25f))
             }
-
-            drawPath(path, color = color.copy(alpha = if (isOld) 0.18f else 0.25f))
         }
 
         // circle on top
@@ -218,7 +220,7 @@ fun MembersMap(
     cameraState: CameraState,
     membersPoints: List<MapPoint>?,
     myPoint: MapPoint?,
-    myHeading: Float?,
+    myDeviceOrientation: Float?,
     onTapMyLocation: () -> Unit
 ) {
     val styleState = rememberStyleState()
@@ -248,7 +250,7 @@ fun MembersMap(
         derivedStateOf {
             val proj = cameraState.projection ?: return@derivedStateOf null
             myPoint?.let {
-                proj.screenLocationFromPosition(it.coordinates .toMapLibreComposePosition())
+                proj.screenLocationFromPosition(it.coordinates.toMapLibreComposePosition())
             }
         }
     }
@@ -273,8 +275,6 @@ fun MembersMap(
         ) {}
 
         // TODO consider returning to rendering via maplibre native layers
-
-        Log.d("Clusters", "clusters count: ${pointsClusters.size}")
 
         pointsClusters.forEach { cluster ->
             val containsMe = cluster.members.any {
@@ -310,7 +310,7 @@ fun MembersMap(
         myPointProjection?.let {
             MyMarker(
                 center = DpOffset(x = it.x, y = it.y),
-                heading = myHeading!!,
+                orientation = myDeviceOrientation,
                 isOld = myPoint!!.isOld
             )
         }

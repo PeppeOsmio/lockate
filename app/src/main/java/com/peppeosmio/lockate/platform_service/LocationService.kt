@@ -41,22 +41,14 @@ import kotlin.io.encoding.Base64
 class LocationService(
     private val context: Context,
     private val fusedLocationClient: FusedLocationProviderClient,
-    private val fusedOrientationProviderClient: FusedOrientationProviderClient,
     private val permissionsService: PermissionsService,
 ) {
 
-    private val _coordinatesUpdates =
-        MutableSharedFlow<Pair<Coordinates, Float>>(extraBufferCapacity = 1)
+    private val _coordinatesUpdates = MutableSharedFlow<Coordinates>(extraBufferCapacity = 1)
 
     @OptIn(ExperimentalAtomicApi::class)
     private val activeCollectors = AtomicInt(0)
     private var locationCallback: LocationCallback? = null
-    private var orientationListener: DeviceOrientationListener? = null
-
-    @OptIn(ExperimentalAtomicApi::class)
-    private val latestHeading = AtomicReference<Float?>(null)
-
-    private val mainExecutor: Executor by lazy { ContextCompat.getMainExecutor(context) }
 
 
     private fun checkPermissions() {
@@ -106,7 +98,7 @@ class LocationService(
     }
 
     @Throws
-    fun getLocationUpdates(): Flow<Pair<Coordinates, Float>> = flow {
+    fun getLocationUpdates(): Flow<Coordinates> = flow {
         onCollectorAdded()
         try {
             emitAll(_coordinatesUpdates)
@@ -130,35 +122,17 @@ class LocationService(
     }
 
     @OptIn(ExperimentalAtomicApi::class)
-    private fun startOrientationUpdates() {
-        val request = DeviceOrientationRequest.Builder(20_000L).build()
-
-        orientationListener = DeviceOrientationListener { deviceOrientation ->
-            latestHeading.store(deviceOrientation.headingDegrees)
-        }
-
-        fusedOrientationProviderClient.requestOrientationUpdates(
-            request,
-            mainExecutor,
-            orientationListener!!
-        )
-    }
-
-    @OptIn(ExperimentalAtomicApi::class)
     @Throws(NoPermissionException::class)
     private fun startLocationUpdates() {
         val request = LocationRequest.Builder(
             Priority.PRIORITY_HIGH_ACCURACY, 2000L
         ).build()
 
-        startOrientationUpdates()
-
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 result.lastLocation?.let { loc ->
                     val coordinates = Coordinates(loc.latitude, loc.longitude)
-                    val emitted =
-                        _coordinatesUpdates.tryEmit(Pair(coordinates, latestHeading.load() ?: 0f))
+                    val emitted = _coordinatesUpdates.tryEmit(coordinates)
                 }
             }
         }
@@ -177,9 +151,6 @@ class LocationService(
             fusedLocationClient.removeLocationUpdates(it)
         }
         locationCallback = null
-        orientationListener?.let {
-            fusedOrientationProviderClient.removeOrientationUpdates(it)
-        }
     }
 
     suspend fun getCurrentLocation(): Coordinates? {

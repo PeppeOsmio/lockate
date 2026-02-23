@@ -6,8 +6,6 @@ import com.peppeosmio.lockate.data.anonymous_group.mappers.AGLocationUpdateMappe
 import com.peppeosmio.lockate.data.anonymous_group.mappers.AGMemberMapper
 import com.peppeosmio.lockate.data.anonymous_group.mappers.AnonymousGroupMapper
 import com.peppeosmio.lockate.data.anonymous_group.mappers.EncryptedDataMapper
-import com.peppeosmio.lockate.data.anonymous_group.remote.AGAdminAuthReqDto
-import com.peppeosmio.lockate.data.anonymous_group.remote.AGAdminAuthResDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGCreateReqDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGCreateResDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGGetMemberPasswordSrpInfoResDto
@@ -23,7 +21,6 @@ import com.peppeosmio.lockate.domain.LocationRecord
 import com.peppeosmio.lockate.domain.anonymous_group.AGLocationUpdate
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.domain.anonymous_group.AnonymousGroup
-import com.peppeosmio.lockate.exceptions.AGMemberNotAdminException
 import com.peppeosmio.lockate.exceptions.AGMemberUnauthorizedException
 import com.peppeosmio.lockate.exceptions.APIException
 import com.peppeosmio.lockate.exceptions.Base64Exception
@@ -75,8 +72,8 @@ import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
+import org.koin.core.time.inMs
 import java.net.ConnectException
-import java.net.ProtocolException
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.concurrent.atomics.decrementAndFetch
@@ -86,6 +83,7 @@ import kotlin.math.min
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
 
 class AnonymousGroupService(
     private val anonymousGroupDao: AnonymousGroupDao,
@@ -704,15 +702,26 @@ class AnonymousGroupService(
                             throw LocationDisabledException()
                         }
 
+                        var lastSent: Instant? = null
+
                         var timeoutJob = launch {
                             getTimeoutJob()
                         }
                         locationService.getLocationUpdates().collect { coordinates ->
+                            val now = Clock.System.now()
+
+                            lastSent?.let {
+                                if ((now - it).inMs < 1500) {
+                                    return@collect
+                                }
+                            }
+                            lastSent = now
+
                             timeoutJob.cancel()
                             timeoutJob = launch {
                                 getTimeoutJob()
                             }
-                            val coordinatesBytes = coordinates.first.toByteArray()
+                            val coordinatesBytes = coordinates.toByteArray()
                             val encryptedCoordinates = cryptoService.encrypt(
                                 data = coordinatesBytes, key = anonymousGroup.key
                             )
@@ -737,7 +746,7 @@ class AnonymousGroupService(
                                     anonymousGroupId = anonymousGroup.id,
                                     connectionId = anonymousGroup.connectionId,
                                     locationRecord = LocationRecord(
-                                        coordinates = coordinates.first,
+                                        coordinates = coordinates,
                                         timestamp = Clock.System.now().toLocalDateTime(TimeZone.UTC)
                                     )
                                 )

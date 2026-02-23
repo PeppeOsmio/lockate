@@ -9,6 +9,7 @@ import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.exceptions.LocationDisabledException
 import com.peppeosmio.lockate.exceptions.NoPermissionException
 import com.peppeosmio.lockate.exceptions.UnauthorizedException
+import com.peppeosmio.lockate.platform_service.DeviceOrientationService
 import com.peppeosmio.lockate.platform_service.LocationService
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupEvent
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
@@ -33,7 +34,8 @@ import kotlin.time.ExperimentalTime
 
 class AGDetailsViewModel(
     private val anonymousGroupService: AnonymousGroupService,
-    private val locationService: LocationService
+    private val locationService: LocationService,
+    private val deviceOrientationService: DeviceOrientationService
 ) : ViewModel() {
 
     enum class AGDetailsTab {
@@ -51,6 +53,7 @@ class AGDetailsViewModel(
     private val _pagerEvents = Channel<AGDetailsTab>()
     val pagerEvents = _pagerEvents.receiveAsFlow()
     private var listenForUserLocationJob: Job? = null
+    private var listenForDeviceOrientationJob: Job? = null
 
     fun getInitialDetails(anonymousGroupInternalId: Long, connectionSettings: Long) {
         viewModelScope.launch {
@@ -121,6 +124,15 @@ class AGDetailsViewModel(
         }
     }
 
+    private fun listenForDeviceOrientation() {
+        listenForDeviceOrientationJob?.cancel()
+        listenForDeviceOrientationJob = viewModelScope.launch {
+            deviceOrientationService.getOrientationUpdates().collect { deviceOrientation ->
+                _state.update { it.copy(myDeviceOrientation = deviceOrientation) }
+            }
+        }
+    }
+
     /**
      * Listens for the user's location, if called multiple times the previous job is canceled
      */
@@ -129,23 +141,22 @@ class AGDetailsViewModel(
         if (state.value.anonymousGroup == null) {
             return
         }
+        listenForDeviceOrientation()
         listenForUserLocationJob?.cancel()
         listenForUserLocationJob = viewModelScope.launch {
             try {
                 Log.d("", "Streaming my position")
                 locationService.getLocationUpdates().collect { coordinates ->
                     if (state.value.myLocationRecordFromGPS == null) {
-                        _cameraPositionEvents.trySend(coordinates.first)
+                        _cameraPositionEvents.trySend(coordinates)
                     }
                     _state.update {
                         it.copy(
-                            myLocationRecordFromGPS = Pair(
-                                LocationRecord(
-                                    coordinates = coordinates.first,
-                                    timestamp = Clock.System.now().toLocalDateTime(
-                                        TimeZone.UTC
-                                    )
-                                ), coordinates.second
+                            myLocationRecordFromGPS = LocationRecord(
+                                coordinates = coordinates,
+                                timestamp = Clock.System.now().toLocalDateTime(
+                                    TimeZone.UTC
+                                )
                             )
                         )
                     }
@@ -169,23 +180,21 @@ class AGDetailsViewModel(
             if (coordinates != null) {
                 _state.update {
                     it.copy(
-                        myLocationRecordFromGPS = Pair(
-                            LocationRecord(
-                                coordinates = coordinates,
-                                timestamp = Clock.System.now().toLocalDateTime(
-                                    timeZone = TimeZone.UTC
-                                )
-                            ), it.myLocationRecordFromGPS?.second ?: 0f
+                        myLocationRecordFromGPS = LocationRecord(
+                            coordinates = coordinates,
+                            timestamp = Clock.System.now().toLocalDateTime(
+                                timeZone = TimeZone.UTC
+                            )
                         )
                     )
                 }
                 _cameraPositionEvents.trySend(coordinates)
             } else if (state.value.myLocationRecordFromGPS != null) {
-                _cameraPositionEvents.trySend(state.value.myLocationRecordFromGPS!!.first.coordinates)
+                _cameraPositionEvents.trySend(state.value.myLocationRecordFromGPS!!.coordinates)
             }
         } catch (e: Exception) {
             if (state.value.myLocationRecordFromGPS != null) {
-                _cameraPositionEvents.trySend(state.value.myLocationRecordFromGPS!!.first.coordinates)
+                _cameraPositionEvents.trySend(state.value.myLocationRecordFromGPS!!.coordinates)
             }
             throw e
         }
