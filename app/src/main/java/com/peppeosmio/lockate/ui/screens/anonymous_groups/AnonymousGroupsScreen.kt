@@ -33,7 +33,7 @@ import org.koin.compose.viewmodel.koinViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AnonymousGroupsScreen(
-    connectionSettingsId: Long,
+    connectionId: Long,
     navigateToCreateAG: () -> Unit,
     navigateToJoinAG: () -> Unit,
     navigateToAGDetails: (anonymousGroupInternalId: Long, anonymousGroupName: String) -> Unit,
@@ -61,18 +61,17 @@ fun AnonymousGroupsScreen(
         }
     }
 
-    LaunchedEffect(true) {
-        viewModel.getInitialData(connectionSettingsId)
+    LaunchedEffect(connectionId) {
+        if(state.fetchedDataOfConnectionId != connectionId) {
+            viewModel.getInitialData(connectionId)
+            viewModel.setFetchedDataOfConnectionId(connectionId)
+        }
     }
 
     LaunchedEffect(true) {
         viewModel.snackbarEvents.collect { snackbarMessage ->
             showErrorSnackbar(snackbarMessage)
         }
-    }
-
-    LaunchedEffect(connectionSettingsId) {
-        viewModel.getInitialData(connectionSettingsId)
     }
 
     // Add group bottom sheet
@@ -139,7 +138,7 @@ fun AnonymousGroupsScreen(
             text = { Text("Are you sure you want to leave ${agWithMembersCount.name}?") },
             confirmButton = {
                 TextButton(onClick = {
-                    viewModel.leaveAnonymousGroup(connectionSettingsId)
+                    viewModel.leaveAnonymousGroup(connectionId)
                 }) { Text("Yes, leave") }
             },
             dismissButton = {
@@ -163,7 +162,7 @@ fun AnonymousGroupsScreen(
                 focusManager.clearFocus()
             },
         isRefreshing = state.isLoading,
-        onRefresh = { viewModel.getInitialData(connectionSettingsId) },
+        onRefresh = { viewModel.getInitialData(connectionId) },
     ) {
         val anonymousGroups = state.anonymousGroups ?: return@PullToRefreshBox
         LazyColumn() {

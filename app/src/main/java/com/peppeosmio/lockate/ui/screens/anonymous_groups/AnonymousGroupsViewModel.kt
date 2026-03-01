@@ -12,7 +12,6 @@ import com.peppeosmio.lockate.utils.SnackbarErrorMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -32,6 +31,10 @@ class AnonymousGroupsViewModel(
         viewModelScope.launch {
             collectAGEvents()
         }
+    }
+
+    fun setFetchedDataOfConnectionId(connectionId: Long) {
+        _state.update { it.copy(fetchedDataOfConnectionId = connectionId) }
     }
 
     fun getInitialData(connectionSettingsId: Long) {

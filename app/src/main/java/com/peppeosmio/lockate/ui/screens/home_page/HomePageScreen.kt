@@ -335,7 +335,7 @@ fun HomePageScreen(
                     exitTransition = { ExitTransition.None }) {
                     composable<AnonymousGroupsRoute> {
                         AnonymousGroupsScreen(
-                            connectionSettingsId = state.selectedConnectionId!!,
+                            connectionId = state.selectedConnectionId!!,
                             navigateToCreateAG = {
                                 navigateToCreateAG(state.selectedConnectionId!!)
                             },
