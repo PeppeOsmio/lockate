@@ -1,0 +1,7 @@
+changelogFile: src/main/resources/db/changelog/db.changelog-master.yml
+outputChangelogFile: src/main/resources/db/changelog/changelog.sql
+diffChangelogFile: src/main/resources/db/changelog/initial.sql
+url: jdbc:postgresql://localhost:5432/lockate
+username: admin
+password: 1234
+referenceUrl: hibernate:spring:com.peppeosmio.lockate?dialect=org.hibernate.dialect.PostgreSQLDialect

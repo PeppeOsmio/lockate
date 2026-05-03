@@ -1,0 +1,47 @@
+### Create group
+POST http://localhost:3118/anonymous-groups
+Content-Type: application/json
+X-API-KEY: 2cd6448f-d482-4a16-b39f-265812c783ac
+
+{
+  "nameSalt": "salt",
+  "nameCipher": "i8Bzb+U7z/o=",
+  "nameIv": "3r2G/f6B7gZqs7/Z18u43Q==",
+  "nameAuthTag": "30BuZDiko6+cyuRVLqeC+g==",
+  "userPasswordHash": "$2a$12$WbFYqh8c.a/j.89rndfC/uiELLpMF4rUDmkA413K4xFf57uINH0Rm",
+  "adminPassword": "1234"
+}
+
+### Get group user password salt
+GET http://localhost:3118/anonymous-groups/9062fd18-1ed2-47e7-97a1-2c6ba5546889/auth
+X-API-KEY: 2cd6448f-d482-4a16-b39f-265812c783ac
+
+### Group user auth
+POST http://localhost:3118/anonymous-groups/9062fd18-1ed2-47e7-97a1-2c6ba5546889/auth
+Content-Type: application/json
+X-API-KEY: 2cd6448f-d482-4a16-b39f-265812c783ac
+
+{
+  "ciphertext": "eCz3NKITR8/0",
+  "iv": "/SAFpcaEWFpPD8PpCSbLSQ==",
+  "pbkdfSalt": "salt",
+  "authTag": "+UtSok/cIkKuE3gpStqn6Q=="
+}
+
+### Delete group user token
+POST http://localhost:3118/anonymous-groups/logout
+Content-Type: application/json
+X-API-KEY: 2cd6448f-d482-4a16-b39f-265812c783ac
+Authorization: Bearer d8edcec6-9dae-4c78-9963-6a0f78802ff2
+
+
+### Delete ALL group user token
+DELETE http://localhost:3118/anonymous-groups/9062fd18-1ed2-47e7-97a1-2c6ba5546889/admin/tokens
+X-API-KEY: 2cd6448f-d482-4a16-b39f-265812c783ac
+Authorization: AdminPassword 1234
+
+### Stream locations
+GET http://localhost:3118/anonymous-groups/9062fd18-1ed2-47e7-97a1-2c6ba5546889/locations/stream
+Content-Type: application/json
+X-API-KEY: 2cd6448f-d482-4a16-b39f-265812c783ac
+Authorization: Bearer d8edcec6-9dae-4c78-9963-6a0f78802ff2

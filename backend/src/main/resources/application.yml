@@ -1,0 +1,39 @@
+spring:
+  main:
+    web-application-type: servlet
+  application:
+    name: lockate
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: jdbc:${DB_URL:postgresql://localhost:5432/lockate}
+    username: ${DB_USERNAME:admin}
+    password: ${DB_PASSWORD:1234}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:1234}
+
+server:
+  port: ${SERVER_PORT:3118}
+
+logging:
+  level:
+    com.peppeosmio.lockate: INFO
+    org.springframework.web.filter.CommonsRequestLoggingFilter: ${REQUEST_LOGGING_LEVEL:DEBUG}
+
+lockate:
+  require-api-key: ${REQUIRE_API_KEY:false}
+  retention:
+    anonymous-group:
+      location:
+        cron: ${RETENTION_ANONYMOUS_GROUP_LOCATION_CRON:0 0 0 * * *}
+        duration: ${RETENTION_ANONYMOUS_GROUP_LOCATION_DURATION:P7D}
+        save-interval: ${RETENTION_ANONYMOUS_GROUP_LOCATION_SAVE_INTERVAL:PT2M}
