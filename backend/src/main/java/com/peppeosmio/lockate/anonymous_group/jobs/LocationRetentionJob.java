@@ -9,7 +9,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import java.time.Instant;
 
-@Profile({"default", "jobs"})
+@Profile({"default", "job-location-retention"})
 @Slf4j
 @Component
 public class LocationRetentionJob {

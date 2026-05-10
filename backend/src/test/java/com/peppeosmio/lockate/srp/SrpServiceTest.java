@@ -3,7 +3,6 @@ package com.peppeosmio.lockate.srp;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peppeosmio.lockate.anonymous_group.exceptions.SrpSessionNotFoundException;
 import com.peppeosmio.lockate.redis.RedisService;
-import org.bouncycastle.crypto.CryptoException;
 import org.bouncycastle.crypto.agreement.srp.SRP6Client;
 import org.bouncycastle.crypto.agreement.srp.SRP6StandardGroups;
 import org.bouncycastle.crypto.agreement.srp.SRP6VerifierGenerator;
@@ -112,8 +111,7 @@ class SrpServiceTest {
         client.calculateSecret(B);
         var M1 = client.calculateClientEvidenceMessage();
 
-        assertThatThrownBy(() -> srpService.verifySrp(result.sessionId(), verifier, M1))
-                .isInstanceOf(CryptoException.class);
+        assertThat(srpService.verifySrp(result.sessionId(), verifier, M1)).isFalse();
     }
 
     @Test
@@ -143,7 +141,7 @@ class SrpServiceTest {
 
     private SRP6Client newClient() {
         var client = new SRP6Client();
-        client.init(SRP6StandardGroups.rfc5054_2048, new SHA256Digest(), new SHA256Digest(), RANDOM);
+        client.init(SRP6StandardGroups.rfc5054_2048, new SHA256Digest(), RANDOM);
         return client;
     }
 
