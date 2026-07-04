@@ -29,7 +29,29 @@ Three core domain entities:
 
 **Redis** (Valkey, referred to as Redis throughout the codebase): used for SRP session storage (`srp:{uuid}`, 5-min TTL) and pub/sub location relay.
 
-## Backend commands
+## Coding standards
+
+### General
+- No comments unless the WHY is non-obvious (hidden constraint, workaround, subtle invariant)
+- No unused code, dead branches, or backwards-compatibility shims
+- No error handling for scenarios that cannot happen; trust framework guarantees
+- Validate only at system boundaries (user input, external APIs)
+
+### Backend (Java / Spring Boot)
+- Follow existing package structure: one package per domain concern under `com.peppeosmio.lockate`
+- Use `@SecuredAGMember` for any endpoint that requires member authentication
+- Never log or expose plaintext sensitive fields; treat all encrypted fields as opaque blobs in service/controller layers
+- Write integration tests against a real database/Redis (no mocks for infrastructure)
+- TDD: write tests before implementing any feature
+
+### Mobile (Kotlin / Android)
+- All crypto operations go through `CryptoService`; never call crypto primitives directly in ViewModels or UI
+- Use `_events: MutableSharedFlow<AnonymousGroupEvent>` for cross-layer communication; do not add new state channels without a clear reason
+- Room stores decrypted data only; never persist ciphertext or IVs in Room tables
+
+## Backend
+
+### Commands
 
 ```bash
 cd backend
@@ -50,7 +72,19 @@ docker compose -f dev-docker-compose.yml up -d
 ./mvnw clean package -Pprod
 ```
 
-## Mobile commands
+### Structure
+
+`com.peppeosmio.lockate` splits into: `anonymous_group/` (controllers, service, entities, repos, DTOs, mappers, websocket, security, jobs), `srp/` (SRP6 server-side logic), `api_key/`, `config/`, `redis/`.
+
+The `@SecuredAGMember` annotation marks endpoints that require a valid member token. Auth is resolved in `AGMemberArgumentResolver` and passed to controllers as `AGMemberAuthentication`.
+
+The `AnonymousGroupService` is the main orchestration point. The `StatelessSRP6Server` extends BouncyCastle's SRP6Server to allow session state to be serialized to Redis.
+
+Location saves are throttled server-side via a `TTLMap` - a member cannot write a new location record more often than `lockate.retention.anonymous-group.location.save-interval` (default `PT2M`).
+
+## Mobile
+
+### Commands
 
 ```bash
 cd mobile_app
@@ -68,17 +102,7 @@ cd mobile_app
 ./gradlew installDebug
 ```
 
-## Backend structure
-
-`com.peppeosmio.lockate` splits into: `anonymous_group/` (controllers, service, entities, repos, DTOs, mappers, websocket, security, jobs), `srp/` (SRP6 server-side logic), `api_key/`, `config/`, `redis/`.
-
-The `@SecuredAGMember` annotation marks endpoints that require a valid member token. Auth is resolved in `AGMemberArgumentResolver` and passed to controllers as `AGMemberAuthentication`.
-
-The `AnonymousGroupService` is the main orchestration point. The `StatelessSRP6Server` extends BouncyCastle's SRP6Server to allow session state to be serialized to Redis.
-
-Location saves are throttled server-side via a `TTLMap` - a member cannot write a new location record more often than `lockate.retention.anonymous-group.location.save-interval` (default `PT2M`).
-
-## Mobile structure
+### Structure
 
 `com.peppeosmio.lockate` splits into: `ui/screens/` (6 screens), `service/` (AnonymousGroupService, CryptoService, SrpClientService, ConnectionService, LocationService), `data/` (Room entities, remote DTOs, mappers), `domain/`, `dao/`, `di/` (Koin modules), `android_service/` (background location foreground service).
 

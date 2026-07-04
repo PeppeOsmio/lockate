@@ -77,19 +77,21 @@ class AndroidSendLocationService : Service() {
 
         serviceScope.launch {
             try {
-                anonymousGroupService.sendLocation { activeAGCount ->
+                anonymousGroupService.sendLocation { status ->
                     if (!isRunning) {
-                        // when the coroutines are canceled the updateActiveAGCount is called
+                        // when the coroutines are canceled the status callback is still invoked
                         // to notify that they're not sending location anymore by decrementing AG count
                         // so update the notification only if !isRunning, otherwise a "ghost" notification
                         // is created
                         return@sendLocation
                     }
                     val updatedNotification = notification.setContentText(
-                        when (activeAGCount) {
-                            0 -> "Not sharing location"
-                            1 -> "Sharing location with 1 group"
-                            else -> "Sharing location with $activeAGCount groups"
+                        when {
+                            status.totalAGCount == 0 -> "No groups to send location to"
+                            status.isLocationDisabled -> "Geolocation is disabled"
+                            status.activeAGCount == 0 -> "Connecting..."
+                            status.activeAGCount == 1 -> "Sharing location with 1 group"
+                            else -> "Sharing location with ${status.activeAGCount} groups"
                         }
                     )
                     notificationManager.notify(1, updatedNotification.build())

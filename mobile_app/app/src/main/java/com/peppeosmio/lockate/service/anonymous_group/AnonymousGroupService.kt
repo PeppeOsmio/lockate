@@ -21,6 +21,7 @@ import com.peppeosmio.lockate.domain.LocationRecord
 import com.peppeosmio.lockate.domain.anonymous_group.AGLocationUpdate
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.domain.anonymous_group.AnonymousGroup
+import com.peppeosmio.lockate.domain.anonymous_group.SendLocationStatus
 import com.peppeosmio.lockate.exceptions.AGMemberUnauthorizedException
 import com.peppeosmio.lockate.exceptions.APIException
 import com.peppeosmio.lockate.exceptions.Base64Exception
@@ -29,6 +30,7 @@ import com.peppeosmio.lockate.exceptions.InvalidApiKeyException
 import com.peppeosmio.lockate.exceptions.LocalAGExistsException
 import com.peppeosmio.lockate.exceptions.LocalAGNotFoundException
 import com.peppeosmio.lockate.exceptions.LocationDisabledException
+import com.peppeosmio.lockate.exceptions.NoPermissionException
 import com.peppeosmio.lockate.exceptions.RemoteAGNotFoundException
 import com.peppeosmio.lockate.exceptions.UnauthorizedException
 import com.peppeosmio.lockate.platform_service.KeyStoreService
@@ -657,17 +659,25 @@ class AnonymousGroupService(
 
     @OptIn(ExperimentalTime::class)
     private suspend fun sendLocation(
-        anonymousGroup: AnonymousGroup, onConnected: () -> Unit, onDisconnected: () -> Unit
+        anonymousGroup: AnonymousGroup,
+        onConnected: () -> Unit,
+        onDisconnected: () -> Unit,
+        onLocationDisabledChanged: (isDisabled: Boolean) -> Unit
     ) {
         val connectionSettings =
             connectionService.getConnectionSettingsById(anonymousGroup.connectionId)
         val maxRetries = 10
         var retries = 0
+        var reportedLocationDisabled = false
         while (true) {
             var isConnected = false
             try {
                 // initiate connection only when location is enabled and we have permissions
                 locationService.checkPermissionsAndLocationEnabled()
+                if (reportedLocationDisabled) {
+                    reportedLocationDisabled = false
+                    onLocationDisabledChanged(false)
+                }
                 httpClient.webSocket(request = {
                     url("${connectionSettings.getWebSocketUrl()}/api/ws/anonymous-groups/${anonymousGroup.id}/send-location")
                     headers {
@@ -786,7 +796,12 @@ class AnonymousGroupService(
                         }
                     }
 
-                    is LocationDisabledException -> {}
+                    is LocationDisabledException, is NoPermissionException -> {
+                        if (!reportedLocationDisabled) {
+                            reportedLocationDisabled = true
+                            onLocationDisabledChanged(true)
+                        }
+                    }
 
                     else -> {
                         e.printStackTrace()
@@ -802,7 +817,7 @@ class AnonymousGroupService(
     }
 
     @OptIn(ExperimentalAtomicApi::class)
-    suspend fun sendLocation(updateActiveAGCount: (count: Int) -> Unit): Unit =
+    suspend fun sendLocation(onStatusUpdate: (SendLocationStatus) -> Unit): Unit =
         withContext(Dispatchers.IO) {
             val anonymousGroupEntities = anonymousGroupDao.listAGsToSendLocation()
             val anonymousGroups = anonymousGroupEntities.map {
@@ -811,16 +826,33 @@ class AnonymousGroupService(
                 )
             }
             val connectedAGCount = AtomicInt(0)
+            val locationDisabledCount = AtomicInt(0)
+
+            val emitStatus = fun() {
+                onStatusUpdate(
+                    SendLocationStatus(
+                        totalAGCount = sendLocationJobs.size,
+                        activeAGCount = connectedAGCount.load(),
+                        isLocationDisabled = locationDisabledCount.load() > 0
+                    )
+                )
+            }
 
             val onConnecting = fun() {
-                val count = connectedAGCount.incrementAndFetch()
-                updateActiveAGCount(count)
+                connectedAGCount.incrementAndFetch()
+                emitStatus()
             }
 
             // this is also called when a Job is canceled since it gets JobCancellationException
             val onDisconnected = fun() {
-                val count = connectedAGCount.decrementAndFetch()
-                updateActiveAGCount(count)
+                connectedAGCount.decrementAndFetch()
+                emitStatus()
+            }
+
+            val onLocationDisabledChanged = fun(isDisabled: Boolean) {
+                if (isDisabled) locationDisabledCount.incrementAndFetch()
+                else locationDisabledCount.decrementAndFetch()
+                emitStatus()
             }
 
             anonymousGroups.forEach {
@@ -829,10 +861,12 @@ class AnonymousGroupService(
                     sendLocation(
                         anonymousGroup = it,
                         onConnected = onConnecting,
-                        onDisconnected = onDisconnected
+                        onDisconnected = onDisconnected,
+                        onLocationDisabledChanged = onLocationDisabledChanged
                     )
                 }
             }
+            emitStatus()
 
             events.collect { event ->
                 when (event) {
@@ -847,9 +881,11 @@ class AnonymousGroupService(
                             sendLocation(
                                 anonymousGroup,
                                 onConnected = onConnecting,
-                                onDisconnected = onDisconnected
+                                onDisconnected = onDisconnected,
+                                onLocationDisabledChanged = onLocationDisabledChanged
                             )
                         }
+                        emitStatus()
                     }
 
                     is AnonymousGroupEvent.SendEnabledEvent -> {
@@ -863,27 +899,31 @@ class AnonymousGroupService(
                             sendLocation(
                                 anonymousGroup,
                                 onConnected = onConnecting,
-                                onDisconnected = onDisconnected
+                                onDisconnected = onDisconnected,
+                                onLocationDisabledChanged = onLocationDisabledChanged
                             )
                         }
+                        emitStatus()
                     }
 
                     is AnonymousGroupEvent.DeleteAnonymousGroupEvent -> {
                         sendLocationJobs.remove(event.anonymousGroupId)?.cancel()
+                        emitStatus()
                     }
 
                     is AnonymousGroupEvent.RemovedFromAnonymousGroupEvent -> {
                         sendLocationJobs.remove(event.anonymousGroupId)?.cancel()
-
+                        emitStatus()
                     }
 
                     is AnonymousGroupEvent.RemoteAGDoesntExistEvent -> {
                         sendLocationJobs.remove(event.anonymousGroupId)?.cancel()
-
+                        emitStatus()
                     }
 
                     is AnonymousGroupEvent.SendDisabledEvent -> {
                         sendLocationJobs.remove(event.anonymousGroupId)?.cancel()
+                        emitStatus()
                     }
 
                     else -> Unit
