@@ -1,3 +1,9 @@
 databaseChangeLog:
   - include:
       file: classpath:db/changelog/initial.sql
+  - include:
+      file: classpath:db/changelog/admin-key.sql
+  - include:
+      file: classpath:db/changelog/drop-admin-key.sql
+  - include:
+      file: classpath:db/changelog/api-key-id-secret.sql

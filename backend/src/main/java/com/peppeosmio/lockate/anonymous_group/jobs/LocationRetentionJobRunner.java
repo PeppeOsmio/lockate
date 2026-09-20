@@ -9,14 +9,14 @@ import org.springframework.stereotype.Component;
 @Component
 public class LocationRetentionJobRunner implements ApplicationRunner {
 
-    private final LocationRetentionJob locationRetentionJob;
+  private final LocationRetentionJob locationRetentionJob;
 
-    public LocationRetentionJobRunner(LocationRetentionJob locationRetentionJob) {
-        this.locationRetentionJob = locationRetentionJob;
-    }
+  public LocationRetentionJobRunner(LocationRetentionJob locationRetentionJob) {
+    this.locationRetentionJob = locationRetentionJob;
+  }
 
-    @Override
-    public void run(ApplicationArguments args) {
-        locationRetentionJob.cleanupOldLocations();
-    }
+  @Override
+  public void run(ApplicationArguments args) {
+    locationRetentionJob.cleanupOldLocations();
+  }
 }

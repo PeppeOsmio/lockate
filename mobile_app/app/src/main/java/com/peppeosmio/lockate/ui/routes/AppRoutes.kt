@@ -15,6 +15,9 @@ data class ConnectionSettingsRoute(val initialConnectionSettingsId: Long?, val s
 data object HomeRoute : Route
 
 @Serializable
+data object ManageConnectionsRoute : Route
+
+@Serializable
 data class CreateAnonymousGroupRoute(val connectionSettingsId: Long) : Route
 
 @Serializable

@@ -8,11 +8,10 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class LocationRecordMapper {
-    public LocationRecordDto toDto(AGMemberLocationEntity entity) {
-        return new LocationRecordDto(
-                EncryptedDataDto.fromEncryptedString(
-                        new EncryptedString(
-                                entity.getCoordinatesCipher(), entity.getCoordinatesIv())),
-                entity.getTimestamp());
-    }
+  public LocationRecordDto toDto(AGMemberLocationEntity entity) {
+    return new LocationRecordDto(
+        EncryptedDataDto.fromEncryptedString(
+            new EncryptedString(entity.getCoordinatesCipher(), entity.getCoordinatesIv())),
+        entity.getTimestamp());
+  }
 }

@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -47,6 +48,12 @@ class AndroidSendLocationService : Service() {
 
     @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
     private fun start() {
+        // startForeground with type location throws SecurityException when the
+        // location permission isn't active, so refuse to start without it.
+        if (!hasLocationPermission()) {
+            stopSelf()
+            return
+        }
         isRunning = true
         val stopIntent = Intent(this, AndroidSendLocationService::class.java).apply {
             action = ACTION_STOP
@@ -102,6 +109,12 @@ class AndroidSendLocationService : Service() {
         }
 
         startForeground(1, notification.build())
+    }
+
+    private fun hasLocationPermission(): Boolean {
+        return checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED || checkSelfPermission(
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
     }
 
     private fun stop() {

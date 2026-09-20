@@ -1,7 +1,12 @@
 package com.peppeosmio.lockate.domain
 
 data class Connection(
-    val id: Long?, val url: String, val apiKey: String?, val username: String?, val authToken: String?
+    val id: Long?,
+    val name: String,
+    val url: String,
+    val apiKey: String?,
+    val username: String?,
+    val authToken: String?
 ) {
     fun getWebSocketUrl(): String {
         if(url.startsWith("https")) {

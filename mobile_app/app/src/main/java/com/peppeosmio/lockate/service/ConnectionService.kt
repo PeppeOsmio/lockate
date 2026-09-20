@@ -21,6 +21,8 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
 import io.ktor.http.Url
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
@@ -31,6 +33,9 @@ class ConnectionService(
     private val connectionDao: ConnectionDao,
     private val keyStoreService: KeyStoreService
 ) {
+    private val _events = MutableSharedFlow<ConnectionEvent>(extraBufferCapacity = 2)
+    val events = _events.asSharedFlow()
+
     @Throws
     suspend fun isApiAvailable(url: String) {
         checkRequireApiKey(url)
@@ -129,5 +134,6 @@ class ConnectionService(
 
     suspend fun deleteConnection(connectionSettingsId: Long) = withContext(Dispatchers.IO) {
         connectionDao.deleteConnectionSettings(connectionSettingsId)
+        _events.tryEmit(ConnectionEvent.ConnectionDeletedEvent(connectionSettingsId))
     }
 }

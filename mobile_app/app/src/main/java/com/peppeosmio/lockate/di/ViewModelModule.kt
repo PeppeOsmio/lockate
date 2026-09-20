@@ -12,6 +12,7 @@ import com.peppeosmio.lockate.ui.screens.create_anonymous_group.CreateAnonymousG
 import com.peppeosmio.lockate.ui.screens.home_page.HomePageViewModel
 import com.peppeosmio.lockate.ui.screens.join_anonymous_group.JoinAnonymousGroupViewModel
 import com.peppeosmio.lockate.ui.screens.loading.LoadingViewModel
+import com.peppeosmio.lockate.ui.screens.manage_connections.ManageConnectionsViewModel
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
@@ -49,6 +50,13 @@ val viewModelModule = module {
             anonymousGroupService = get<AnonymousGroupService>(),
             locationService = get<LocationService>(),
             deviceOrientationService = get<DeviceOrientationService>()
+        )
+    }
+
+    viewModel<ManageConnectionsViewModel> {
+        ManageConnectionsViewModel(
+            connectionService = get<ConnectionService>(),
+            anonymousGroupService = get<AnonymousGroupService>()
         )
     }
 }

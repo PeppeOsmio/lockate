@@ -5,11 +5,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
 public record AGCreateReqDto(
-        @NotNull EncryptedDataDto encryptedMemberName,
-        @NotNull EncryptedDataDto encryptedGroupName,
-        @NotBlank String memberPasswordSrpVerifier,
-        @NotBlank String memberPasswordSrpSalt,
-        @NotBlank String keySalt
-) {
-}
-
+    @NotNull EncryptedDataDto encryptedMemberName,
+    @NotNull EncryptedDataDto encryptedGroupName,
+    @NotBlank String memberPasswordSrpVerifier,
+    @NotBlank String memberPasswordSrpSalt,
+    @NotBlank String keySalt) {}

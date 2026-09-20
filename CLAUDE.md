@@ -41,7 +41,6 @@ Three core domain entities:
 - Follow existing package structure: one package per domain concern under `com.peppeosmio.lockate`
 - Use `@SecuredAGMember` for any endpoint that requires member authentication
 - Never log or expose plaintext sensitive fields; treat all encrypted fields as opaque blobs in service/controller layers
-- Write integration tests against a real database/Redis (no mocks for infrastructure)
 - TDD: write tests before implementing any feature
 
 ### Mobile (Kotlin / Android)

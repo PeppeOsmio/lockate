@@ -5,7 +5,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -48,6 +47,7 @@ fun HomePageScreen(
     navigateToCreateAG: (connectionSettingsId: Long) -> Unit,
     navigateToJoinAG: (connectionSettingsId: Long) -> Unit,
     navigateToAGDetails: (connectionSettingsId: Long, anonymousGroupInternalId: Long, anonymousGroupName: String) -> Unit,
+    navigateToManageConnections: () -> Unit,
     startLocationService: () -> Unit,
     stopLocationService: () -> Unit,
     viewModel: HomePageViewModel = koinViewModel()
@@ -96,8 +96,9 @@ fun HomePageScreen(
     }
 
     if (state.showLogoutDialog && state.connections != null && state.selectedConnectionId != null) {
+        val selectedConnection = state.connections!![state.selectedConnectionId]!!
         AlertDialog(
-            title = { Text("Disconnect from ${state.connections!![state.selectedConnectionId]!!.url}") },
+            title = { Text("Disconnect from ${selectedConnection.name.ifBlank { selectedConnection.url }}") },
             text = { Text("Do you want to disconnect? You will leave all groups and anonymous groups!") },
             confirmButton = {
                 TextButton(onClick = {
@@ -138,9 +139,24 @@ fun HomePageScreen(
             connections = state.connections!!.map { it.value },
             selectedConnectionId = state.selectedConnectionId!!,
             onDismiss = viewModel::closeConnectionsMenu,
-            onAddNew = {},
-            onEdit = {},
-            onSelect = {})
+            onAddNew = {
+                viewModel.closeConnectionsMenu()
+                navigateToConnectionSettings(
+                    ConnectionSettingsRoute(
+                        initialConnectionSettingsId = null, showBackButton = true
+                    )
+                )
+            },
+            onManage = {
+                viewModel.closeConnectionsMenu()
+                navigateToManageConnections()
+            },
+            onSelect = { connectionSettingsId ->
+                coroutineScope.launch {
+                    viewModel.onConnectionSelected(connectionSettingsId)
+                }
+                viewModel.closeConnectionsMenu()
+            })
     }
 
     ModalNavigationDrawer(
@@ -219,65 +235,13 @@ fun HomePageScreen(
                         if (state.connections == null) {
                             return@RoundedSearchAppBar
                         }
-                        Box {
-                            IconButton(onClick = {
-                                viewModel.toggleConnectionsMenu()
-                            }) {
-                                Icon(
-                                    painter = painterResource(R.drawable.outline_data_table_24),
-                                    contentDescription = "Connections"
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = false,
-                                onDismissRequest = {
-                                    viewModel.closeConnectionsMenu()
-                                }) {
-                                Text(
-                                    modifier = Modifier.padding(12.dp),
-                                    text = "Connections",
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                                HorizontalDivider()
-                                DropdownMenuItem(
-                                    text = { Text("Add new connection") },
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = Icons.Default.Add,
-                                            contentDescription = "Add new connection"
-                                        )
-                                    },
-                                    onClick = {
-                                        viewModel.closeConnectionsMenu()
-                                        navigateToConnectionSettings(
-                                            ConnectionSettingsRoute(
-                                                initialConnectionSettingsId = null,
-                                                showBackButton = true
-                                            )
-                                        )
-                                    })
-                                state.connections!!.map { (connectionSettingsId, connectionSettings) ->
-                                    val connectionName = if (connectionSettings.username != null) {
-                                        "${connectionSettings.username}@${connectionSettings.url}"
-                                    } else {
-                                        connectionSettings.url
-                                    }
-                                    DropdownMenuItem(
-                                        text = { Text(connectionName) },
-                                        leadingIcon = {
-                                            Checkbox(
-                                                modifier = Modifier.padding(0.dp),
-                                                checked = state.selectedConnectionId == connectionSettingsId,
-                                                onCheckedChange = null
-                                            )
-                                        },
-                                        onClick = {
-                                            coroutineScope.launch {
-                                                viewModel.onConnectionSelected(connectionSettingsId)
-                                            }
-                                        })
-                                }
-                            }
+                        IconButton(onClick = {
+                            viewModel.toggleConnectionsMenu()
+                        }) {
+                            Icon(
+                                painter = painterResource(R.drawable.outline_data_table_24),
+                                contentDescription = "Connections"
+                            )
                         }
                     },
                     onTap = { viewModel.onTapSearchBar() },

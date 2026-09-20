@@ -12,12 +12,14 @@ import com.peppeosmio.lockate.ui.routes.CreateAnonymousGroupRoute
 import com.peppeosmio.lockate.ui.routes.HomeRoute
 import com.peppeosmio.lockate.ui.routes.JoinAnonymousGroupRoute
 import com.peppeosmio.lockate.ui.routes.LoadingRoute
+import com.peppeosmio.lockate.ui.routes.ManageConnectionsRoute
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.AnonymousGroupDetailsScreen
 import com.peppeosmio.lockate.ui.screens.connection_settings.ConnectionSettingsScreen
 import com.peppeosmio.lockate.ui.screens.create_anonymous_group.CreateAnonymousGroupScreen
 import com.peppeosmio.lockate.ui.screens.home_page.HomePageScreen
 import com.peppeosmio.lockate.ui.screens.join_anonymous_group.JoinAnonymousGroupScreen
 import com.peppeosmio.lockate.ui.screens.loading.LoadingScreen
+import com.peppeosmio.lockate.ui.screens.manage_connections.ManageConnectionsScreen
 import com.peppeosmio.lockate.ui.theme.LockateTheme
 
 @Composable
@@ -91,9 +93,21 @@ fun LockateApp(startLocationService: () -> Unit, stopLocationService: () -> Unit
                     navigateToJoinAG = { connectionSettingsId ->
                         appNavController.navigate(JoinAnonymousGroupRoute(connectionSettingsId))
                     },
+                    navigateToManageConnections = {
+                        appNavController.navigate(ManageConnectionsRoute)
+                    },
                     startLocationService = startLocationService,
                     stopLocationService = stopLocationService
                 )
+            }
+            composable<ManageConnectionsRoute> {
+                ManageConnectionsScreen(
+                    navigateBack = {
+                        appNavController.popBackStack()
+                    },
+                    navigateToConnectionSettings = { route ->
+                        appNavController.navigate(route)
+                    })
             }
             composable<CreateAnonymousGroupRoute> { navBackStackEntry ->
                 val createAnonymousGroupRoute =

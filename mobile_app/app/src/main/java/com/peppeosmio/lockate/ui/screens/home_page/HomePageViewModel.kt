@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.peppeosmio.lockate.exceptions.ConnectionSettingsNotFoundException
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
+import com.peppeosmio.lockate.service.ConnectionEvent
 import com.peppeosmio.lockate.service.ConnectionService
 import com.peppeosmio.lockate.service.PermissionsService
 import com.peppeosmio.lockate.ui.routes.ConnectionSettingsRoute
@@ -47,6 +48,40 @@ class HomePageViewModel(
                 _state.update { it.copy(selectedConnectionId = selectedConnectionSettings.id) }
             } catch (e: ConnectionSettingsNotFoundException) {
                 _snackbarEvents.trySend(SnackbarErrorMessage(text = "No connection settings found!"))
+            }
+        }
+        viewModelScope.launch {
+            connectionService.events.collect { event ->
+                when (event) {
+                    is ConnectionEvent.ConnectionDeletedEvent -> {
+                        val currentState = state.value
+                        if (currentState.connections == null || event.connectionId !in currentState.connections) {
+                            return@collect
+                        }
+                        val newConnections = currentState.connections - event.connectionId
+                        val newSelectedConnectionId = if (event.connectionId == currentState.selectedConnectionId) {
+                            val newId = newConnections.keys.firstOrNull()
+                            if (newId != null) {
+                                connectionService.saveSelectedConnectionSettingsId(newId)
+                            }
+                            newId
+                        } else {
+                            currentState.selectedConnectionId
+                        }
+                        _state.update {
+                            it.copy(
+                                connections = newConnections, selectedConnectionId = newSelectedConnectionId
+                            )
+                        }
+                        if (newConnections.isEmpty()) {
+                            _navigateToConnectionSettingsEvents.send(
+                                ConnectionSettingsRoute(
+                                    initialConnectionSettingsId = null, showBackButton = false
+                                )
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -110,25 +145,7 @@ class HomePageViewModel(
                 anonymousGroupService.deleteAllAG(state.value.selectedConnectionId!!)
             }
             connectionService.deleteConnection(state.value.selectedConnectionId!!)
-            val newSelectedConnectionId =
-                state.value.connections!!.keys.firstOrNull { connectionId ->
-                    connectionId != state.value.selectedConnectionId!!
-                }
-            val newConnections = state.value.connections!! - state.value.selectedConnectionId!!
-            if (newConnections.isEmpty()) {
-                _navigateToConnectionSettingsEvents.send(
-                    ConnectionSettingsRoute(
-                        initialConnectionSettingsId = null, showBackButton = false
-                    )
-                )
-            }
-            _state.update {
-                it.copy(
-                    showLoadingOverlay = false,
-                    connections = newConnections,
-                    selectedConnectionId = newSelectedConnectionId
-                )
-            }
+            _state.update { it.copy(showLoadingOverlay = false) }
         } catch (e: Exception) {
             _state.update { it.copy(showLoadingOverlay = false) }
             _snackbarEvents.trySend(
