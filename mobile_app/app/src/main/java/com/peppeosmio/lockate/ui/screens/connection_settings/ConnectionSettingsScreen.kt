@@ -122,6 +122,17 @@ fun ConnectionSettingsScreen(
             } else {
                 "Welcome to Lockate"
             }, style = MaterialTheme.typography.titleLarge)
+            Text(
+                "Enter a name for your Lockate server and its URL",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            OutlinedTextField(
+                value = state.name,
+                onValueChange = { text -> viewModel.onNameChanged(text) },
+                label = { Text("Name") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
             OutlinedTextField(
                 value = state.url,
                 onValueChange = { text -> viewModel.onUrlChanged(text) },

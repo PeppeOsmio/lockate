@@ -1,4 +1,3 @@
 package com.peppeosmio.lockate.srp;
 
-public class InvalidSrpSessionException extends Exception {
-}
+public class InvalidSrpSessionException extends Exception {}

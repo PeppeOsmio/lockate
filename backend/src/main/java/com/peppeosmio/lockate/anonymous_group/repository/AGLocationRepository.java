@@ -2,21 +2,21 @@ package com.peppeosmio.lockate.anonymous_group.repository;
 
 import com.peppeosmio.lockate.anonymous_group.entity.AGMemberEntity;
 import com.peppeosmio.lockate.anonymous_group.entity.AGMemberLocationEntity;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.NativeQuery;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
 @Repository
-public interface AGLocationRepository
-        extends CrudRepository<AGMemberLocationEntity, UUID> {
-    @NativeQuery(value = """
+public interface AGLocationRepository extends CrudRepository<AGMemberLocationEntity, UUID> {
+  @NativeQuery(
+      value =
+          """
                 WITH ranked_locations AS (
                     SELECT
                         l.*,
@@ -34,11 +34,13 @@ public interface AGLocationRepository
                 FROM ranked_locations
                 WHERE row_number = 1
             """)
-    List<AGMemberLocationEntity> findLastLocationOfMembers(
-            @Param("anonymousGroupId") UUID anonymousGroupId);
+  List<AGMemberLocationEntity> findLastLocationOfMembers(
+      @Param("anonymousGroupId") UUID anonymousGroupId);
 
-    @Modifying
-    @NativeQuery(value = """
+  @Modifying
+  @NativeQuery(
+      value =
+          """
             DELETE FROM ag_member_location l
             WHERE l.timestamp < :cutoff
             AND l.id NOT IN (
@@ -49,8 +51,8 @@ public interface AGLocationRepository
                 ) latest_per_member
             )
             """)
-    int deleteOldLocations(@Param("cutoff") Instant cutoff);
+  int deleteOldLocations(@Param("cutoff") Instant cutoff);
 
-    Optional<AGMemberLocationEntity> findFirstByAgMemberEntityOrderByTimestampDescIdDesc(
-            AGMemberEntity agMemberEntity);
+  Optional<AGMemberLocationEntity> findFirstByAgMemberEntityOrderByTimestampDescIdDesc(
+      AGMemberEntity agMemberEntity);
 }

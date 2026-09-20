@@ -9,22 +9,22 @@ import org.springframework.web.socket.config.annotation.*;
 @EnableWebSocket
 public class WebSocketConfig implements WebSocketConfigurer {
 
-    private final AGSendLocationWSHandler agSendLocationWSHandler;
-    private final AGSendLocationHandshakeInterceptor agSendLocationHandshakeInterceptor;
+  private final AGSendLocationWSHandler agSendLocationWSHandler;
+  private final AGSendLocationHandshakeInterceptor agSendLocationHandshakeInterceptor;
 
-    public WebSocketConfig(
-            AGSendLocationWSHandler agSendLocationWSHandler,
-            AGSendLocationHandshakeInterceptor agSendLocationHandshakeInterceptor) {
-        this.agSendLocationWSHandler = agSendLocationWSHandler;
-        this.agSendLocationHandshakeInterceptor = agSendLocationHandshakeInterceptor;
-    }
+  public WebSocketConfig(
+      AGSendLocationWSHandler agSendLocationWSHandler,
+      AGSendLocationHandshakeInterceptor agSendLocationHandshakeInterceptor) {
+    this.agSendLocationWSHandler = agSendLocationWSHandler;
+    this.agSendLocationHandshakeInterceptor = agSendLocationHandshakeInterceptor;
+  }
 
-    @Override
-    public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
-        registry.addHandler(
-                        agSendLocationWSHandler,
-                        "/api/ws/anonymous-groups/{anonymousGroupId}/send-location")
-                .addInterceptors(agSendLocationHandshakeInterceptor)
-                .setAllowedOriginPatterns("*");
-    }
+  @Override
+  public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
+    registry
+        .addHandler(
+            agSendLocationWSHandler, "/api/ws/anonymous-groups/{anonymousGroupId}/send-location")
+        .addInterceptors(agSendLocationHandshakeInterceptor)
+        .setAllowedOriginPatterns("*");
+  }
 }

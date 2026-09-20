@@ -7,6 +7,7 @@ object ConnectionMapper {
     fun toEntity(connection: Connection): ConnectionEntity {
         return ConnectionEntity(
             id = connection.id ?: 0,
+            name = connection.name,
             url = connection.url,
             apiKey = connection.apiKey,
             username = connection.username,
@@ -17,6 +18,7 @@ object ConnectionMapper {
     fun toDomain(entity : ConnectionEntity): Connection {
         return Connection(
             id = entity.id,
+            name = entity.name,
             url = entity.url,
             apiKey = entity.apiKey,
             username = entity.username,

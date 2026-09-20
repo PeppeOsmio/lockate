@@ -14,7 +14,7 @@ interface ConnectionDao {
     @Query("SELECT * FROM connection ORDER BY id ASC LIMIT 1")
     suspend fun getFirstConnection(): ConnectionEntity?
 
-    @Query("SELECT * FROM connection ORDER BY id")
+    @Query("SELECT * FROM connection ORDER BY name COLLATE NOCASE")
     suspend fun listConnections(): List<ConnectionEntity>
 
     @Insert

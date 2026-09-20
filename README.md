@@ -55,12 +55,22 @@ Run a single test class:
 ./mvnw test -Pdev -Dtest=SrpServiceTest
 ```
 
-**API key management** - run with the `cli` profile and pass the command as an argument:
+**API key management** - run with the `cli` profile and pass the command as an argument. Activate the
+profile via `jvmArguments` rather than `run.profiles`, since the latter leaks a `--spring.profiles.active=...`
+flag into the program arguments and shifts the command out of position:
 
 ```bash
-./mvnw spring-boot:run -Pdev -Dspring-boot.run.profiles=cli -Dspring-boot.run.arguments="create-api-key"
-./mvnw spring-boot:run -Pdev -Dspring-boot.run.profiles=cli -Dspring-boot.run.arguments="list-api-keys"
-./mvnw spring-boot:run -Pdev -Dspring-boot.run.profiles=cli -Dspring-boot.run.arguments="delete-api-key <uuid>"
+./mvnw spring-boot:run -Pdev -Dspring-boot.run.jvmArguments="-Dspring.profiles.active=cli" -Dspring-boot.run.arguments="create-api-key"
+./mvnw spring-boot:run -Pdev -Dspring-boot.run.jvmArguments="-Dspring.profiles.active=cli" -Dspring-boot.run.arguments="list-api-keys"
+./mvnw spring-boot:run -Pdev -Dspring-boot.run.jvmArguments="-Dspring.profiles.active=cli" -Dspring-boot.run.arguments="delete-api-key <uuid>"
+```
+
+**Admin key management** - separate from the regular API keys above; these authenticate the admin UI only:
+
+```bash
+./mvnw spring-boot:run -Pdev -Dspring-boot.run.jvmArguments="-Dspring.profiles.active=cli" -Dspring-boot.run.arguments="create-admin-key"
+./mvnw spring-boot:run -Pdev -Dspring-boot.run.jvmArguments="-Dspring.profiles.active=cli" -Dspring-boot.run.arguments="list-admin-keys"
+./mvnw spring-boot:run -Pdev -Dspring-boot.run.jvmArguments="-Dspring.profiles.active=cli" -Dspring-boot.run.arguments="delete-admin-key <uuid>"
 ```
 
 **Run a background job manually** - activate the job's profile, e.g. to run location retention cleanup:

@@ -40,6 +40,7 @@ class ConnectionSettingsViewModel(
                 _state.update {
                     it.copy(
                         showLoadingOverlay = false,
+                        name = connectionSettings.name,
                         apiKey = connectionSettings.apiKey ?: "",
                         url = connectionSettings.url
                     )
@@ -48,6 +49,10 @@ class ConnectionSettingsViewModel(
                 _state.update { it.copy(showLoadingOverlay = false) }
             }
         }
+    }
+
+    fun onNameChanged(name: String) {
+        _state.update { it.copy(name = name) }
     }
 
     fun onUrlChanged(url: String) {
@@ -60,6 +65,10 @@ class ConnectionSettingsViewModel(
 
     fun onConnectClicked(initialConnectionId: Long?) {
         viewModelScope.launch {
+            if (state.value.name.isBlank()) {
+                _snackbarEvents.trySend(SnackbarErrorMessage(text = "Please enter a name"))
+                return@launch
+            }
             if (state.value.url.isBlank()) {
                 _snackbarEvents.trySend(SnackbarErrorMessage(text = "Please enter url"))
                 return@launch
@@ -93,6 +102,7 @@ class ConnectionSettingsViewModel(
             }
             val connection = Connection(
                 id = initialConnectionId,
+                name = _state.value.name,
                 url = _state.value.url,
                 apiKey = if(state.value.requireApiKey) state.value.apiKey else null ,
                 username = null,

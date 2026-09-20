@@ -9,10 +9,9 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 
 @ControllerAdvice
 public class ApiKeyExceptionHandler {
-    @ExceptionHandler(Base64Exception.class)
-    public ResponseEntity<ErrorResponseDto> handleBase64(
-            Base64Exception e) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ErrorResponseDto("invalid_base64"));
-    }
+  @ExceptionHandler(Base64Exception.class)
+  public ResponseEntity<ErrorResponseDto> handleBase64(Base64Exception e) {
+    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        .body(new ErrorResponseDto("invalid_base64"));
+  }
 }

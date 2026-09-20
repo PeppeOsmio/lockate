@@ -22,7 +22,7 @@ services:
     command: ["valkey-server", "--requirepass", "${REDIS_PASSWORD}"]
     restart: unless-stopped
 
-  lockate-api:
+  backend:
     build:
       context: backend
       dockerfile: Dockerfile
