@@ -1,7 +1,11 @@
 package com.peppeosmio.lockate.platform_service
 
 import  android.Manifest
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.location.LocationManager
 import android.os.Build
 import android.os.Looper
 import android.util.Log
@@ -27,6 +31,7 @@ import com.peppeosmio.lockate.service.ConfigSettings
 import com.peppeosmio.lockate.service.PermissionsService
 import com.peppeosmio.lockate.service.dataStore
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.util.concurrent.Executor
@@ -95,6 +100,35 @@ class LocationService(
     suspend fun checkPermissionsAndLocationEnabled(): Unit {
         checkPermissions()
         checkLocationEnabled()
+    }
+
+    private fun locationEnabledChanges(): Flow<Unit> = callbackFlow {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                trySend(Unit)
+            }
+        }
+        ContextCompat.registerReceiver(
+            context,
+            receiver,
+            IntentFilter(LocationManager.PROVIDERS_CHANGED_ACTION),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+        awaitClose { context.unregisterReceiver(receiver) }
+    }
+
+    suspend fun awaitLocationEnabled() {
+        if (runCatching { checkPermissionsAndLocationEnabled() }.isSuccess) return
+        locationEnabledChanges().first {
+            runCatching { checkPermissionsAndLocationEnabled() }.isSuccess
+        }
+    }
+
+    suspend fun awaitLocationDisabled() {
+        if (runCatching { checkPermissionsAndLocationEnabled() }.isFailure) return
+        locationEnabledChanges().first {
+            runCatching { checkPermissionsAndLocationEnabled() }.isFailure
+        }
     }
 
     @Throws

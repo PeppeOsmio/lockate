@@ -96,6 +96,7 @@ class AndroidSendLocationService : Service() {
                         when {
                             status.totalAGCount == 0 -> "No groups to send location to"
                             status.isLocationDisabled -> "Geolocation is disabled"
+                            status.isLocationUnavailable -> "Geolocation not available"
                             status.activeAGCount == 0 -> "Connecting..."
                             status.activeAGCount == 1 -> "Sharing location with 1 group"
                             else -> "Sharing location with ${status.activeAGCount} groups"

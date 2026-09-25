@@ -7,6 +7,7 @@ import com.google.android.gms.location.LocationServices
 import com.peppeosmio.lockate.AppDatabase
 import com.peppeosmio.lockate.dao.AnonymousGroupDao
 import com.peppeosmio.lockate.dao.ConnectionDao
+import com.peppeosmio.lockate.platform_service.ConnectivityService
 import com.peppeosmio.lockate.platform_service.DeviceOrientationService
 import com.peppeosmio.lockate.platform_service.KeyStoreService
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
@@ -89,6 +90,10 @@ val appModule = module {
         PermissionsService(context = androidContext())
     }
 
+    single<ConnectivityService> {
+        ConnectivityService(context = androidContext())
+    }
+
     single<LocationService> {
         LocationService(
             context = androidContext(),
@@ -116,6 +121,7 @@ val appModule = module {
             httpClient = get(),
             srpClientService = get(),
             locationService = get(),
+            connectivityService = get(),
             keyStoreService = get()
         )
     }
