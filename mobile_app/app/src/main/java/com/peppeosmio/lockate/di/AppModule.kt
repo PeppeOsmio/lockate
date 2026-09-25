@@ -48,6 +48,14 @@ val appModule = module {
     // Ktor HttpClient
     single<HttpClient> {
         HttpClient(OkHttp) {
+            engine {
+                // OkHttp native ping: fails the socket if no pong arrives within the interval,
+                // regardless of whether the network dropped or the backend is hung. The ktor
+                // WebSockets-plugin pingIntervalMillis is ignored by the OkHttp engine.
+                config {
+                    pingInterval(15, java.util.concurrent.TimeUnit.SECONDS)
+                }
+            }
             install(SSE)
             install(WebSockets)
 

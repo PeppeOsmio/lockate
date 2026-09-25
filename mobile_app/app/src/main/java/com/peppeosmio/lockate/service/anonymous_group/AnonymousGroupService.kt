@@ -90,6 +90,22 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
+internal enum class ReconnectAction { AwaitLocationEnabled, AwaitNetwork, Backoff }
+
+/**
+ * Decides how the location loop should wait before its next connection attempt. GPS/permission
+ * faults take priority (they have their own event to wait on); otherwise a missing network parks
+ * on the connectivity event, and everything else (backend faults, the 30s no-location timeout)
+ * uses a timed backoff.
+ */
+internal fun classifyReconnect(e: Throwable, isNetworkAvailable: Boolean): ReconnectAction = when {
+    e is LocationDisabledException || e is NoPermissionException -> ReconnectAction.AwaitLocationEnabled
+    !isNetworkAvailable -> ReconnectAction.AwaitNetwork
+    else -> ReconnectAction.Backoff
+}
+
+internal fun nextBackoffSeconds(retries: Int): Long = min(5L * retries, 60L)
+
 class AnonymousGroupService(
     private val anonymousGroupDao: AnonymousGroupDao,
     private val cryptoService: CryptoService,
@@ -832,23 +848,23 @@ class AnonymousGroupService(
                         e.printStackTrace()
                     }
                 }
-                when {
-                    e is LocationDisabledException || e is NoPermissionException -> {
+                when (classifyReconnect(e, connectivityService.isNetworkAvailable())) {
+                    ReconnectAction.AwaitLocationEnabled -> {
                         // reconnect as soon as GPS/permissions come back; the timeout is a safety
                         // net so we re-check even if the signal never arrives.
                         withTimeoutOrNull(60.seconds) { locationService.awaitLocationEnabled() }
                     }
 
-                    !connectivityService.isNetworkAvailable() -> {
+                    ReconnectAction.AwaitNetwork -> {
                         // reconnect the instant the network returns
                         withTimeoutOrNull(60.seconds) { connectivityService.awaitNetworkAvailable() }
                     }
 
-                    else -> {
+                    ReconnectAction.Backoff -> {
                         // LocationTimeoutException and backend faults (network is up): timed backoff
                         retries += 1
                         retries = min(retries, maxRetries)
-                        val waitSeconds = min(5L * retries, 60L)
+                        val waitSeconds = nextBackoffSeconds(retries)
                         Log.e(
                             "",
                             "Can't connect to ${connectionSettings.url} retrying in $waitSeconds s"
