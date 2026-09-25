@@ -30,9 +30,11 @@ import com.peppeosmio.lockate.exceptions.InvalidApiKeyException
 import com.peppeosmio.lockate.exceptions.LocalAGExistsException
 import com.peppeosmio.lockate.exceptions.LocalAGNotFoundException
 import com.peppeosmio.lockate.exceptions.LocationDisabledException
+import com.peppeosmio.lockate.exceptions.LocationTimeoutException
 import com.peppeosmio.lockate.exceptions.NoPermissionException
 import com.peppeosmio.lockate.exceptions.RemoteAGNotFoundException
 import com.peppeosmio.lockate.exceptions.UnauthorizedException
+import com.peppeosmio.lockate.platform_service.ConnectivityService
 import com.peppeosmio.lockate.platform_service.KeyStoreService
 import com.peppeosmio.lockate.platform_service.LocationService
 import com.peppeosmio.lockate.service.ConnectionService
@@ -68,6 +70,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
@@ -94,6 +97,7 @@ class AnonymousGroupService(
     private val httpClient: HttpClient,
     private val srpClientService: SrpClientService,
     private val locationService: LocationService,
+    private val connectivityService: ConnectivityService,
     private val keyStoreService: KeyStoreService
 ) {
     private val _events = MutableSharedFlow<AnonymousGroupEvent>(extraBufferCapacity = 2)
@@ -662,13 +666,15 @@ class AnonymousGroupService(
         anonymousGroup: AnonymousGroup,
         onConnected: () -> Unit,
         onDisconnected: () -> Unit,
-        onLocationDisabledChanged: (isDisabled: Boolean) -> Unit
+        onLocationDisabledChanged: (isDisabled: Boolean) -> Unit,
+        onLocationUnavailableChanged: (isUnavailable: Boolean) -> Unit
     ) {
         val connectionSettings =
             connectionService.getConnectionSettingsById(anonymousGroup.connectionId)
         val maxRetries = 10
         var retries = 0
         var reportedLocationDisabled = false
+        var reportedLocationUnavailable = false
         while (true) {
             var isConnected = false
             try {
@@ -709,13 +715,20 @@ class AnonymousGroupService(
                         suspend fun getTimeoutJob() {
                             delay(30000L)
                             Log.e("", "No location obtained in the last 30 s")
-                            throw LocationDisabledException()
+                            throw LocationTimeoutException()
                         }
 
                         var lastSent: Instant? = null
 
                         var timeoutJob = launch {
                             getTimeoutJob()
+                        }
+                        // location can be disabled while the socket stays open; fused updates just
+                        // stop silently, so watch for it and surface it immediately instead of
+                        // waiting out the 30s timeout.
+                        launch {
+                            locationService.awaitLocationDisabled()
+                            throw LocationDisabledException()
                         }
                         locationService.getLocationUpdates().collect { coordinates ->
                             val now = Clock.System.now()
@@ -726,6 +739,11 @@ class AnonymousGroupService(
                                 }
                             }
                             lastSent = now
+
+                            if (reportedLocationUnavailable) {
+                                reportedLocationUnavailable = false
+                                onLocationUnavailableChanged(false)
+                            }
 
                             timeoutJob.cancel()
                             timeoutJob = launch {
@@ -803,15 +821,41 @@ class AnonymousGroupService(
                         }
                     }
 
+                    is LocationTimeoutException -> {
+                        if (!reportedLocationUnavailable) {
+                            reportedLocationUnavailable = true
+                            onLocationUnavailableChanged(true)
+                        }
+                    }
+
                     else -> {
                         e.printStackTrace()
                     }
                 }
-                retries += 1
-                retries = min(retries, maxRetries)
-                val waitSeconds = 5L * retries
-                Log.e("", "Can't connect to ${connectionSettings.url} retrying in $waitSeconds s")
-                delay(waitSeconds.seconds)
+                when {
+                    e is LocationDisabledException || e is NoPermissionException -> {
+                        // reconnect as soon as GPS/permissions come back; the timeout is a safety
+                        // net so we re-check even if the signal never arrives.
+                        withTimeoutOrNull(60.seconds) { locationService.awaitLocationEnabled() }
+                    }
+
+                    !connectivityService.isNetworkAvailable() -> {
+                        // reconnect the instant the network returns
+                        withTimeoutOrNull(60.seconds) { connectivityService.awaitNetworkAvailable() }
+                    }
+
+                    else -> {
+                        // LocationTimeoutException and backend faults (network is up): timed backoff
+                        retries += 1
+                        retries = min(retries, maxRetries)
+                        val waitSeconds = min(5L * retries, 60L)
+                        Log.e(
+                            "",
+                            "Can't connect to ${connectionSettings.url} retrying in $waitSeconds s"
+                        )
+                        delay(waitSeconds.seconds)
+                    }
+                }
             }
         }
     }
@@ -827,13 +871,15 @@ class AnonymousGroupService(
             }
             val connectedAGCount = AtomicInt(0)
             val locationDisabledCount = AtomicInt(0)
+            val locationUnavailableCount = AtomicInt(0)
 
             val emitStatus = fun() {
                 onStatusUpdate(
                     SendLocationStatus(
                         totalAGCount = sendLocationJobs.size,
                         activeAGCount = connectedAGCount.load(),
-                        isLocationDisabled = locationDisabledCount.load() > 0
+                        isLocationDisabled = locationDisabledCount.load() > 0,
+                        isLocationUnavailable = locationUnavailableCount.load() > 0
                     )
                 )
             }
@@ -855,6 +901,12 @@ class AnonymousGroupService(
                 emitStatus()
             }
 
+            val onLocationUnavailableChanged = fun(isUnavailable: Boolean) {
+                if (isUnavailable) locationUnavailableCount.incrementAndFetch()
+                else locationUnavailableCount.decrementAndFetch()
+                emitStatus()
+            }
+
             anonymousGroups.forEach {
                 sendLocationJobs[it.id]?.cancel()
                 sendLocationJobs[it.id] = launch {
@@ -862,7 +914,8 @@ class AnonymousGroupService(
                         anonymousGroup = it,
                         onConnected = onConnecting,
                         onDisconnected = onDisconnected,
-                        onLocationDisabledChanged = onLocationDisabledChanged
+                        onLocationDisabledChanged = onLocationDisabledChanged,
+                        onLocationUnavailableChanged = onLocationUnavailableChanged
                     )
                 }
             }
@@ -882,7 +935,8 @@ class AnonymousGroupService(
                                 anonymousGroup,
                                 onConnected = onConnecting,
                                 onDisconnected = onDisconnected,
-                                onLocationDisabledChanged = onLocationDisabledChanged
+                                onLocationDisabledChanged = onLocationDisabledChanged,
+                                onLocationUnavailableChanged = onLocationUnavailableChanged
                             )
                         }
                         emitStatus()
@@ -900,7 +954,8 @@ class AnonymousGroupService(
                                 anonymousGroup,
                                 onConnected = onConnecting,
                                 onDisconnected = onDisconnected,
-                                onLocationDisabledChanged = onLocationDisabledChanged
+                                onLocationDisabledChanged = onLocationDisabledChanged,
+                                onLocationUnavailableChanged = onLocationUnavailableChanged
                             )
                         }
                         emitStatus()
