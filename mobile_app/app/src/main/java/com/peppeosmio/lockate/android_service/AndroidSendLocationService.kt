@@ -14,6 +14,7 @@ import androidx.annotation.RequiresPermission
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.peppeosmio.lockate.R
+import com.peppeosmio.lockate.domain.anonymous_group.notificationText
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -92,16 +93,7 @@ class AndroidSendLocationService : Service() {
                         // is created
                         return@sendLocation
                     }
-                    val updatedNotification = notification.setContentText(
-                        when {
-                            status.totalAGCount == 0 -> "No groups to send location to"
-                            status.isLocationDisabled -> "Geolocation is disabled"
-                            status.isLocationUnavailable -> "Geolocation not available"
-                            status.activeAGCount == 0 -> "Connecting..."
-                            status.activeAGCount == 1 -> "Sharing location with 1 group"
-                            else -> "Sharing location with ${status.activeAGCount} groups"
-                        }
-                    )
+                    val updatedNotification = notification.setContentText(status.notificationText())
                     notificationManager.notify(1, updatedNotification.build())
                 }
             } catch (e: Exception) {
