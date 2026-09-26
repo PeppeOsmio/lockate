@@ -6,11 +6,12 @@ import Button from '@mui/material/Button'
 import Paper from '@mui/material/Paper'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
-import { BASE_URL } from '../api/client'
+import { useAdminApiClient } from '../api/AdminAPIClientContext'
 import { useToken } from './TokenContext'
 
 export function TokenGate({ children }: { children: ReactNode }) {
   const { token, setToken } = useToken()
+  const client = useAdminApiClient()
   const [input, setInput] = useState('')
   const [checking, setChecking] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -24,10 +25,8 @@ export function TokenGate({ children }: { children: ReactNode }) {
     setChecking(true)
     setError(null)
     try {
-      const response = await fetch(`${BASE_URL}/api/admin/api-keys`, {
-        headers: { 'X-API-KEY': input.trim() },
-      })
-      if (!response.ok) {
+      const ok = await client.checkApiKey(input.trim())
+      if (!ok) {
         setError('That key was rejected by the server. Double-check it and try again.')
         return
       }

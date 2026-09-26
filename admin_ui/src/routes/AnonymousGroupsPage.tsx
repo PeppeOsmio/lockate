@@ -4,7 +4,7 @@ import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import CircularProgress from '@mui/material/CircularProgress'
 import Typography from '@mui/material/Typography'
-import { listAnonymousGroups } from '../api/anonymousGroups'
+import { useAdminApiClient } from '../api/AdminAPIClientContext'
 import type { AnonymousGroupSummary } from '../api/types'
 import { Table } from '../components/Table'
 import { formatDate } from '../utils/format'
@@ -14,13 +14,14 @@ export function AnonymousGroupsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const navigate = useNavigate()
+  const client = useAdminApiClient()
 
   useEffect(() => {
-    listAnonymousGroups()
+    client.listAnonymousGroups()
       .then(setGroups)
       .catch(() => setError('Failed to load anonymous groups.'))
       .finally(() => setLoading(false))
-  }, [])
+  }, [client])
 
   return (
     <Box>
