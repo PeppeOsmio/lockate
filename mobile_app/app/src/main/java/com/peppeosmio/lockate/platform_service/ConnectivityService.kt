@@ -44,9 +44,4 @@ class ConnectivityService(
         if (isNetworkAvailable()) return
         networkAvailability().first { it }
     }
-
-    suspend fun awaitNetworkLost() {
-        if (!isNetworkAvailable()) return
-        networkAvailability().first { !it }
-    }
 }

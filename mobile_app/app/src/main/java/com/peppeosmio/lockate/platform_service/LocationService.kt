@@ -43,6 +43,16 @@ import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.coroutines.resumeWithException
 import kotlin.io.encoding.Base64
 
+/**
+ * Suspends until [condition] holds. Checks it once immediately, and otherwise re-evaluates it on
+ * every emission of [signal], returning on the first emission after which it holds. [signal] is only
+ * collected when the initial check fails, so a callback-backed flow isn't registered needlessly.
+ */
+internal suspend fun awaitSignal(signal: Flow<Unit>, condition: suspend () -> Boolean) {
+    if (condition()) return
+    signal.first { condition() }
+}
+
 class LocationService(
     private val context: Context,
     private val fusedLocationClient: FusedLocationProviderClient,
@@ -117,18 +127,12 @@ class LocationService(
         awaitClose { context.unregisterReceiver(receiver) }
     }
 
-    suspend fun awaitLocationEnabled() {
-        if (runCatching { checkPermissionsAndLocationEnabled() }.isSuccess) return
-        locationEnabledChanges().first {
-            runCatching { checkPermissionsAndLocationEnabled() }.isSuccess
-        }
+    suspend fun awaitLocationEnabled() = awaitSignal(locationEnabledChanges()) {
+        runCatching { checkPermissionsAndLocationEnabled() }.isSuccess
     }
 
-    suspend fun awaitLocationDisabled() {
-        if (runCatching { checkPermissionsAndLocationEnabled() }.isFailure) return
-        locationEnabledChanges().first {
-            runCatching { checkPermissionsAndLocationEnabled() }.isFailure
-        }
+    suspend fun awaitLocationDisabled() = awaitSignal(locationEnabledChanges()) {
+        runCatching { checkPermissionsAndLocationEnabled() }.isFailure
     }
 
     @Throws
