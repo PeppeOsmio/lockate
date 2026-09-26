@@ -11,6 +11,7 @@ RUN npm run build
 FROM nginx:alpine AS app
 
 COPY --from=builder /app/dist /usr/share/nginx/html
+COPY public/config.json /etc/nginx/templates/config.json.template
 
 EXPOSE 80
 

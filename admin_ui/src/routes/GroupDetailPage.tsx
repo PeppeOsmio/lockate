@@ -5,7 +5,7 @@ import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
 import Typography from '@mui/material/Typography'
-import { listGroupMembers } from '../api/anonymousGroups'
+import { useAdminApiClient } from '../api/AdminAPIClientContext'
 import type { AGMember } from '../api/types'
 import { Table } from '../components/Table'
 import { formatDate } from '../utils/format'
@@ -15,14 +15,15 @@ export function GroupDetailPage() {
   const [members, setMembers] = useState<AGMember[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const client = useAdminApiClient()
 
   useEffect(() => {
     if (!anonymousGroupId) return
-    listGroupMembers(anonymousGroupId)
+    client.listGroupMembers(anonymousGroupId)
       .then(setMembers)
       .catch(() => setError('Failed to load members for this group.'))
       .finally(() => setLoading(false))
-  }, [anonymousGroupId])
+  }, [client, anonymousGroupId])
 
   return (
     <Box>

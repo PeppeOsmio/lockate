@@ -4,7 +4,7 @@ import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
 import Typography from '@mui/material/Typography'
-import { createApiKey, listApiKeys, revokeApiKey } from '../api/apiKeys'
+import { useAdminApiClient } from '../api/AdminAPIClientContext'
 import type { ApiKey, ApiKeyCreated } from '../api/types'
 import { ConfirmButton } from '../components/ConfirmButton'
 import { Table } from '../components/Table'
@@ -15,10 +15,11 @@ export function ApiKeysPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [revealedKey, setRevealedKey] = useState<ApiKeyCreated | null>(null)
+  const client = useAdminApiClient()
 
   function refresh() {
     setLoading(true)
-    listApiKeys()
+    client.listApiKeys()
       .then(setKeys)
       .catch(() => setError('Failed to load API keys.'))
       .finally(() => setLoading(false))
@@ -27,13 +28,13 @@ export function ApiKeysPage() {
   useEffect(refresh, [])
 
   async function handleCreate() {
-    const created = await createApiKey()
+    const created = await client.createApiKey()
     setRevealedKey(created)
     refresh()
   }
 
   async function handleRevoke(id: string) {
-    await revokeApiKey(id)
+    await client.revokeApiKey(id)
     refresh()
   }
 

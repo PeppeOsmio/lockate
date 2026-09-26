@@ -12,6 +12,7 @@ import IconButton from '@mui/material/IconButton'
 import Toolbar from '@mui/material/Toolbar'
 import Typography from '@mui/material/Typography'
 import { createTheme, ThemeProvider, useMediaQuery } from '@mui/material'
+import { AdminAPIClientProvider } from './api/AdminAPIClientContext'
 import { TokenGate } from './auth/TokenGate'
 import { TokenProvider, useToken } from './auth/TokenContext'
 import { ApiKeysPage } from './routes/ApiKeysPage'
@@ -76,6 +77,7 @@ function App() {
 
   return (
     <ThemeProvider theme={theme}>
+      <AdminAPIClientProvider>
       <TokenProvider>
         <BrowserRouter>
           <CssBaseline />
@@ -84,6 +86,7 @@ function App() {
           </TokenGate>
         </BrowserRouter>
       </TokenProvider>
+      </AdminAPIClientProvider>
     </ThemeProvider>
   )
 }
