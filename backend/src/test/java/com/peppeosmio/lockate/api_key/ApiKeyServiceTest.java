@@ -11,6 +11,9 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -104,13 +107,15 @@ class ApiKeyServiceTest {
     var entity = new ApiKeyEntity("hash", LocalDateTime.now(ZoneOffset.UTC));
     entity.setId(UUID.randomUUID());
     entity.setLastValidated(LocalDateTime.now(ZoneOffset.UTC));
-    when(apiKeyRepository.findAll()).thenReturn(List.of(entity));
+    var pageable = PageRequest.of(0, 20, Sort.by("createdAt").descending());
+    when(apiKeyRepository.findAll(pageable)).thenReturn(new PageImpl<>(List.of(entity), pageable, 1));
 
-    var result = service.listApiKeys();
+    var result = service.listApiKeys(pageable);
 
-    assertThat(result).hasSize(1);
-    assertThat(result.getFirst().id()).isEqualTo(entity.getId());
-    assertThat(result.getFirst().lastValidated()).isEqualTo(entity.getLastValidated());
+    assertThat(result.items()).hasSize(1);
+    assertThat(result.totalElements()).isEqualTo(1);
+    assertThat(result.items().getFirst().id()).isEqualTo(entity.getId());
+    assertThat(result.items().getFirst().lastValidated()).isEqualTo(entity.getLastValidated());
   }
 
   @Test

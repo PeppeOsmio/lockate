@@ -6,8 +6,11 @@ import com.peppeosmio.lockate.anonymous_group.dto.AGAdminSummaryDto;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.service.AnonymousGroupService;
+import com.peppeosmio.lockate.common.dto.PageResponseDto;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
@@ -24,8 +27,11 @@ public class AdminAnonymousGroupController {
 
   @GetMapping("")
   @ResponseStatus(HttpStatus.OK)
-  List<AGAdminSummaryDto> listGroups() {
-    return anonymousGroupService.listGroupsForAdmin();
+  PageResponseDto<AGAdminSummaryDto> listGroups(
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size) {
+    return anonymousGroupService.listGroupsForAdmin(
+        PageRequest.of(page, size, Sort.by("createdAt").descending()));
   }
 
   @GetMapping("/{anonymousGroupId}/members")

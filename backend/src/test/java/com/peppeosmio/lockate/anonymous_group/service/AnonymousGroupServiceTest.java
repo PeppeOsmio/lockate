@@ -46,6 +46,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.redis.connection.MessageListener;
 import org.springframework.security.crypto.bcrypt.BCrypt;
 
@@ -533,7 +536,9 @@ class AnonymousGroupServiceTest {
             "keysalt".getBytes());
     var otherGroupId = UUID.randomUUID();
     otherGroup.setId(otherGroupId);
-    when(anonymousGroupRepository.findAll()).thenReturn(List.of(groupEntity, otherGroup));
+    var pageable = PageRequest.of(0, 20, Sort.by("createdAt").descending());
+    var pageResult = new PageImpl<>(List.of(groupEntity, otherGroup), pageable, 2);
+    when(anonymousGroupRepository.findAll(pageable)).thenReturn(pageResult);
     var lastLocationAt = LocalDateTime.now(ZoneOffset.UTC);
     var summary =
         org.mockito.Mockito.mock(
@@ -544,26 +549,31 @@ class AnonymousGroupServiceTest {
     when(agMemberRepository.summarizeByGroupIds(List.of(groupId, otherGroupId)))
         .thenReturn(List.of(summary));
 
-    var result = service.listGroupsForAdmin();
+    var result = service.listGroupsForAdmin(pageable);
 
-    assertThat(result).hasSize(2);
+    assertThat(result.items()).hasSize(2);
+    assertThat(result.totalElements()).isEqualTo(2);
+    assertThat(result.totalPages()).isEqualTo(1);
     var groupSummary =
-        result.stream().filter(g -> g.id().equals(groupId)).findFirst().orElseThrow();
+        result.items().stream().filter(g -> g.id().equals(groupId)).findFirst().orElseThrow();
     assertThat(groupSummary.memberCount()).isEqualTo(3L);
     assertThat(groupSummary.lastLocationAt()).isEqualTo(lastLocationAt);
     var emptyGroupSummary =
-        result.stream().filter(g -> g.id().equals(otherGroupId)).findFirst().orElseThrow();
+        result.items().stream().filter(g -> g.id().equals(otherGroupId)).findFirst().orElseThrow();
     assertThat(emptyGroupSummary.memberCount()).isEqualTo(0L);
     assertThat(emptyGroupSummary.lastLocationAt()).isNull();
   }
 
   @Test
-  void listGroupsForAdmin_noGroups_returnsEmptyListWithoutQueryingSummaries() {
-    when(anonymousGroupRepository.findAll()).thenReturn(List.of());
+  void listGroupsForAdmin_noGroups_returnsEmptyPageWithoutQueryingSummaries() {
+    var pageable = PageRequest.of(0, 20, Sort.by("createdAt").descending());
+    when(anonymousGroupRepository.findAll(pageable))
+        .thenReturn(new PageImpl<>(List.of(), pageable, 0));
 
-    var result = service.listGroupsForAdmin();
+    var result = service.listGroupsForAdmin(pageable);
 
-    assertThat(result).isEmpty();
+    assertThat(result.items()).isEmpty();
+    assertThat(result.totalElements()).isZero();
     verify(agMemberRepository, never()).summarizeByGroupIds(any());
   }
 

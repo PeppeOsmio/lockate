@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peppeosmio.lockate.anonymous_group.configuration_properties.AGLocationConfigurationProperties;
 import com.peppeosmio.lockate.anonymous_group.dto.*;
 import com.peppeosmio.lockate.anonymous_group.entity.AGMemberEntity;
+import com.peppeosmio.lockate.common.dto.PageResponseDto;
 import com.peppeosmio.lockate.anonymous_group.entity.AGMemberLocationEntity;
 import com.peppeosmio.lockate.anonymous_group.entity.AnonymousGroupEntity;
 import com.peppeosmio.lockate.anonymous_group.exceptions.*;
@@ -24,6 +25,7 @@ import com.peppeosmio.lockate.srp.InvalidSrpSessionException;
 import com.peppeosmio.lockate.srp.SrpService;
 import jakarta.annotation.Nullable;
 import jakarta.transaction.Transactional;
+import org.springframework.data.domain.Pageable;
 import java.math.BigInteger;
 import java.security.SecureRandom;
 import java.time.Duration;
@@ -32,7 +34,6 @@ import java.time.ZoneOffset;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 import lombok.extern.slf4j.Slf4j;
 import org.bouncycastle.crypto.CryptoException;
 import org.springframework.security.crypto.bcrypt.BCrypt;
@@ -354,9 +355,9 @@ public class AnonymousGroupService {
   }
 
   @Transactional
-  public List<AGAdminSummaryDto> listGroupsForAdmin() {
-    var groups =
-        StreamSupport.stream(anonymousGroupRepository.findAll().spliterator(), false).toList();
+  public PageResponseDto<AGAdminSummaryDto> listGroupsForAdmin(Pageable pageable) {
+    var page = anonymousGroupRepository.findAll(pageable);
+    var groups = page.getContent();
     var groupIds = groups.stream().map(AnonymousGroupEntity::getId).toList();
     var summaries =
         groupIds.isEmpty()
@@ -364,17 +365,19 @@ public class AnonymousGroupService {
             : agMemberRepository.summarizeByGroupIds(groupIds).stream()
                 .collect(
                     Collectors.toMap(AGGroupSummaryProjection::getGroupId, summary -> summary));
-    return groups.stream()
-        .map(
-            group -> {
-              var summary = summaries.get(group.getId());
-              return new AGAdminSummaryDto(
-                  group.getId(),
-                  group.getCreatedAt(),
-                  summary == null ? 0 : summary.getMemberCount(),
-                  summary == null ? null : summary.getLastLocationAt());
-            })
-        .toList();
+    var items =
+        groups.stream()
+            .map(
+                group -> {
+                  var summary = summaries.get(group.getId());
+                  return new AGAdminSummaryDto(
+                      group.getId(),
+                      group.getCreatedAt(),
+                      summary == null ? 0 : summary.getMemberCount(),
+                      summary == null ? null : summary.getLastLocationAt());
+                })
+            .toList();
+    return PageResponseDto.of(page, items);
   }
 
   @Transactional

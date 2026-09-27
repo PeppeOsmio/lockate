@@ -42,21 +42,25 @@ export function GroupDetailPage() {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-        <Typography variant="h5">
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={1}
+        sx={{ mb: 2, alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between' }}
+      >
+        <Typography variant="h5" sx={{ wordBreak: 'break-all' }}>
           Group <code>{anonymousGroupId}</code>
         </Typography>
-        <Stack direction="row" spacing={1}>
+        <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
           <ConfirmButton
             label="Delete group"
-            confirmLabel="Confirm delete group"
+            confirmLabel="Confirm delete"
             onConfirm={handleDeleteGroup}
           />
           <Button component={RouterLink} to="/anonymous-groups" variant="outlined">
-            Back to groups
+            Back
           </Button>
         </Stack>
-      </Box>
+      </Stack>
 
       {loading && <CircularProgress />}
       {error && <Alert severity="error">{error}</Alert>}

@@ -2,6 +2,7 @@ package com.peppeosmio.lockate.api_key;
 
 import com.peppeosmio.lockate.api_key.dto.ApiKeyCreatedDto;
 import com.peppeosmio.lockate.api_key.dto.ApiKeyDto;
+import com.peppeosmio.lockate.common.dto.PageResponseDto;
 import jakarta.transaction.Transactional;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -11,8 +12,8 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.*;
 import java.util.Base64;
-import java.util.stream.StreamSupport;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -52,14 +53,15 @@ public class ApiKeyService {
     return true;
   }
 
-  public List<ApiKeyDto> listApiKeys() {
-    var entities = apiKeyRepository.findAll().iterator();
-    return StreamSupport.stream(
-            Spliterators.spliteratorUnknownSize(entities, Spliterator.ORDERED), false)
-        .map(
-            entity ->
-                new ApiKeyDto(entity.getId(), entity.getCreatedAt(), entity.getLastValidated()))
-        .toList();
+  public PageResponseDto<ApiKeyDto> listApiKeys(Pageable pageable) {
+    var page = apiKeyRepository.findAll(pageable);
+    var items =
+        page.getContent().stream()
+            .map(
+                entity ->
+                    new ApiKeyDto(entity.getId(), entity.getCreatedAt(), entity.getLastValidated()))
+            .toList();
+    return PageResponseDto.of(page, items);
   }
 
   public Optional<ApiKeyDto> deleteApiKey(UUID id) {
