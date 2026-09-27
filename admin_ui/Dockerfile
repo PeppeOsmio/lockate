@@ -12,6 +12,7 @@ FROM nginx:alpine AS app
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY public/config.json /etc/nginx/templates/config.json.template
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
 
