@@ -23,9 +23,11 @@ services:
     restart: unless-stopped
 
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: maven:3-amazoncorretto-25
+    working_dir: /app
+    volumes:
+      - ./backend:/app
+      - backend_m2:/root/.m2
     env_file:
       - path: ./backend/.env
         required: false
@@ -46,6 +48,7 @@ services:
         condition: service_healthy
       valkey:
         condition: service_started
+    command: mvn spring-boot:run -Pdev
 
   admin-ui:
     image: node:22-alpine
@@ -56,11 +59,12 @@ services:
     environment:
       VITE_API_BASE_URL: http://localhost:3118
     ports:
-      - "5173:5173"
+      - "3119:3119"
     depends_on:
       - backend
-    command: sh -c "npm install && npm run dev -- --host"
+    command: sh -c "npm install && npm run dev -- --host --port 3119"
 
 volumes:
   postgres_data:
   admin_ui_node_modules:
+  backend_m2:

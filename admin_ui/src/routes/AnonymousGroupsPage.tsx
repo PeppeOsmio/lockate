@@ -6,6 +6,7 @@ import CircularProgress from '@mui/material/CircularProgress'
 import Typography from '@mui/material/Typography'
 import { useAdminApiClient } from '../api/AdminAPIClientContext'
 import type { AnonymousGroupSummary } from '../api/types'
+import { ConfirmButton } from '../components/ConfirmButton'
 import { Table } from '../components/Table'
 import { formatDate } from '../utils/format'
 
@@ -23,6 +24,11 @@ export function AnonymousGroupsPage() {
       .finally(() => setLoading(false))
   }, [client])
 
+  async function handleDelete(groupId: string) {
+    await client.deleteAnonymousGroup(groupId)
+    setGroups((prev) => prev.filter((g) => g.id !== groupId))
+  }
+
   return (
     <Box>
       <Typography variant="h5" sx={{ mb: 2 }}>
@@ -39,6 +45,18 @@ export function AnonymousGroupsPage() {
             { header: 'Created', render: (g) => formatDate(g.createdAt) },
             { header: 'Members', render: (g) => g.memberCount },
             { header: 'Last location received', render: (g) => formatDate(g.lastLocationAt) },
+            {
+              header: '',
+              render: (g) => (
+                <Box onClick={(e) => e.stopPropagation()} sx={{ display: 'inline-block' }}>
+                  <ConfirmButton
+                    label="Delete"
+                    confirmLabel="Confirm delete"
+                    onConfirm={() => handleDelete(g.id)}
+                  />
+                </Box>
+              ),
+            },
           ]}
           rows={groups}
           keyFor={(g) => g.id}

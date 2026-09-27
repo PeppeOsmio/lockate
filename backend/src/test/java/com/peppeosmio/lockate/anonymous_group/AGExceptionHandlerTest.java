@@ -3,6 +3,7 @@ package com.peppeosmio.lockate.anonymous_group;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotAdminException;
+import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.Base64Exception;
 import com.peppeosmio.lockate.srp.InvalidSrpSessionException;
@@ -36,6 +37,14 @@ class AGExceptionHandlerTest {
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     assertThat(response.getBody().error()).isEqualTo("ag_not_found");
+  }
+
+  @Test
+  void handleAGMemberNotFound_returns404() {
+    var response = handler.handleAGMemberNotFound(new AGMemberNotFoundException(UUID.randomUUID()));
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    assertThat(response.getBody().error()).isEqualTo("ag_member_not_found");
   }
 
   @Test

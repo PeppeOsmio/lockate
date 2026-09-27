@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
-import { Link as RouterLink, useParams } from 'react-router-dom'
+import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
+import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import { useAdminApiClient } from '../api/AdminAPIClientContext'
 import type { AGMember } from '../api/types'
+import { ConfirmButton } from '../components/ConfirmButton'
 import { Table } from '../components/Table'
 import { formatDate } from '../utils/format'
 
@@ -16,6 +18,7 @@ export function GroupDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const client = useAdminApiClient()
+  const navigate = useNavigate()
 
   useEffect(() => {
     if (!anonymousGroupId) return
@@ -25,15 +28,34 @@ export function GroupDetailPage() {
       .finally(() => setLoading(false))
   }, [client, anonymousGroupId])
 
+  async function handleDeleteGroup() {
+    if (!anonymousGroupId) return
+    await client.deleteAnonymousGroup(anonymousGroupId)
+    navigate('/anonymous-groups')
+  }
+
+  async function handleDeleteMember(memberId: string) {
+    if (!anonymousGroupId) return
+    await client.deleteGroupMember(anonymousGroupId, memberId)
+    setMembers((prev) => prev.filter((m) => m.id !== memberId))
+  }
+
   return (
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
         <Typography variant="h5">
           Group <code>{anonymousGroupId}</code>
         </Typography>
-        <Button component={RouterLink} to="/anonymous-groups" variant="outlined">
-          Back to groups
-        </Button>
+        <Stack direction="row" spacing={1}>
+          <ConfirmButton
+            label="Delete group"
+            confirmLabel="Confirm delete group"
+            onConfirm={handleDeleteGroup}
+          />
+          <Button component={RouterLink} to="/anonymous-groups" variant="outlined">
+            Back to groups
+          </Button>
+        </Stack>
       </Box>
 
       {loading && <CircularProgress />}
@@ -46,6 +68,16 @@ export function GroupDetailPage() {
             { header: 'Joined', render: (m) => formatDate(m.createdAt) },
             { header: 'Admin', render: (m) => (m.isAGAdmin ? 'Yes' : 'No') },
             { header: 'Last location received', render: (m) => formatDate(m.lastLocationAt) },
+            {
+              header: '',
+              render: (m) => (
+                <ConfirmButton
+                  label="Remove"
+                  confirmLabel="Confirm remove"
+                  onConfirm={() => handleDeleteMember(m.id)}
+                />
+              ),
+            },
           ]}
           rows={members}
           keyFor={(m) => m.id}

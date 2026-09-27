@@ -1,6 +1,7 @@
 package com.peppeosmio.lockate.anonymous_group;
 
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotAdminException;
+import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.Base64Exception;
 import com.peppeosmio.lockate.common.dto.ErrorResponseDto;
@@ -29,6 +30,12 @@ public class AGExceptionHandler {
   @ExceptionHandler(AGNotFoundException.class)
   public ResponseEntity<ErrorResponseDto> handleAGNotFound(AGNotFoundException e) {
     return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErrorResponseDto("ag_not_found"));
+  }
+
+  @ExceptionHandler(AGMemberNotFoundException.class)
+  public ResponseEntity<ErrorResponseDto> handleAGMemberNotFound(AGMemberNotFoundException e) {
+    return ResponseEntity.status(HttpStatus.NOT_FOUND)
+        .body(new ErrorResponseDto("ag_member_not_found"));
   }
 
   @ExceptionHandler(AGMemberNotAdminException.class)

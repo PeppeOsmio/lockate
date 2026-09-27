@@ -3,6 +3,7 @@ package com.peppeosmio.lockate.admin.controllers;
 import com.peppeosmio.lockate.admin.security.SecuredAdmin;
 import com.peppeosmio.lockate.anonymous_group.dto.AGAdminMemberDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGAdminSummaryDto;
+import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.service.AnonymousGroupService;
 import java.util.List;
@@ -32,5 +33,18 @@ public class AdminAnonymousGroupController {
   List<AGAdminMemberDto> listMembers(@PathVariable UUID anonymousGroupId)
       throws AGNotFoundException {
     return anonymousGroupService.listMembersForAdmin(anonymousGroupId);
+  }
+
+  @DeleteMapping("/{anonymousGroupId}")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  void deleteGroup(@PathVariable UUID anonymousGroupId) throws AGNotFoundException {
+    anonymousGroupService.deleteAnonymousGroupForAdmin(anonymousGroupId);
+  }
+
+  @DeleteMapping("/{anonymousGroupId}/members/{agMemberId}")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  void deleteMember(@PathVariable UUID anonymousGroupId, @PathVariable UUID agMemberId)
+      throws AGMemberNotFoundException {
+    anonymousGroupService.deleteMemberForAdmin(anonymousGroupId, agMemberId);
   }
 }
