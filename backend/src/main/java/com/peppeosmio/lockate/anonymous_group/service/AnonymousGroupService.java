@@ -411,4 +411,22 @@ public class AnonymousGroupService {
     }
     anonymousGroupRepository.deleteAnonymousGroup(anonymousGroupId);
   }
+
+  @Transactional
+  public void deleteAnonymousGroupForAdmin(UUID anonymousGroupId) throws AGNotFoundException {
+    if (!anonymousGroupRepository.existsById(anonymousGroupId)) {
+      throw new AGNotFoundException(anonymousGroupId);
+    }
+    anonymousGroupRepository.deleteAnonymousGroup(anonymousGroupId);
+  }
+
+  @Transactional
+  public void deleteMemberForAdmin(UUID anonymousGroupId, UUID agMemberId)
+      throws AGMemberNotFoundException {
+    var agMemberEntity =
+        agMemberRepository
+            .findByIdAndAnonymousGroupId(agMemberId, anonymousGroupId)
+            .orElseThrow(() -> new AGMemberNotFoundException(agMemberId));
+    agMemberRepository.deleteById(agMemberEntity.getId());
+  }
 }

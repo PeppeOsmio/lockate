@@ -14,6 +14,7 @@ import com.peppeosmio.lockate.anonymous_group.dto.*;
 import com.peppeosmio.lockate.anonymous_group.entity.AGMemberEntity;
 import com.peppeosmio.lockate.anonymous_group.entity.AnonymousGroupEntity;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotAdminException;
+import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.Base64Exception;
 import com.peppeosmio.lockate.anonymous_group.mapper.AGMemberMapper;
@@ -634,5 +635,50 @@ class AnonymousGroupServiceTest {
     assertThatThrownBy(() -> service.deleteAnonymousGroup(groupId, authentication))
         .isInstanceOf(AGMemberNotAdminException.class);
     verify(anonymousGroupRepository, never()).deleteAnonymousGroup(any());
+  }
+
+  // ---------- deleteAnonymousGroupForAdmin ----------
+
+  @Test
+  void deleteAnonymousGroupForAdmin_existingGroup_deletesGroup() throws Exception {
+    when(anonymousGroupRepository.existsById(groupId)).thenReturn(true);
+
+    service.deleteAnonymousGroupForAdmin(groupId);
+
+    verify(anonymousGroupRepository).deleteAnonymousGroup(groupId);
+  }
+
+  @Test
+  void deleteAnonymousGroupForAdmin_missingGroup_throwsAGNotFoundException() {
+    when(anonymousGroupRepository.existsById(groupId)).thenReturn(false);
+
+    assertThatThrownBy(() -> service.deleteAnonymousGroupForAdmin(groupId))
+        .isInstanceOf(AGNotFoundException.class);
+    verify(anonymousGroupRepository, never()).deleteAnonymousGroup(any());
+  }
+
+  // ---------- deleteMemberForAdmin ----------
+
+  @Test
+  void deleteMemberForAdmin_existingMember_deletesMember() throws Exception {
+    var memberId = UUID.randomUUID();
+    var member = newMember(memberId, "token".getBytes(), false, groupEntity);
+    when(agMemberRepository.findByIdAndAnonymousGroupId(memberId, groupId))
+        .thenReturn(Optional.of(member));
+
+    service.deleteMemberForAdmin(groupId, memberId);
+
+    verify(agMemberRepository).deleteById(memberId);
+  }
+
+  @Test
+  void deleteMemberForAdmin_missingMember_throwsAGMemberNotFoundException() {
+    var memberId = UUID.randomUUID();
+    when(agMemberRepository.findByIdAndAnonymousGroupId(memberId, groupId))
+        .thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.deleteMemberForAdmin(groupId, memberId))
+        .isInstanceOf(AGMemberNotFoundException.class);
+    verify(agMemberRepository, never()).deleteById(any());
   }
 }
