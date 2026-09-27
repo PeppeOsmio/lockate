@@ -1,3 +1,11 @@
+export interface Page<T> {
+  items: T[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+}
+
 export interface ApiKey {
   id: string
   createdAt: string

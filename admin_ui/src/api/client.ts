@@ -1,5 +1,5 @@
 import { clearToken, getToken } from '../auth/tokenStorage'
-import type { AGMember, AnonymousGroupSummary, ApiKey, ApiKeyCreated } from './types'
+import type { AGMember, AnonymousGroupSummary, ApiKey, ApiKeyCreated, Page } from './types'
 
 export class ApiError extends Error {
   status: number
@@ -61,8 +61,8 @@ export class AdminAPIClient {
     return response.ok
   }
 
-  listAnonymousGroups(): Promise<AnonymousGroupSummary[]> {
-    return this.apiFetch('/api/admin/anonymous-groups')
+  listAnonymousGroups(page = 0, size = 20): Promise<Page<AnonymousGroupSummary>> {
+    return this.apiFetch(`/api/admin/anonymous-groups?page=${page}&size=${size}`)
   }
 
   listGroupMembers(anonymousGroupId: string): Promise<AGMember[]> {
@@ -79,8 +79,8 @@ export class AdminAPIClient {
     })
   }
 
-  listApiKeys(): Promise<ApiKey[]> {
-    return this.apiFetch('/api/admin/api-keys')
+  listApiKeys(page = 0, size = 20): Promise<Page<ApiKey>> {
+    return this.apiFetch(`/api/admin/api-keys?page=${page}&size=${size}`)
   }
 
   createApiKey(): Promise<ApiKeyCreated> {

@@ -5,8 +5,10 @@ import com.peppeosmio.lockate.api_key.ApiKeyService;
 import com.peppeosmio.lockate.api_key.dto.ApiKeyCreatedDto;
 import com.peppeosmio.lockate.api_key.dto.ApiKeyDto;
 import com.peppeosmio.lockate.common.dto.ErrorResponseDto;
-import java.util.List;
+import com.peppeosmio.lockate.common.dto.PageResponseDto;
 import java.util.UUID;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -24,8 +26,10 @@ public class AdminApiKeyController {
 
   @GetMapping("")
   @ResponseStatus(HttpStatus.OK)
-  List<ApiKeyDto> listApiKeys() {
-    return apiKeyService.listApiKeys();
+  PageResponseDto<ApiKeyDto> listApiKeys(
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size) {
+    return apiKeyService.listApiKeys(PageRequest.of(page, size, Sort.by("createdAt").descending()));
   }
 
   @PostMapping("")

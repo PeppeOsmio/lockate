@@ -3,6 +3,8 @@ package com.peppeosmio.lockate;
 import com.peppeosmio.lockate.api_key.ApiKeyService;
 import java.util.UUID;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
@@ -30,7 +32,9 @@ public class CliRunner implements CommandLineRunner {
       }
 
       case "list-api-keys" -> {
-        var apiKeyDtos = apiKeyService.listApiKeys();
+        var apiKeyPage = apiKeyService.listApiKeys(
+            PageRequest.of(0, 1000, Sort.by("createdAt").descending()));
+        var apiKeyDtos = apiKeyPage.items();
         System.out.println("\n\n----------------------------------------------");
         for (int i = 0; i < apiKeyDtos.size(); i++) {
           var apiKeyDto = apiKeyDtos.get(i);
