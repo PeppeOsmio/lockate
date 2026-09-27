@@ -69,6 +69,16 @@ export class AdminAPIClient {
     return this.apiFetch(`/api/admin/anonymous-groups/${anonymousGroupId}/members`)
   }
 
+  deleteAnonymousGroup(anonymousGroupId: string): Promise<void> {
+    return this.apiFetch(`/api/admin/anonymous-groups/${anonymousGroupId}`, { method: 'DELETE' })
+  }
+
+  deleteGroupMember(anonymousGroupId: string, memberId: string): Promise<void> {
+    return this.apiFetch(`/api/admin/anonymous-groups/${anonymousGroupId}/members/${memberId}`, {
+      method: 'DELETE',
+    })
+  }
+
   listApiKeys(): Promise<ApiKey[]> {
     return this.apiFetch('/api/admin/api-keys')
   }
