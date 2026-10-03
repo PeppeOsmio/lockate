@@ -1,5 +1,5 @@
-# The 25 tag is stuck on GraalVM 25.0.2, which builds a much larger binary.
-FROM ghcr.io/graalvm/native-image-community:25i4-25.0.4.1.1 AS builder
+# The 25 tag is stuck on GraalVM 25.0.2, which builds a much larger binary. ol9 because the default Oracle Linux 10 image needs x86-64-v3.
+FROM ghcr.io/graalvm/native-image-community:25i4-25.0.4.1.1-ol9 AS builder
 
 WORKDIR /app
 
