@@ -1,4 +1,4 @@
-FROM amazoncorretto:25-alpine3.22-jdk AS builder
+FROM ghcr.io/graalvm/native-image-community:25 AS builder
 
 WORKDIR /app
 
@@ -10,17 +10,18 @@ RUN ./mvnw dependency:go-offline -B
 
 COPY src src
 
-RUN ./mvnw clean package -DskipTests
+RUN ./mvnw -Pnative native:compile -DskipTests -B
 
-FROM amazoncorretto:25-alpine3.22 AS app
+FROM debian:stable-slim AS app
 
 WORKDIR /app
 
-RUN apk add --no-cache curl
+RUN useradd --system --no-create-home lockate
 
-COPY --from=builder /app/target/*.jar lockate.jar
+COPY --from=builder /app/target/lockate lockate
+
+USER lockate
 
 EXPOSE 3118
 
-# Run the application
-ENTRYPOINT ["java", "-jar", "lockate.jar"]
+ENTRYPOINT ["./lockate"]
