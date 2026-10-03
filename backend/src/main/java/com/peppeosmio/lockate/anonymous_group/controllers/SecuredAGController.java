@@ -1,6 +1,5 @@
 package com.peppeosmio.lockate.anonymous_group.controllers;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.peppeosmio.lockate.anonymous_group.dto.AGGetMembersCountDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGGetMembersResDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGLocationSaveReqDto;
@@ -67,7 +66,7 @@ public class SecuredAGController {
       @PathVariable UUID anonymousGroupId,
       @RequestBody AGLocationSaveReqDto dto,
       AGMemberAuthentication authentication)
-      throws UnauthorizedException, AGNotFoundException, JsonProcessingException {
+      throws UnauthorizedException, AGNotFoundException {
     anonymousGroupService.saveLocation(
         anonymousGroupId, (AGMemberAuthentication) authentication, dto, null);
   }

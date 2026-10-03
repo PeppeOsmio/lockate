@@ -1,7 +1,5 @@
 package com.peppeosmio.lockate.anonymous_group.websocket;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peppeosmio.lockate.anonymous_group.dto.AGLocationSaveReqDto;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.security.AGMemberAuthentication;
@@ -18,6 +16,8 @@ import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 @Slf4j
 @Component
@@ -84,7 +84,7 @@ public class AGSendLocationWSHandler extends TextWebSocketHandler {
       if (timestampSaved != null) {
         lastSavedLocationsCache.put(agMemberAuthentication.getId(), timestampSaved);
       }
-    } catch (AGNotFoundException | UnauthorizedException | JsonProcessingException e) {
+    } catch (AGNotFoundException | UnauthorizedException | JacksonException e) {
       session.close(CloseStatus.BAD_DATA);
     } catch (Exception e) {
       session.close(CloseStatus.SERVER_ERROR);

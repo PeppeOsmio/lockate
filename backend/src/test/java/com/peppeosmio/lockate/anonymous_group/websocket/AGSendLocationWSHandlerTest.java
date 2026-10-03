@@ -10,7 +10,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peppeosmio.lockate.anonymous_group.dto.AGLocationSaveReqDto;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.security.AGMemberAuthentication;
@@ -31,6 +30,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
+import tools.jackson.databind.ObjectMapper;
 
 @ExtendWith(MockitoExtension.class)
 class AGSendLocationWSHandlerTest {

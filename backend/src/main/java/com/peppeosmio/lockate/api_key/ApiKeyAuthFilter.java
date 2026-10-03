@@ -1,6 +1,5 @@
 package com.peppeosmio.lockate.api_key;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peppeosmio.lockate.common.dto.ErrorResponseDto;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -12,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import tools.jackson.databind.ObjectMapper;
 
 @Slf4j
 @Component

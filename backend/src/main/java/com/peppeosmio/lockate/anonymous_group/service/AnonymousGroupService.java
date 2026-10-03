@@ -1,12 +1,8 @@
 package com.peppeosmio.lockate.anonymous_group.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peppeosmio.lockate.anonymous_group.configuration_properties.AGLocationConfigurationProperties;
 import com.peppeosmio.lockate.anonymous_group.dto.*;
 import com.peppeosmio.lockate.anonymous_group.entity.AGMemberEntity;
-import com.peppeosmio.lockate.common.dto.PageQueryDto;
-import com.peppeosmio.lockate.common.dto.PageResponseDto;
 import com.peppeosmio.lockate.anonymous_group.entity.AGMemberLocationEntity;
 import com.peppeosmio.lockate.anonymous_group.entity.AnonymousGroupEntity;
 import com.peppeosmio.lockate.anonymous_group.exceptions.*;
@@ -19,6 +15,8 @@ import com.peppeosmio.lockate.anonymous_group.repository.AnonymousGroupRepositor
 import com.peppeosmio.lockate.anonymous_group.security.AGMemberAuthentication;
 import com.peppeosmio.lockate.common.classes.EncryptedString;
 import com.peppeosmio.lockate.common.dto.EncryptedDataDto;
+import com.peppeosmio.lockate.common.dto.PageQueryDto;
+import com.peppeosmio.lockate.common.dto.PageResponseDto;
 import com.peppeosmio.lockate.common.exceptions.NotFoundException;
 import com.peppeosmio.lockate.common.exceptions.UnauthorizedException;
 import com.peppeosmio.lockate.redis.RedisService;
@@ -26,8 +24,6 @@ import com.peppeosmio.lockate.srp.InvalidSrpSessionException;
 import com.peppeosmio.lockate.srp.SrpService;
 import jakarta.annotation.Nullable;
 import jakarta.transaction.Transactional;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import java.math.BigInteger;
 import java.security.SecureRandom;
 import java.time.Duration;
@@ -38,8 +34,12 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.bouncycastle.crypto.CryptoException;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.bcrypt.BCrypt;
 import org.springframework.stereotype.Service;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 @Slf4j
 @Service
@@ -265,7 +265,6 @@ public class AnonymousGroupService {
    * @return the LocalDateTime if it was saved in the db
    * @throws AGNotFoundException
    * @throws UnauthorizedException
-   * @throws JsonProcessingException
    */
   @Transactional
   public Optional<LocalDateTime> saveLocation(
@@ -273,7 +272,7 @@ public class AnonymousGroupService {
       AGMemberAuthentication authentication,
       AGLocationSaveReqDto dto,
       @Nullable LocalDateTime lastSavedLocationTimeStamp)
-      throws AGNotFoundException, UnauthorizedException, JsonProcessingException {
+      throws AGNotFoundException, UnauthorizedException {
     if (!(authentication instanceof AGMemberAuthentication agMemberAuthentication)) {
       throw new UnauthorizedException();
     }
@@ -342,7 +341,7 @@ public class AnonymousGroupService {
                 if (!agLocationUpdate.memberId().equals(authentication.getId())) {
                   onLocation.accept(agLocationUpdate);
                 }
-              } catch (JsonProcessingException e) {
+              } catch (JacksonException e) {
                 e.printStackTrace();
               }
             });

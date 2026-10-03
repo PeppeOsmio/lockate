@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 
 class JacksonConfigTest {
 
-  private final com.fasterxml.jackson.databind.ObjectMapper objectMapper =
+  private final tools.jackson.databind.ObjectMapper objectMapper =
       new JacksonConfig().objectMapper();
 
   @Test

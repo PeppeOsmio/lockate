@@ -1,6 +1,5 @@
 package com.peppeosmio.lockate.anonymous_group.security;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peppeosmio.lockate.anonymous_group.controllers.SecuredAGMember;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
 import com.peppeosmio.lockate.common.dto.ErrorResponseDto;
@@ -16,6 +15,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.servlet.HandlerMapping;
+import tools.jackson.databind.ObjectMapper;
 
 @Component
 @Slf4j
