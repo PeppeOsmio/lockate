@@ -1,5 +1,4 @@
-# The 25 tag is stuck on GraalVM 25.0.2, which builds a much larger binary. ol9 because the default Oracle Linux 10 image needs x86-64-v3.
-FROM ghcr.io/graalvm/native-image-community:25i4-25.0.4.1.1-ol9 AS builder
+FROM amazoncorretto:25-alpine3.22-jdk AS builder
 
 WORKDIR /app
 
@@ -11,18 +10,17 @@ RUN ./mvnw dependency:go-offline -B
 
 COPY src src
 
-RUN ./mvnw -Pnative native:compile -DskipTests -B
+RUN ./mvnw clean package -DskipTests
 
-FROM debian:stable-slim AS app
+FROM amazoncorretto:25-alpine3.22 AS app
 
 WORKDIR /app
 
-RUN useradd --system --no-create-home lockate
+RUN apk add --no-cache curl
 
-COPY --from=builder /app/target/lockate lockate
-
-USER lockate
+COPY --from=builder /app/target/*.jar lockate.jar
 
 EXPOSE 3118
 
-ENTRYPOINT ["./lockate"]
+# Run the application
+ENTRYPOINT ["java", "-jar", "lockate.jar"]

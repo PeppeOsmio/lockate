@@ -31,7 +31,7 @@ services:
   backend:
     build:
       context: backend
-      dockerfile: Dockerfile
+      dockerfile: "${BACKEND_DOCKERFILE:-Dockerfile}"
     restart: unless-stopped
     ports:
       - "3118:3118"
