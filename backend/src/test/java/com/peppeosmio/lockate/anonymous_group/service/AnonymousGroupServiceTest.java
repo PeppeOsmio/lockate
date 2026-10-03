@@ -8,7 +8,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peppeosmio.lockate.anonymous_group.configuration_properties.AGLocationConfigurationProperties;
 import com.peppeosmio.lockate.anonymous_group.dto.*;
 import com.peppeosmio.lockate.anonymous_group.entity.AGMemberEntity;
@@ -52,6 +51,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.redis.connection.MessageListener;
 import org.springframework.security.crypto.bcrypt.BCrypt;
+import tools.jackson.databind.ObjectMapper;
 
 @ExtendWith(MockitoExtension.class)
 class AnonymousGroupServiceTest {

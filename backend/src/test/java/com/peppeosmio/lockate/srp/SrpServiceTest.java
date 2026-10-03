@@ -7,7 +7,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peppeosmio.lockate.anonymous_group.exceptions.SrpSessionNotFoundException;
 import com.peppeosmio.lockate.redis.RedisService;
 import java.math.BigInteger;
@@ -25,6 +24,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import tools.jackson.databind.json.JsonMapper;
 
 @ExtendWith(MockitoExtension.class)
 class SrpServiceTest {
@@ -44,7 +44,7 @@ class SrpServiceTest {
   @BeforeEach
   void setUp() {
     random.nextBytes(salt);
-    srpService = new SrpService(redisService, new ObjectMapper().findAndRegisterModules());
+    srpService = new SrpService(redisService, JsonMapper.builder().build());
 
     var gen = new SRP6VerifierGenerator();
     gen.init(SRP6StandardGroups.rfc5054_2048, new SHA256Digest());

@@ -1,7 +1,5 @@
 package com.peppeosmio.lockate.srp;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peppeosmio.lockate.anonymous_group.exceptions.SrpSessionNotFoundException;
 import com.peppeosmio.lockate.redis.RedisService;
 import java.math.BigInteger;
@@ -16,6 +14,8 @@ import org.bouncycastle.crypto.CryptoException;
 import org.bouncycastle.crypto.agreement.srp.SRP6StandardGroups;
 import org.bouncycastle.crypto.digests.SHA256Digest;
 import org.springframework.stereotype.Service;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 @Slf4j
 @Service
@@ -55,7 +55,7 @@ public class SrpService {
     String sessionJson;
     try {
       sessionJson = objectMapper.writeValueAsString(session);
-    } catch (JsonProcessingException e) {
+    } catch (JacksonException e) {
       throw new InvalidSrpSessionException();
     }
     redisService.saveValue(sessionId, sessionJson, Duration.ofMinutes(5));
@@ -71,7 +71,7 @@ public class SrpService {
     SrpSession srpSession;
     try {
       srpSession = objectMapper.readValue(srpSessionJson, SrpSession.class);
-    } catch (JsonProcessingException e) {
+    } catch (JacksonException e) {
       e.printStackTrace();
       throw new InvalidSrpSessionException();
     }

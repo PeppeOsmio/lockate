@@ -1,7 +1,5 @@
 package com.peppeosmio.lockate.anonymous_group.websocket;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.security.AGMemberAuthenticator;
 import com.peppeosmio.lockate.common.exceptions.UnauthorizedException;
@@ -15,6 +13,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.server.HandshakeInterceptor;
+import tools.jackson.databind.ObjectMapper;
 
 @Component
 @Slf4j
@@ -33,8 +32,7 @@ public class AGSendLocationHandshakeInterceptor implements HandshakeInterceptor 
       ServerHttpRequest request,
       ServerHttpResponse response,
       WebSocketHandler wsHandler,
-      Map<String, Object> attributes)
-      throws JsonProcessingException {
+      Map<String, Object> attributes) {
 
     var path = request.getURI().getPath();
     String[] segments = path.split("/");
