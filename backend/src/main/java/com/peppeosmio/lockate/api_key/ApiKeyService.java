@@ -2,6 +2,7 @@ package com.peppeosmio.lockate.api_key;
 
 import com.peppeosmio.lockate.api_key.dto.ApiKeyCreatedDto;
 import com.peppeosmio.lockate.api_key.dto.ApiKeyDto;
+import com.peppeosmio.lockate.common.dto.PageQueryDto;
 import com.peppeosmio.lockate.common.dto.PageResponseDto;
 import jakarta.transaction.Transactional;
 import java.nio.charset.StandardCharsets;
@@ -13,7 +14,8 @@ import java.time.ZoneOffset;
 import java.util.*;
 import java.util.Base64;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -53,7 +55,8 @@ public class ApiKeyService {
     return true;
   }
 
-  public PageResponseDto<ApiKeyDto> listApiKeys(Pageable pageable) {
+  public PageResponseDto<ApiKeyDto> listApiKeys(PageQueryDto query) {
+    var pageable = PageRequest.of(query.page(), query.size(), Sort.by("createdAt").descending());
     var page = apiKeyRepository.findAll(pageable);
     var items =
         page.getContent().stream()

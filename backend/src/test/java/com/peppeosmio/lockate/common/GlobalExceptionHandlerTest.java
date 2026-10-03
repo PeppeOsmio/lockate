@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.validation.BindException;
 import org.springframework.web.context.request.ServletWebRequest;
 
 class GlobalExceptionHandlerTest {
@@ -28,6 +29,14 @@ class GlobalExceptionHandlerTest {
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     assertThat(response.getBody().error()).isEqualTo("not_found");
+  }
+
+  @Test
+  void handleBind_returns400() {
+    var response = handler.handleBind(new BindException(new Object(), "query"));
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(response.getBody().error()).isEqualTo("invalid_request");
   }
 
   @Test

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peppeosmio.lockate.anonymous_group.configuration_properties.AGLocationConfigurationProperties;
 import com.peppeosmio.lockate.anonymous_group.dto.*;
 import com.peppeosmio.lockate.anonymous_group.entity.AGMemberEntity;
+import com.peppeosmio.lockate.common.dto.PageQueryDto;
 import com.peppeosmio.lockate.common.dto.PageResponseDto;
 import com.peppeosmio.lockate.anonymous_group.entity.AGMemberLocationEntity;
 import com.peppeosmio.lockate.anonymous_group.entity.AnonymousGroupEntity;
@@ -25,7 +26,8 @@ import com.peppeosmio.lockate.srp.InvalidSrpSessionException;
 import com.peppeosmio.lockate.srp.SrpService;
 import jakarta.annotation.Nullable;
 import jakarta.transaction.Transactional;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import java.math.BigInteger;
 import java.security.SecureRandom;
 import java.time.Duration;
@@ -355,7 +357,8 @@ public class AnonymousGroupService {
   }
 
   @Transactional
-  public PageResponseDto<AGAdminSummaryDto> listGroupsForAdmin(Pageable pageable) {
+  public PageResponseDto<AGAdminSummaryDto> listGroupsForAdmin(PageQueryDto query) {
+    var pageable = PageRequest.of(query.page(), query.size(), Sort.by("createdAt").descending());
     var page = anonymousGroupRepository.findAll(pageable);
     var groups = page.getContent();
     var groupIds = groups.stream().map(AnonymousGroupEntity::getId).toList();
