@@ -25,6 +25,7 @@ import com.peppeosmio.lockate.anonymous_group.repository.AnonymousGroupRepositor
 import com.peppeosmio.lockate.anonymous_group.security.AGMemberAuthentication;
 import com.peppeosmio.lockate.common.classes.EncryptedString;
 import com.peppeosmio.lockate.common.dto.EncryptedDataDto;
+import com.peppeosmio.lockate.common.dto.PageQueryDto;
 import com.peppeosmio.lockate.common.exceptions.UnauthorizedException;
 import com.peppeosmio.lockate.redis.RedisService;
 import com.peppeosmio.lockate.srp.SrpService;
@@ -549,7 +550,7 @@ class AnonymousGroupServiceTest {
     when(agMemberRepository.summarizeByGroupIds(List.of(groupId, otherGroupId)))
         .thenReturn(List.of(summary));
 
-    var result = service.listGroupsForAdmin(pageable);
+    var result = service.listGroupsForAdmin(new PageQueryDto(0, 20));
 
     assertThat(result.items()).hasSize(2);
     assertThat(result.totalElements()).isEqualTo(2);
@@ -570,7 +571,7 @@ class AnonymousGroupServiceTest {
     when(anonymousGroupRepository.findAll(pageable))
         .thenReturn(new PageImpl<>(List.of(), pageable, 0));
 
-    var result = service.listGroupsForAdmin(pageable);
+    var result = service.listGroupsForAdmin(new PageQueryDto(0, 20));
 
     assertThat(result.items()).isEmpty();
     assertThat(result.totalElements()).isZero();

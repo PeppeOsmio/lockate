@@ -2,7 +2,6 @@ package com.peppeosmio.lockate.admin.controllers;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -12,6 +11,7 @@ import com.peppeosmio.lockate.anonymous_group.dto.AGAdminSummaryDto;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.service.AnonymousGroupService;
+import com.peppeosmio.lockate.common.dto.PageQueryDto;
 import com.peppeosmio.lockate.common.dto.PageResponseDto;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -22,7 +22,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Pageable;
 
 @ExtendWith(MockitoExtension.class)
 class AdminAnonymousGroupControllerTest {
@@ -40,11 +39,12 @@ class AdminAnonymousGroupControllerTest {
   void listGroups_delegatesToServiceAndReturnsPage() {
     var dto = new AGAdminSummaryDto(UUID.randomUUID(), LocalDateTime.now(ZoneOffset.UTC), 2L, null);
     var page = new PageResponseDto<>(List.of(dto), 0, 20, 1L, 1);
-    when(anonymousGroupService.listGroupsForAdmin(any(Pageable.class))).thenReturn(page);
+    var query = new PageQueryDto(0, 20);
+    when(anonymousGroupService.listGroupsForAdmin(query)).thenReturn(page);
 
-    var result = controller.listGroups(0, 20);
+    var result = controller.listGroups(query);
 
-    verify(anonymousGroupService).listGroupsForAdmin(any(Pageable.class));
+    verify(anonymousGroupService).listGroupsForAdmin(query);
     assertThat(result.items()).hasSize(1);
   }
 

@@ -6,6 +6,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.peppeosmio.lockate.common.dto.PageQueryDto;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -110,7 +111,7 @@ class ApiKeyServiceTest {
     var pageable = PageRequest.of(0, 20, Sort.by("createdAt").descending());
     when(apiKeyRepository.findAll(pageable)).thenReturn(new PageImpl<>(List.of(entity), pageable, 1));
 
-    var result = service.listApiKeys(pageable);
+    var result = service.listApiKeys(new PageQueryDto(0, 20));
 
     assertThat(result.items()).hasSize(1);
     assertThat(result.totalElements()).isEqualTo(1);

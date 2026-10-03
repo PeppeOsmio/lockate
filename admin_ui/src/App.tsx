@@ -36,24 +36,18 @@ const NAV_ITEMS = [
   { label: 'Anonymous Groups', path: '/anonymous-groups', icon: <PeopleIcon /> },
 ]
 
-function NavDrawerContent({ onNavigate }: { onNavigate?: () => void }) {
+function NavDrawerContent({
+  mode,
+  onToggleMode,
+  onNavigate,
+}: {
+  mode: 'light' | 'dark'
+  onToggleMode: () => void
+  onNavigate?: () => void
+}) {
   const location = useLocation()
   const navigate = useNavigate()
   const { clearToken } = useToken()
-  const prefersDark = useMediaQuery('(prefers-color-scheme: dark)')
-  const [mode, setMode] = useState<'light' | 'dark'>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY)
-    if (saved === 'light' || saved === 'dark') return saved
-    return prefersDark ? 'dark' : 'light'
-  })
-
-  function toggleMode() {
-    setMode((prev) => {
-      const next = prev === 'light' ? 'dark' : 'light'
-      localStorage.setItem(STORAGE_KEY, next)
-      return next
-    })
-  }
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -85,7 +79,7 @@ function NavDrawerContent({ onNavigate }: { onNavigate?: () => void }) {
       <Divider />
       <Box sx={{ display: 'flex', justifyContent: 'space-around', p: 1 }}>
         <Tooltip title="Toggle theme">
-          <IconButton onClick={toggleMode} size="small">
+          <IconButton onClick={onToggleMode} size="small">
             {mode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
           </IconButton>
         </Tooltip>
@@ -101,12 +95,20 @@ function NavDrawerContent({ onNavigate }: { onNavigate?: () => void }) {
 
 function AdminLayout() {
   const prefersDark = useMediaQuery('(prefers-color-scheme: dark)')
-  const [mode] = useState<'light' | 'dark'>(() => {
+  const [mode, setMode] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem(STORAGE_KEY)
     if (saved === 'light' || saved === 'dark') return saved
     return prefersDark ? 'dark' : 'light'
   })
   const theme = useMemo(() => buildTheme(mode), [mode])
+
+  function toggleMode() {
+    setMode((prev) => {
+      const next = prev === 'light' ? 'dark' : 'light'
+      localStorage.setItem(STORAGE_KEY, next)
+      return next
+    })
+  }
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'))
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -141,7 +143,11 @@ function AdminLayout() {
             '& .MuiDrawer-paper': { width: DRAWER_WIDTH, boxSizing: 'border-box' },
           }}
         >
-          <NavDrawerContent onNavigate={isDesktop ? undefined : () => setMobileOpen(false)} />
+          <NavDrawerContent
+            mode={mode}
+            onToggleMode={toggleMode}
+            onNavigate={isDesktop ? undefined : () => setMobileOpen(false)}
+          />
         </Drawer>
 
         {/* Main content */}
