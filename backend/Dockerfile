@@ -1,4 +1,5 @@
-FROM ghcr.io/graalvm/native-image-community:latest AS builder
+# GraalVM CE 25.0.4. The 25 tag is stuck on 25.0.2, which builds a much larger binary, so pin by digest.
+FROM ghcr.io/graalvm/native-image-community:latest@sha256:287f82eefd5d631865302df00a8555bcf80e3c0291da171fb7f72d594a542315 AS builder
 
 WORKDIR /app
 
