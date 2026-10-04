@@ -1,5 +1,6 @@
 package com.peppeosmio.lockate.ui.screens.home_page
 
+import com.peppeosmio.lockate.ui.composables.ErrorDialog
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.EnterTransition
@@ -68,16 +69,12 @@ fun HomePageScreen(
 
     LaunchedEffect(true) {
         viewModel.snackbarEvents.collect { snackbarMessage ->
-            val result = snackbarHostState.showSnackbar(
-                message = snackbarMessage.text,
-                snackbarMessage.errorInfo?.let { "More" },
-                withDismissAction = true
-            )
-            when (result) {
-                SnackbarResult.Dismissed -> Unit
-                SnackbarResult.ActionPerformed -> snackbarMessage.errorInfo?.let {
-                    viewModel.showErrorDialog(it)
-                }
+            if (snackbarMessage.errorInfo != null) {
+                viewModel.showErrorDialog(snackbarMessage)
+            } else {
+                snackbarHostState.showSnackbar(
+                    message = snackbarMessage.text, withDismissAction = true
+                )
             }
         }
     }
@@ -89,11 +86,7 @@ fun HomePageScreen(
     }
 
     // Error dialog
-    state.dialogErrorInfo?.let { error ->
-        AlertDialog(title = { Text(error.title) }, text = { Text(error.body) }, dismissButton = {
-            TextButton(onClick = { viewModel.hideErrorDialog() }) { Text("Dismiss") }
-        }, confirmButton = {}, onDismissRequest = { viewModel.hideErrorDialog() })
-    }
+    state.dialogError?.let { ErrorDialog(it, onDismiss = viewModel::hideErrorDialog) }
 
     if (state.showLogoutDialog && state.connections != null && state.selectedConnectionId != null) {
         val selectedConnection = state.connections!![state.selectedConnectionId]!!

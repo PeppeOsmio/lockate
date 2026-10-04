@@ -157,11 +157,11 @@ class HomePageViewModel(
     }
 
     fun hideErrorDialog() {
-        _state.update { it.copy(dialogErrorInfo = null) }
+        _state.update { it.copy(dialogError = null) }
     }
 
-    fun showErrorDialog(errorInfo: ErrorInfo) {
-        _state.update { it.copy(dialogErrorInfo = errorInfo) }
+    fun showErrorDialog(error: SnackbarErrorMessage) {
+        _state.update { it.copy(dialogError = error) }
     }
 
     fun showSnackbar(snackbarErrorMessage: SnackbarErrorMessage) {

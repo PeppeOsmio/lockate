@@ -1,7 +1,7 @@
 package com.peppeosmio.lockate.ui.screens.home_page
 
+import com.peppeosmio.lockate.utils.SnackbarErrorMessage
 import com.peppeosmio.lockate.domain.Connection
-import com.peppeosmio.lockate.utils.ErrorInfo
 
 data class HomePageState(
     val showLoadingOverlay: Boolean = false,
@@ -11,7 +11,7 @@ data class HomePageState(
     val searchText: String = "",
     val registeredOnSearch: ((query: String) -> Unit)? = null,
     val registeredOnTapFab: (() -> Unit)? = null,
-    val dialogErrorInfo: ErrorInfo? = null,
+    val dialogError: SnackbarErrorMessage? = null,
     val selectedConnectionId: Long? = null,
     val connections: Map<Long, Connection>? = null,
     val isConnectionsDialogOpen: Boolean = false,

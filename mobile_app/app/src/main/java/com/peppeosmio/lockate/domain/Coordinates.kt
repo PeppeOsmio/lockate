@@ -2,6 +2,7 @@ package com.peppeosmio.lockate.domain
 
 import com.peppeosmio.lockate.utils.DoubleBytesUtils
 import io.github.dellisd.spatialk.geojson.Position
+import java.util.Locale
 
 data class Coordinates(val latitude: Double, val longitude: Double) {
     fun toByteArray(): ByteArray {
@@ -13,6 +14,10 @@ data class Coordinates(val latitude: Double, val longitude: Double) {
     fun toMapLibreComposePosition() : Position {
         return Position(longitude = longitude, latitude = latitude)
     }
+
+    // Locale.ROOT keeps the dot separator so maps apps can parse the pasted "lat,lng"
+    fun toShareableString(): String =
+        String.format(Locale.ROOT, "%.6f,%.6f", latitude, longitude)
 
     companion object {
         val NAPOLI = Coordinates(latitude = 40.8517746, longitude = 14.2681244)

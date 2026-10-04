@@ -121,7 +121,12 @@ function AdminLayout() {
         {!isDesktop && (
           <AppBar position="fixed" sx={{ zIndex: (t) => t.zIndex.drawer + 1 }}>
             <Toolbar>
-              <IconButton color="inherit" edge="start" sx={{ mr: 1 }} onClick={() => setMobileOpen(true)}>
+              <IconButton
+                color="inherit"
+                edge="start"
+                sx={{ mr: 1 }}
+                onClick={() => setMobileOpen(true)}
+              >
                 <MenuIcon />
               </IconButton>
               <Typography variant="h6" sx={{ fontWeight: 700 }}>

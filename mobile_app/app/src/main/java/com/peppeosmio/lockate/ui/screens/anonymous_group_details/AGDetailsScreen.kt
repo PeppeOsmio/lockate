@@ -1,5 +1,9 @@
 package com.peppeosmio.lockate.ui.screens.anonymous_group_details
 
+import com.peppeosmio.lockate.ui.composables.ErrorDialog
+import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,10 +29,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.core.net.toUri
 import com.peppeosmio.lockate.domain.Coordinates
+import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.ui.composables.SmallCircularProgressIndicator
 import com.peppeosmio.lockate.utils.LoadingState
 import dev.sargunv.maplibrecompose.compose.rememberCameraState
@@ -64,6 +73,29 @@ fun AnonymousGroupDetailsScreen(
     var isMyLocationOldJob = remember<Job?> { null }
 
     val snackbarHostState = remember { SnackbarHostState() }
+    val clipboard = LocalClipboard.current
+    val context = LocalContext.current
+
+    fun copyCoordinates(member: AGMember) {
+        val coordinates = member.lastLocationRecord?.coordinates ?: return
+        coroutineScope.launch {
+            clipboard.setClipEntry(
+                ClipEntry(ClipData.newPlainText("coordinates", coordinates.toShareableString()))
+            )
+            snackbarHostState.showSnackbar("Coordinates copied to clipboard")
+        }
+    }
+
+    // The member name is deliberately not passed as the geo label so the decrypted name
+    // is never handed to a third-party app
+    fun openInMaps(member: AGMember) {
+        val point = member.lastLocationRecord?.coordinates?.toShareableString() ?: return
+        try {
+            context.startActivity(Intent(Intent.ACTION_VIEW, "geo:$point?z=17&q=$point".toUri()))
+        } catch (_: ActivityNotFoundException) {
+            coroutineScope.launch { snackbarHostState.showSnackbar("No maps app installed") }
+        }
+    }
     val mapCameraState = rememberCameraState(
         firstPosition = CameraPosition(
             target = Position(
@@ -85,7 +117,7 @@ fun AnonymousGroupDetailsScreen(
     }
 
     val membersPoints =
-        remember(state.members, oldLocations, state.anonymousGroup) {
+        remember(state.members, oldLocations, state.anonymousGroup, state.selectedMemberId) {
             if (state.anonymousGroup == null) {
                 null
             } else {
@@ -98,6 +130,7 @@ fun AnonymousGroupDetailsScreen(
                             coordinates = locationRecord.coordinates,
                             name = member.name,
                             isOld = oldLocations.contains(memberId),
+                            isSelected = memberId == state.selectedMemberId,
                             id = memberId
                         )
                     }
@@ -113,6 +146,7 @@ fun AnonymousGroupDetailsScreen(
             coordinates = state.myLocationRecordFromGPS!!.coordinates,
             name = "You",
             isOld = isMyLocationOld,
+            isSelected = false,
             id = state.anonymousGroup!!.memberId
         )
     }
@@ -159,16 +193,12 @@ fun AnonymousGroupDetailsScreen(
 
     LaunchedEffect(true) {
         viewModel.snackbarEvents.collect { snackbarMessage ->
-            val result = snackbarHostState.showSnackbar(
-                message = snackbarMessage.text,
-                snackbarMessage.errorInfo?.let { "More" },
-                withDismissAction = true
-            )
-            when (result) {
-                SnackbarResult.Dismissed -> Unit
-                SnackbarResult.ActionPerformed -> snackbarMessage.errorInfo?.let {
-                    viewModel.showErrorDialog(it)
-                }
+            if (snackbarMessage.errorInfo != null) {
+                viewModel.showErrorDialog(snackbarMessage)
+            } else {
+                snackbarHostState.showSnackbar(
+                    message = snackbarMessage.text, withDismissAction = true
+                )
             }
         }
     }
@@ -191,11 +221,7 @@ fun AnonymousGroupDetailsScreen(
         }
     }
 
-    state.dialogErrorInfo?.let {
-        AlertDialog(title = { Text(it.title) }, text = { Text(it.body) }, dismissButton = {
-            TextButton(onClick = { viewModel.hideErrorDialog() }) { Text("Dismiss") }
-        }, confirmButton = {}, onDismissRequest = { viewModel.hideErrorDialog() })
-    }
+    state.dialogError?.let { ErrorDialog(it, onDismiss = viewModel::hideErrorDialog) }
 
     if (state.showDeleteAGDialog) {
         AlertDialog(
@@ -323,36 +349,27 @@ fun AnonymousGroupDetailsScreen(
             ) { page ->
                 when (tabs[page]) {
                     AGDetailsViewModel.AGDetailsTab.Map -> {
-                        Box {
-                            MembersMap(
-                                modifier = Modifier.fillMaxSize(),
-                                cameraState = mapCameraState,
-                                membersPoints = membersPoints,
-                                myPoint = myPoint,
-                                myDeviceOrientation = state.myDeviceOrientation,
-                                onTapMyLocation = {
-                                    viewModel.onTapMyLocation()
-                                })
-                            if (state.followedMemberId != null) {
-                                Snackbar(
-                                    containerColor = MaterialTheme.colorScheme.inverseSurface,
-                                    contentColor = MaterialTheme.colorScheme.inverseOnSurface,
-                                    action = {
-                                        TextButton(
-                                            onClick = { viewModel.stopFollowMember() },
-                                            colors = ButtonDefaults.textButtonColors(
-                                                contentColor = MaterialTheme.colorScheme.onPrimary // or Color.White
-                                            )
-                                        ) {
-                                            Text("Stop")
-                                        }
-                                    },
-                                    modifier = Modifier.padding(8.dp)
-                                ) {
-                                    Text(text = "You're following ${state.members?.get(state.followedMemberId)?.name}")
+                        MembersMap(
+                            modifier = Modifier.fillMaxSize(),
+                            cameraState = mapCameraState,
+                            membersPoints = membersPoints,
+                            myPoint = myPoint,
+                            myDeviceOrientation = state.myDeviceOrientation,
+                            onTapMyLocation = viewModel::onTapMyLocation,
+                            onTapMember = { viewModel.selectMember(it) },
+                            onMapGesture = viewModel::onMapGesture,
+                            bottomContent = {
+                                state.selectedMemberId?.let { state.members?.get(it) }?.let { member ->
+                                    SelectedMemberCard(
+                                        member = member,
+                                        isFollowing = state.isFollowingSelectedMember,
+                                        onToggleFollow = viewModel::setFollowSelectedMember,
+                                        onCopyCoordinates = { copyCoordinates(member) },
+                                        onOpenInMaps = { openInMaps(member) },
+                                        onClose = viewModel::clearSelectedMember
+                                    )
                                 }
-                            }
-                        }
+                            })
                     }
 
                     AGDetailsViewModel.AGDetailsTab.Members -> {
@@ -368,12 +385,9 @@ fun AnonymousGroupDetailsScreen(
                             AGMembersList(
                                 members = state.members!!.map { (_, member) -> member },
                                 authenticatedMemberId = state.anonymousGroup!!.memberId,
-                                onTapLocate = { memberId ->
-                                    viewModel.onTapLocate(memberId)
-                                },
-                                onTapFollow = { memberId ->
-                                    viewModel.onTapFollow(memberId)
-                                })
+                                onTapMember = { viewModel.selectMember(it) },
+                                onCopyCoordinates = ::copyCoordinates,
+                                onOpenInMaps = ::openInMaps)
                         }
                     }
                 }

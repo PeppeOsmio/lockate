@@ -1,5 +1,6 @@
 package com.peppeosmio.lockate.ui.screens.create_anonymous_group
 
+import com.peppeosmio.lockate.ui.composables.ErrorDialog
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -9,7 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Done
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -19,9 +19,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -49,16 +47,12 @@ fun CreateAnonymousGroupScreen(
 
     LaunchedEffect(true) {
         viewModel.snackbarEvents.collect { snackbarMessage ->
-            val result = snackbarHostState.showSnackbar(
-                message = snackbarMessage.text,
-                snackbarMessage.errorInfo?.let { "More" },
-                withDismissAction = true
-            )
-            when (result) {
-                SnackbarResult.Dismissed -> Unit
-                SnackbarResult.ActionPerformed -> snackbarMessage.errorInfo?.let {
-                    viewModel.showErrorDialog(it)
-                }
+            if (snackbarMessage.errorInfo != null) {
+                viewModel.showErrorDialog(snackbarMessage)
+            } else {
+                snackbarHostState.showSnackbar(
+                    message = snackbarMessage.text, withDismissAction = true
+                )
             }
         }
     }
@@ -69,11 +63,7 @@ fun CreateAnonymousGroupScreen(
         }
     }
 
-    state.errorInfo?.let {
-        AlertDialog(title = { Text(it.title) }, text = { Text(it.body) }, dismissButton = {
-            TextButton(onClick = { viewModel.hideErrorDialog() }) { Text("Dismiss") }
-        }, confirmButton = {}, onDismissRequest = { viewModel.hideErrorDialog() })
-    }
+    state.dialogError?.let { ErrorDialog(it, onDismiss = viewModel::hideErrorDialog) }
 
     if (state.showLoadingOverlay) {
         Dialog(onDismissRequest = {}) {

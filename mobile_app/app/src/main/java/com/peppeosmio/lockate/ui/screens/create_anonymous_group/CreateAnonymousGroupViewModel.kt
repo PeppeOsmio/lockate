@@ -93,10 +93,10 @@ class CreateAnonymousGroupViewModel(
     }
 
     fun hideErrorDialog() {
-        _state.update { it.copy(errorInfo = null) }
+        _state.update { it.copy(dialogError = null) }
     }
 
-    fun showErrorDialog(errorInfo: ErrorInfo) {
-        _state.update { it.copy(errorInfo = errorInfo) }
+    fun showErrorDialog(error: SnackbarErrorMessage) {
+        _state.update { it.copy(dialogError = error) }
     }
 }

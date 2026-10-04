@@ -59,7 +59,7 @@ class JoinAnonymousGroupViewModel(
                 idError = null,
                 memberPasswordError = null,
                 memberNameError = null,
-                dialogErrorInfo = null
+                dialogError = null
             )
         }
     }
@@ -101,10 +101,10 @@ class JoinAnonymousGroupViewModel(
     }
 
     fun hideErrorDialog() {
-        _state.update { it.copy(dialogErrorInfo = null) }
+        _state.update { it.copy(dialogError = null) }
     }
 
-    fun showErrorDialog(errorInfo: ErrorInfo) {
-        _state.update { it.copy(dialogErrorInfo = errorInfo) }
+    fun showErrorDialog(error: SnackbarErrorMessage) {
+        _state.update { it.copy(dialogError = error) }
     }
 }
