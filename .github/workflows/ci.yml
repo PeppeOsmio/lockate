@@ -1,0 +1,266 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changes:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      backend: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.backend == 'true' }}
+      mobile: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.mobile == 'true' }}
+      admin_ui: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.admin_ui == 'true' }}
+      docker_compose: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.docker_compose == 'true' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
+        id: filter
+        if: github.event_name != 'workflow_dispatch'
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - '.github/workflows/ci.yml'
+            mobile:
+              - 'mobile_app/**'
+              - '.github/workflows/ci.yml'
+            admin_ui:
+              - 'admin_ui/**'
+              - '.github/workflows/ci.yml'
+            docker_compose:
+              - 'docker-compose.yml'
+              - 'dev-docker-compose.yml'
+              - '.env.example'
+              - '.github/workflows/ci.yml'
+
+  backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 25
+          cache: maven
+      - run: make all
+        env:
+          MAVEN_ARGS: -B
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: backend-test-reports
+          path: backend/target/surefire-reports
+
+  mobile:
+    needs: changes
+    if: needs.changes.outputs.mobile == 'true'
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: mobile_app
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v6
+      - run: ./gradlew testDebugUnitTest
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: mobile-test-reports
+          path: mobile_app/app/build/reports/tests
+
+  admin-ui:
+    needs: changes
+    if: needs.changes.outputs.admin_ui == 'true'
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: admin_ui
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: admin_ui/package-lock.json
+      - run: npm ci
+      - run: make ci
+
+  docker-compose:
+    needs: changes
+    if: needs.changes.outputs.docker_compose == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker compose --env-file .env.example -f docker-compose.yml config --quiet
+      - run: docker compose --env-file .env.example -f dev-docker-compose.yml config --quiet
+
+  # Single required status check: path-filtered jobs are skipped rather than missing
+  ci-ok:
+    needs: [changes, backend, mobile, admin-ui, docker-compose]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
+
+  publish-backend-jvm:
+    needs: [changes, ci-ok]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-24.04
+    environment: dockerhub
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/metadata-action@v6
+        id: meta
+        with:
+          images: ${{ vars.DOCKERHUB_USERNAME }}/lockate-backend
+          tags: |
+            type=raw,value=latest
+            type=sha
+      - uses: docker/build-push-action@v7
+        with:
+          context: backend
+          file: backend/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=backend-jvm
+          cache-to: type=gha,scope=backend-jvm,mode=max
+
+  # native-image can't cross-compile, so each arch builds on its own runner and the digests are merged
+  publish-backend-native-build:
+    needs: [changes, ci-ok]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.changes.outputs.backend == 'true'
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            arch: amd64
+            runner: ubuntu-24.04
+          - platform: linux/arm64
+            arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    environment: dockerhub
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/metadata-action@v6
+        id: meta
+        with:
+          images: ${{ vars.DOCKERHUB_USERNAME }}/lockate-backend
+      - uses: docker/build-push-action@v7
+        id: build
+        with:
+          context: backend
+          file: backend/native.Dockerfile
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=${{ vars.DOCKERHUB_USERNAME }}/lockate-backend,push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=backend-native-${{ matrix.arch }}
+          cache-to: type=gha,scope=backend-native-${{ matrix.arch }},mode=max
+      - run: |
+          mkdir -p "$RUNNER_TEMP/digests"
+          digest="${{ steps.build.outputs.digest }}"
+          touch "$RUNNER_TEMP/digests/${digest#sha256:}"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: digests-native-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  publish-backend-native:
+    needs: publish-backend-native-build
+    runs-on: ubuntu-24.04
+    environment: dockerhub
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-native-*
+          merge-multiple: true
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/metadata-action@v6
+        id: meta
+        with:
+          images: ${{ vars.DOCKERHUB_USERNAME }}/lockate-backend
+          flavor: suffix=-native
+          tags: |
+            type=raw,value=latest
+            type=sha
+      - working-directory: ${{ runner.temp }}/digests
+        env:
+          IMAGE: ${{ vars.DOCKERHUB_USERNAME }}/lockate-backend
+        run: |
+          mapfile -t tag_args < <(jq -r '.tags[] | "-t", .' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+          digests=()
+          for digest in *; do digests+=("$IMAGE@sha256:$digest"); done
+          docker buildx imagetools create "${tag_args[@]}" "${digests[@]}"
+
+  publish-admin-ui:
+    needs: [changes, ci-ok]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.changes.outputs.admin_ui == 'true'
+    runs-on: ubuntu-24.04
+    environment: dockerhub
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/metadata-action@v6
+        id: meta
+        with:
+          images: ${{ vars.DOCKERHUB_USERNAME }}/lockate-admin-ui
+          tags: |
+            type=raw,value=latest
+            type=sha
+      - uses: docker/build-push-action@v7
+        with:
+          context: admin_ui
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=admin-ui
+          cache-to: type=gha,scope=admin-ui,mode=max
