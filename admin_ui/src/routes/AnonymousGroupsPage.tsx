@@ -21,7 +21,8 @@ export function AnonymousGroupsPage() {
 
   useEffect(() => {
     setLoading(true)
-    client.listAnonymousGroups(page)
+    client
+      .listAnonymousGroups(page)
       .then(setResult)
       .catch(() => setError('Failed to load anonymous groups.'))
       .finally(() => setLoading(false))

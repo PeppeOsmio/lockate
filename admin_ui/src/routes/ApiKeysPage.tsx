@@ -22,7 +22,8 @@ export function ApiKeysPage() {
   const refresh = useCallback(
     (targetPage = page) => {
       setLoading(true)
-      client.listApiKeys(targetPage)
+      client
+        .listApiKeys(targetPage)
         .then(setResult)
         .catch(() => setError('Failed to load API keys.'))
         .finally(() => setLoading(false))
@@ -30,7 +31,9 @@ export function ApiKeysPage() {
     [client, page],
   )
 
-  useEffect(() => { refresh(page) }, [client, page]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    refresh(page)
+  }, [client, page]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleCreate() {
     const created = await client.createApiKey()

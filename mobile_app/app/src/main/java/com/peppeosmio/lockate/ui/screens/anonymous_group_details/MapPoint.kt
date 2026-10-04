@@ -7,5 +7,6 @@ data class MapPoint(
     val name: String,
     val coordinates:Coordinates,
     val isOld: Boolean,
+    val isSelected: Boolean,
 ) {
 }

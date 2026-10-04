@@ -3,6 +3,18 @@ package com.peppeosmio.lockate.ui.screens.anonymous_group_details
 import android.util.Log
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.draw.clip
+import dev.sargunv.maplibrecompose.core.CameraMoveReason
+import io.github.dellisd.spatialk.geojson.Position
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -94,7 +106,7 @@ fun clusterPoints(
 }
 
 @Composable
-fun ClusterBubble(center: DpOffset, count: Int) {
+fun ClusterBubble(center: DpOffset, count: Int, onClick: () -> Unit) {
     val circleSize = 36.dp
     val halfCircleSize = circleSize / 2
     val backgroundColor = MaterialTheme.colorScheme.secondary
@@ -108,7 +120,9 @@ fun ClusterBubble(center: DpOffset, count: Int) {
         modifier = Modifier
             .offset(center.x - halfCircleSize, center.y - halfCircleSize)
             .size(circleSize)
-            .background(backgroundColor, CircleShape),
+            .clip(CircleShape)
+            .background(backgroundColor)
+            .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Text(text = text, color = textColor)
@@ -117,7 +131,7 @@ fun ClusterBubble(center: DpOffset, count: Int) {
 
 @Composable
 fun MemberMarker(
-    center: DpOffset, member: MapPoint, isMe: Boolean, isOld: Boolean
+    center: DpOffset, member: MapPoint, isMe: Boolean, isOld: Boolean, onClick: () -> Unit
 ) {
     var backgroundColor = if (isMe) {
         MaterialTheme.colorScheme.primary
@@ -133,30 +147,43 @@ fun MemberMarker(
         MaterialTheme.colorScheme.secondary
     }
     // Circle is exactly on the coordinate
-    val circleSize = 16.dp
-    val halfCircleSize = circleSize / 2
-    Box(modifier = Modifier.offset(x = center.x - halfCircleSize, y = center.y - halfCircleSize)) {
+    val circleSize = if (member.isSelected) 22.dp else 16.dp
+    val touchTargetSize = 48.dp
+    Box(
+        modifier = Modifier
+            .offset(x = center.x - touchTargetSize / 2, y = center.y - touchTargetSize / 2)
+            .size(touchTargetSize)
+            .clickable(interactionSource = null, indication = null, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
         Box(
             modifier = Modifier
-                .align(Alignment.TopStart)
                 .size(circleSize)
+                .then(
+                    if (member.isSelected) {
+                        Modifier.border(3.dp, MaterialTheme.colorScheme.surface, CircleShape)
+                    } else {
+                        Modifier
+                    }
+                )
                 .background(
                     if (isOld) backgroundColor.copy(alpha = 0.5f) else backgroundColor, CircleShape
                 )
         )
-
-        Text(
-            text = member.name,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .width(120.dp)
-                .offset(x = (-60).dp + halfCircleSize, y = 16.dp),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center,
-            color = textColor
-        )
     }
+
+    val labelWidth = 120.dp
+    Text(
+        text = member.name,
+        modifier = Modifier
+            .offset(x = center.x - labelWidth / 2, y = center.y + circleSize / 2)
+            .width(labelWidth)
+            .clickable(interactionSource = null, indication = null, onClick = onClick),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        textAlign = TextAlign.Center,
+        color = textColor
+    )
 }
 
 @Composable
@@ -221,16 +248,26 @@ fun MembersMap(
     membersPoints: List<MapPoint>?,
     myPoint: MapPoint?,
     myDeviceOrientation: Float?,
-    onTapMyLocation: () -> Unit
+    onTapMyLocation: () -> Unit,
+    onTapMember: (memberId: String) -> Unit,
+    onMapGesture: () -> Unit,
+    bottomContent: @Composable () -> Unit
 ) {
     val styleState = rememberStyleState()
+    val coroutineScope = rememberCoroutineScope()
+
+    LaunchedEffect(cameraState) {
+        snapshotFlow { cameraState.moveReason }
+            .filter { it == CameraMoveReason.GESTURE }
+            .collect { onMapGesture() }
+    }
     val variant = if (isSystemInDarkTheme()) "dark" else "light"
     val apiKey = "121a0e377516f8bc"
     val mapStyle = remember(variant) {
         BaseStyle.Uri("https://api.protomaps.com/styles/v4/$variant/en.json?key=$apiKey")
     }
 
-    val pointsClusters by remember(cameraState.position, myPoint) {
+    val pointsClusters by remember(cameraState.position, membersPoints) {
         Log.d("Clusters", cameraState.position.toString())
         derivedStateOf {
             Log.d("Clusters", "Computing clusters")
@@ -288,10 +325,22 @@ fun MembersMap(
                     isMe = containsMe,
                     member = member,
                     isOld = member.isOld,
+                    onClick = { onTapMember(member.id) }
                 )
             } else {
                 ClusterBubble(
-                    center = cluster.center, count = cluster.members.size
+                    center = cluster.center, count = cluster.members.size, onClick = {
+                        coroutineScope.launch {
+                            cameraState.animateTo(
+                                cameraState.position.copy(
+                                    target = Position(
+                                        latitude = cluster.members.map { it.coordinates.latitude }.average(),
+                                        longitude = cluster.members.map { it.coordinates.longitude }.average()
+                                    ), zoom = cameraState.position.zoom + 2
+                                )
+                            )
+                        }
+                    }
                 )
             }
 //          This is a debug yellow dot positioned exactly on the coordinates.
@@ -323,15 +372,20 @@ fun MembersMap(
             DisappearingCompassButton(cameraState, modifier = Modifier.align(Alignment.TopEnd))
         }
 
-        FloatingActionButton(
+        Column(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(16.dp), onClick = onTapMyLocation
+                .padding(16.dp),
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Icon(
-                painter = painterResource(R.drawable.outline_location_searching_24),
-                contentDescription = ""
-            )
+            FloatingActionButton(onClick = onTapMyLocation) {
+                Icon(
+                    painter = painterResource(R.drawable.outline_location_searching_24),
+                    contentDescription = "My location"
+                )
+            }
+            bottomContent()
         }
     }
 }

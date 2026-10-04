@@ -1,6 +1,6 @@
 package com.peppeosmio.lockate.ui.screens.create_anonymous_group
 
-import com.peppeosmio.lockate.utils.ErrorInfo
+import com.peppeosmio.lockate.utils.SnackbarErrorMessage
 
 data class CreateAnonymousGroupState(
     val showLoadingOverlay: Boolean = false,
@@ -10,5 +10,5 @@ data class CreateAnonymousGroupState(
     val memberPasswordError: String? = null,
     val userNameText: String = "",
     val userNameError: String? = null,
-    val errorInfo: ErrorInfo? = null
+    val dialogError: SnackbarErrorMessage? = null
 )

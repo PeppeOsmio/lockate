@@ -202,6 +202,7 @@ class AGDetailsViewModel(
     }
 
     fun onTapMyLocation() {
+        clearSelectedMember()
         viewModelScope.launch {
             try {
                 getAndMoveToMyLocation()
@@ -358,7 +359,7 @@ class AGDetailsViewModel(
                         members = it.members!! + (member.id to member.copy(lastLocationRecord = locationUpdate.locationRecord))
                     )
                 }
-                if (locationUpdate.agMemberId == state.value.followedMemberId) {
+                if (state.value.isFollowingSelectedMember && locationUpdate.agMemberId == state.value.selectedMemberId) {
                     _cameraPositionEvents.trySend(locationUpdate.locationRecord.coordinates)
                 }
             }
@@ -428,51 +429,43 @@ class AGDetailsViewModel(
     }
 
     fun hideErrorDialog() {
-        _state.update { it.copy(dialogErrorInfo = null) }
+        _state.update { it.copy(dialogError = null) }
     }
 
-    fun showErrorDialog(errorInfo: ErrorInfo) {
-        _state.update { it.copy(dialogErrorInfo = errorInfo) }
+    fun showErrorDialog(error: SnackbarErrorMessage) {
+        _state.update { it.copy(dialogError = error) }
     }
 
-    fun onTapLocate(agMemberId: String) = viewModelScope.launch {
-        if (state.value.anonymousGroup == null || state.value.members == null) {
+    fun selectMember(agMemberId: String) = viewModelScope.launch {
+        val anonymousGroup = state.value.anonymousGroup ?: return@launch
+        val member = state.value.members?.get(agMemberId) ?: return@launch
+        if (agMemberId == anonymousGroup.memberId) {
+            onTapMyLocation()
+            _pagerEvents.send(AGDetailsTab.Map)
             return@launch
         }
-        state.value.members!![agMemberId]?.let { member ->
-            if (agMemberId == state.value.anonymousGroup!!.memberId) {
-                onTapMyLocation()
-                _pagerEvents.send(AGDetailsTab.Map)
-                return@launch
+        _state.update {
+            it.copy(selectedMemberId = agMemberId, isFollowingSelectedMember = true)
+        }
+        member.lastLocationRecord?.let { _cameraPositionEvents.trySend(it.coordinates) }
+        _pagerEvents.send(AGDetailsTab.Map)
+    }
+
+    fun setFollowSelectedMember(follow: Boolean) {
+        _state.update { it.copy(isFollowingSelectedMember = follow) }
+        if (follow) {
+            val selectedMemberId = state.value.selectedMemberId ?: return
+            state.value.members?.get(selectedMemberId)?.lastLocationRecord?.let {
+                _cameraPositionEvents.trySend(it.coordinates)
             }
-            if (member.lastLocationRecord == null) {
-                return@launch
-            }
-            _cameraPositionEvents.trySend(member.lastLocationRecord.coordinates)
-            _pagerEvents.send(AGDetailsTab.Map)
         }
     }
 
-    fun onTapFollow(agMemberId: String) = viewModelScope.launch {
-        if (state.value.members == null || state.value.anonymousGroup == null) {
-            return@launch
-        }
-        state.value.members!![agMemberId]?.let { member ->
-            _state.update { it.copy(followedMemberId = agMemberId) }
-
-            _state.update { it.copy(followedMemberId = agMemberId) }
-            Log.d("", "Following member $agMemberId")
-            if (member.lastLocationRecord == null) {
-                return@launch
-            }
-            _cameraPositionEvents.trySend(member.lastLocationRecord.coordinates)
-
-            _pagerEvents.send(AGDetailsTab.Map)
-        }
+    fun onMapGesture() {
+        _state.update { it.copy(isFollowingSelectedMember = false) }
     }
 
-
-    fun stopFollowMember() {
-        _state.update { it.copy(followedMemberId = null) }
+    fun clearSelectedMember() {
+        _state.update { it.copy(selectedMemberId = null, isFollowingSelectedMember = false) }
     }
 }

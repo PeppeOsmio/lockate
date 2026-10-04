@@ -54,6 +54,9 @@ val appModule = module {
                 // WebSockets-plugin pingIntervalMillis is ignored by the OkHttp engine.
                 config {
                     pingInterval(15, java.util.concurrent.TimeUnit.SECONDS)
+                    // must exceed the backend's 15s SSE heartbeat, otherwise the location stream
+                    // times out whenever no member sends for 10s (OkHttp's default)
+                    readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
                 }
             }
             install(SSE)

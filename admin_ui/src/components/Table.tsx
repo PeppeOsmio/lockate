@@ -27,31 +27,31 @@ export function Table<T>({ columns, rows, keyFor, onRowClick, emptyMessage }: Ta
 
   return (
     <TableContainer sx={{ overflowX: 'auto' }}>
-    <MuiTable>
-      <TableHead>
-        <TableRow>
-          {columns.map((column) => (
-            <TableCell key={column.header}>
-              <strong>{column.header}</strong>
-            </TableCell>
-          ))}
-        </TableRow>
-      </TableHead>
-      <TableBody>
-        {rows.map((row) => (
-          <TableRow
-            key={keyFor(row)}
-            hover={!!onRowClick}
-            onClick={onRowClick ? () => onRowClick(row) : undefined}
-            sx={onRowClick ? { cursor: 'pointer' } : undefined}
-          >
+      <MuiTable>
+        <TableHead>
+          <TableRow>
             {columns.map((column) => (
-              <TableCell key={column.header}>{column.render(row)}</TableCell>
+              <TableCell key={column.header}>
+                <strong>{column.header}</strong>
+              </TableCell>
             ))}
           </TableRow>
-        ))}
-      </TableBody>
-    </MuiTable>
+        </TableHead>
+        <TableBody>
+          {rows.map((row) => (
+            <TableRow
+              key={keyFor(row)}
+              hover={!!onRowClick}
+              onClick={onRowClick ? () => onRowClick(row) : undefined}
+              sx={onRowClick ? { cursor: 'pointer' } : undefined}
+            >
+              {columns.map((column) => (
+                <TableCell key={column.header}>{column.render(row)}</TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </MuiTable>
     </TableContainer>
   )
 }

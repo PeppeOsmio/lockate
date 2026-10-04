@@ -90,4 +90,12 @@ class ManageConnectionsViewModel(
             }
         }
     }
+
+    fun showErrorDialog(error: SnackbarErrorMessage) {
+        _state.update { it.copy(dialogError = error) }
+    }
+
+    fun hideErrorDialog() {
+        _state.update { it.copy(dialogError = null) }
+    }
 }

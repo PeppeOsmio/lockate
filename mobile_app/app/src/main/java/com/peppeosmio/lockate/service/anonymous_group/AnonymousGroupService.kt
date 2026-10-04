@@ -1046,18 +1046,21 @@ class AnonymousGroupService(
                                     Log.d(
                                         "", "Received location $agLocation"
                                     )
-                                    val agMember = anonymousGroupDao.getAGMemberByIdAndAGInternalId(
+                                    // a member unknown locally joined after our last fetch: still emit
+                                    // the update so the caller can refetch members
+                                    anonymousGroupDao.getAGMemberByIdAndAGInternalId(
                                         agInternalId = anonymousGroup.internalId,
                                         id = agLocation.agMemberId,
-                                    ) ?: return@collect
-                                    anonymousGroupDao.setAGMemberLastLocation(
-                                        agMemberInternalId = agMember.internalId,
-                                        lastLatitude = agLocation.locationRecord.coordinates.latitude,
-                                        lastLongitude = agLocation.locationRecord.coordinates.longitude,
-                                        lastSeen = agLocation.locationRecord.timestamp.toInstant(
-                                            TimeZone.UTC
-                                        ).toEpochMilliseconds()
-                                    )
+                                    )?.let { agMember ->
+                                        anonymousGroupDao.setAGMemberLastLocation(
+                                            agMemberInternalId = agMember.internalId,
+                                            lastLatitude = agLocation.locationRecord.coordinates.latitude,
+                                            lastLongitude = agLocation.locationRecord.coordinates.longitude,
+                                            lastSeen = agLocation.locationRecord.timestamp.toInstant(
+                                                TimeZone.UTC
+                                            ).toEpochMilliseconds()
+                                        )
+                                    }
                                     send(
                                         agLocation
                                     )

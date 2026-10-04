@@ -18,7 +18,7 @@ export class AdminAPIClient {
       if (import.meta.env.DEV) {
         this.baseUrl = import.meta.env.VITE_API_BASE_URL as string
       } else {
-        const config = await fetch('/config.json').then(r => r.json())
+        const config = await fetch('/config.json').then((r) => r.json())
         this.baseUrl = config.apiBaseUrl as string
       }
     }
@@ -43,7 +43,10 @@ export class AdminAPIClient {
     }
 
     if (!response.ok) {
-      throw new ApiError(response.status, `Request to ${path} failed with status ${response.status}`)
+      throw new ApiError(
+        response.status,
+        `Request to ${path} failed with status ${response.status}`,
+      )
     }
 
     if (response.status === 204) {
@@ -91,4 +94,3 @@ export class AdminAPIClient {
     return this.apiFetch(`/api/admin/api-keys/${id}`, { method: 'DELETE' })
   }
 }
-

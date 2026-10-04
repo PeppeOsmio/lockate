@@ -1,5 +1,6 @@
 package com.peppeosmio.lockate.ui.screens.manage_connections
 
+import com.peppeosmio.lockate.ui.composables.ErrorDialog
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -19,7 +20,6 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -56,17 +56,17 @@ fun ManageConnectionsScreen(
 
     LaunchedEffect(true) {
         viewModel.snackbarEvents.collect { snackbarMessage ->
-            val result = snackbarHostState.showSnackbar(
-                message = snackbarMessage.text,
-                actionLabel = snackbarMessage.errorInfo?.let { "More" },
-                withDismissAction = true
-            )
-            when (result) {
-                SnackbarResult.Dismissed -> Unit
-                SnackbarResult.ActionPerformed -> Unit
+            if (snackbarMessage.errorInfo != null) {
+                viewModel.showErrorDialog(snackbarMessage)
+            } else {
+                snackbarHostState.showSnackbar(
+                    message = snackbarMessage.text, withDismissAction = true
+                )
             }
         }
     }
+
+    state.dialogError?.let { ErrorDialog(it, onDismiss = viewModel::hideErrorDialog) }
 
     if (state.showDeleteConfirmDialog && state.selectedConnectionIdForDelete != null) {
         val connection =

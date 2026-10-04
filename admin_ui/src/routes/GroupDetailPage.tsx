@@ -22,7 +22,8 @@ export function GroupDetailPage() {
 
   useEffect(() => {
     if (!anonymousGroupId) return
-    client.listGroupMembers(anonymousGroupId)
+    client
+      .listGroupMembers(anonymousGroupId)
       .then(setMembers)
       .catch(() => setError('Failed to load members for this group.'))
       .finally(() => setLoading(false))
@@ -45,7 +46,11 @@ export function GroupDetailPage() {
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
         spacing={1}
-        sx={{ mb: 2, alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between' }}
+        sx={{
+          mb: 2,
+          alignItems: { xs: 'flex-start', sm: 'center' },
+          justifyContent: 'space-between',
+        }}
       >
         <Typography variant="h5" sx={{ wordBreak: 'break-all' }}>
           Group <code>{anonymousGroupId}</code>
