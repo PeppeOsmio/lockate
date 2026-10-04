@@ -1,4 +1,4 @@
-FROM amazoncorretto:25-alpine3.22-jdk AS builder
+FROM --platform=$BUILDPLATFORM amazoncorretto:25-alpine3.22-jdk AS builder
 
 WORKDIR /app
 

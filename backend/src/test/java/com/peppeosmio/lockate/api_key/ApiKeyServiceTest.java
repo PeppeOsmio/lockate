@@ -12,14 +12,14 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 @ExtendWith(MockitoExtension.class)
 class ApiKeyServiceTest {
@@ -109,7 +109,8 @@ class ApiKeyServiceTest {
     entity.setId(UUID.randomUUID());
     entity.setLastValidated(LocalDateTime.now(ZoneOffset.UTC));
     var pageable = PageRequest.of(0, 20, Sort.by("createdAt").descending());
-    when(apiKeyRepository.findAll(pageable)).thenReturn(new PageImpl<>(List.of(entity), pageable, 1));
+    when(apiKeyRepository.findAll(pageable))
+        .thenReturn(new PageImpl<>(List.of(entity), pageable, 1));
 
     var result = service.listApiKeys(new PageQueryDto(0, 20));
 
