@@ -51,7 +51,8 @@ class AdminAnonymousGroupControllerTest {
   @Test
   void listMembers_delegatesToServiceAndReturnsList() throws Exception {
     var groupId = UUID.randomUUID();
-    var dto = new AGAdminMemberDto(UUID.randomUUID(), LocalDateTime.now(ZoneOffset.UTC), false, null);
+    var dto =
+        new AGAdminMemberDto(UUID.randomUUID(), LocalDateTime.now(ZoneOffset.UTC), false, null);
     when(anonymousGroupService.listMembersForAdmin(groupId)).thenReturn(List.of(dto));
 
     var result = controller.listMembers(groupId);

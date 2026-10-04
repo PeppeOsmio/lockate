@@ -1,15 +1,13 @@
-JAVA21 := /usr/lib/jvm/java-21-openjdk
-
 .PHONY: all test format format-check lint check
 
 test:
 	./mvnw clean test -Pdev
 
 format:
-	JAVA_HOME=$(JAVA21) ./mvnw spotless:apply
+	./mvnw spotless:apply
 
 format-check:
-	JAVA_HOME=$(JAVA21) ./mvnw spotless:check
+	./mvnw spotless:check
 
 lint:
 	./mvnw checkstyle:check
