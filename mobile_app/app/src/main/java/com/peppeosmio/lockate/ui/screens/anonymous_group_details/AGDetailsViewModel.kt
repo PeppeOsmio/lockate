@@ -310,11 +310,12 @@ class AGDetailsViewModel(
                 )
             }
         } catch (e: Exception) {
-            _snackbarEvents.trySend(
-                SnackbarErrorMessage(
-                    text = "Connection error", errorInfo = ErrorInfo.fromException(e)
+            val errorInfo = ErrorInfo.fromException(e)
+            if (!errorInfo.isConnectionError) {
+                _snackbarEvents.trySend(
+                    SnackbarErrorMessage(text = "Connection error", errorInfo = errorInfo)
                 )
-            )
+            }
             throw e
         }
     }
@@ -373,6 +374,43 @@ class AGDetailsViewModel(
 
     fun hideDeleteAGDialog() {
         _state.update { it.copy(showDeleteAGDialog = false) }
+    }
+
+    fun openMemberInfo(agMemberId: String) {
+        _state.update { it.copy(memberInfoSheetMemberId = agMemberId) }
+    }
+
+    fun closeMemberInfo() {
+        _state.update { it.copy(memberInfoSheetMemberId = null) }
+    }
+
+    fun showLeaveAGDialog() {
+        _state.update { it.copy(showLeaveAGDialog = true, isDropdownMenuOpen = false) }
+    }
+
+    fun hideLeaveAGDialog() {
+        _state.update { it.copy(showLeaveAGDialog = false) }
+    }
+
+    fun leaveAnonymousGroup(connectionSettingsId: Long, anonymousGroupInternalId: Long) {
+        viewModelScope.launch {
+            _state.update { it.copy(showLoadingOverlay = true) }
+            try {
+                anonymousGroupService.leaveAnonymousGroup(
+                    connectionSettingsId = connectionSettingsId,
+                    anonymousGroupInternalId = anonymousGroupInternalId
+                )
+                _state.update { it.copy(showLoadingOverlay = false, showLeaveAGDialog = false) }
+                _navigateBackEvents.trySend(Unit)
+            } catch (e: Exception) {
+                _state.update { it.copy(showLoadingOverlay = false, showLeaveAGDialog = false) }
+                _snackbarEvents.trySend(
+                    SnackbarErrorMessage(
+                        text = "Can't leave anonymous group", errorInfo = ErrorInfo.fromException(e)
+                    )
+                )
+            }
+        }
     }
 
     @Throws

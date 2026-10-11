@@ -20,10 +20,10 @@ import com.peppeosmio.lockate.utils.DateTimeUtils
 import kotlinx.coroutines.delay
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
-import kotlinx.datetime.format
 import kotlinx.datetime.toInstant
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
@@ -44,26 +44,19 @@ fun lastSeenFreshness(lastSeen: LocalDateTime?, now: Instant): LastSeenFreshness
 }
 
 /**
- * "Last seen" with a dot that turns green → yellow → grey as the timestamp ages.
+ * Relative "last seen" with a dot that turns green → yellow → grey as the timestamp ages.
  * [lastSeen] is in UTC.
  */
 @OptIn(ExperimentalTime::class)
 @Composable
 fun LastSeenText(modifier: Modifier = Modifier, lastSeen: LocalDateTime?) {
-    // recompute only when the next threshold is crossed, so the dot ages without new updates
-    val freshness by produceState(lastSeenFreshness(lastSeen, Clock.System.now()), lastSeen) {
-        // produceState keeps the previous value when lastSeen changes, so refresh it right away
-        value = lastSeenFreshness(lastSeen, Clock.System.now())
-        if (lastSeen == null) return@produceState
-        val lastSeenInstant = lastSeen.toInstant(TimeZone.UTC)
-        for (threshold in listOf(LIVE_WINDOW, RECENT_WINDOW)) {
-            val untilThreshold = lastSeenInstant + threshold - Clock.System.now()
-            if (untilThreshold.isPositive()) {
-                delay(untilThreshold)
-            }
-            value = lastSeenFreshness(lastSeen, Clock.System.now())
+    val now by produceState(Clock.System.now()) {
+        while (true) {
+            value = Clock.System.now()
+            delay(30.seconds)
         }
     }
+    val freshness = lastSeenFreshness(lastSeen, now)
     val dotColor = when (freshness) {
         LastSeenFreshness.Live -> Color(0xFF4CAF50)
         LastSeenFreshness.Recent -> Color(0xFFFFC107)
@@ -77,10 +70,11 @@ fun LastSeenText(modifier: Modifier = Modifier, lastSeen: LocalDateTime?) {
         )
         Spacer(Modifier.width(6.dp))
         Text(
-            text = "Last seen: ${
-                lastSeen?.let { DateTimeUtils.utcToCurrentTimeZone(it) }
-                    ?.format(DateTimeUtils.DATE_FORMAT) ?: "never"
-            }", style = MaterialTheme.typography.bodyMedium
+            text = when {
+                lastSeen == null -> "Never seen"
+                freshness == LastSeenFreshness.Live -> "Online"
+                else -> "Last seen ${DateTimeUtils.formatRelative(lastSeen.toInstant(TimeZone.UTC), now)}"
+            }, style = MaterialTheme.typography.bodyMedium
         )
     }
 }

@@ -11,6 +11,9 @@ import java.net.NoRouteToHostException
 
 data class ErrorInfo(val title: String, val body: String, val exception: Throwable?) {
 
+    val isConnectionError: Boolean
+        get() = exception is ConnectException || exception is NoRouteToHostException
+
     override fun toString(): String {
         return "$title: $body"
     }

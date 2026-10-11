@@ -39,7 +39,7 @@ class AnonymousGroupsViewModel(
 
     fun getInitialData(connectionSettingsId: Long) {
         viewModelScope.launch {
-            _state.update { it.copy(isLoading = true) }
+            _state.update { it.copy(isLoading = true, isServerUnreachable = false) }
             runCatching {
                 coroutineScope {
                     getAnonymousGroups(connectionSettingsId)
@@ -165,11 +165,14 @@ class AnonymousGroupsViewModel(
                 when (e) {
                     is UnauthorizedException, is RemoteAGNotFoundException -> Unit
                     else -> {
-                        _snackbarEvents.trySend(
-                            SnackbarErrorMessage(
-                                text = "Connection error", errorInfo = ErrorInfo.fromException(e)
+                        val errorInfo = ErrorInfo.fromException(e)
+                        if (errorInfo.isConnectionError) {
+                            _state.update { it.copy(isServerUnreachable = true) }
+                        } else {
+                            _snackbarEvents.trySend(
+                                SnackbarErrorMessage(text = "Connection error", errorInfo = errorInfo)
                             )
-                        )
+                        }
                         throw e
                     }
                 }

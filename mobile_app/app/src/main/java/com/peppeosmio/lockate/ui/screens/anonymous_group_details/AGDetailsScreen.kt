@@ -16,7 +16,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import com.peppeosmio.lockate.R
 import androidx.compose.runtime.Composable
@@ -38,6 +37,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.core.net.toUri
 import com.peppeosmio.lockate.domain.Coordinates
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
+import com.peppeosmio.lockate.ui.composables.ServerUnreachableBanner
 import com.peppeosmio.lockate.ui.composables.SmallCircularProgressIndicator
 import com.peppeosmio.lockate.utils.LoadingState
 import dev.sargunv.maplibrecompose.compose.rememberCameraState
@@ -86,12 +86,12 @@ fun AnonymousGroupDetailsScreen(
         }
     }
 
-    // The member name is deliberately not passed as the geo label so the decrypted name
+    // The geo label is a fixed string, not the member name, so the decrypted name
     // is never handed to a third-party app
     fun openInMaps(member: AGMember) {
-        val point = member.lastLocationRecord?.coordinates?.toShareableString() ?: return
+        val geoUri = member.lastLocationRecord?.coordinates?.toGeoUri() ?: return
         try {
-            context.startActivity(Intent(Intent.ACTION_VIEW, "geo:$point?z=17&q=$point".toUri()))
+            context.startActivity(Intent(Intent.ACTION_VIEW, geoUri.toUri()))
         } catch (_: ActivityNotFoundException) {
             coroutineScope.launch { snackbarHostState.showSnackbar("No maps app installed") }
         }
@@ -226,7 +226,7 @@ fun AnonymousGroupDetailsScreen(
     if (state.showDeleteAGDialog) {
         AlertDialog(
             title = { Text("Delete $anonymousGroupName") },
-            text = { Text("Are you sure you want do delete this anonymous group? This action is permanent!") },
+            text = { Text("Are you sure you want to delete this anonymous group? This action is permanent!") },
             dismissButton = {
                 TextButton(onClick = { viewModel.hideDeleteAGDialog() }) { Text("No, don't delete") }
             },
@@ -238,7 +238,55 @@ fun AnonymousGroupDetailsScreen(
                     )
                 }) { Text("Yes, delete") }
             },
-            onDismissRequest = { viewModel.hideErrorDialog() })
+            onDismissRequest = { viewModel.hideDeleteAGDialog() })
+    }
+
+    if (state.showLeaveAGDialog) {
+        AlertDialog(
+            title = { Text("Leave $anonymousGroupName") },
+            text = { Text("Are you sure you want to leave this anonymous group?") },
+            dismissButton = {
+                TextButton(onClick = { viewModel.hideLeaveAGDialog() }) { Text("No, stay") }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.leaveAnonymousGroup(
+                        connectionSettingsId = connectionId,
+                        anonymousGroupInternalId = anonymousGroupInternalId
+                    )
+                }) { Text("Yes, leave") }
+            },
+            onDismissRequest = { viewModel.hideLeaveAGDialog() })
+    }
+
+    state.memberInfoSheetMemberId?.let { memberId ->
+        state.members?.get(memberId)?.let { member ->
+            MemberInfoBottomSheet(
+                member = member,
+                isMe = member.id == state.anonymousGroup?.memberId,
+                onDismiss = viewModel::closeMemberInfo,
+                onShowOnMap = {
+                    viewModel.closeMemberInfo()
+                    viewModel.selectMember(member.id)
+                },
+                onCopyCoordinates = {
+                    viewModel.closeMemberInfo()
+                    copyCoordinates(member)
+                },
+                onOpenInMaps = {
+                    viewModel.closeMemberInfo()
+                    openInMaps(member)
+                },
+                onCopyId = {
+                    viewModel.closeMemberInfo()
+                    coroutineScope.launch {
+                        clipboard.setClipEntry(
+                            ClipEntry(ClipData.newPlainText("memberId", member.id))
+                        )
+                        snackbarHostState.showSnackbar("Member id copied to clipboard")
+                    }
+                })
+        }
     }
 
     Scaffold(snackbarHost = {
@@ -257,22 +305,8 @@ fun AnonymousGroupDetailsScreen(
                 )
             }
         }, actions = {
-            when (state.remoteDataLoadingState) {
-                LoadingState.Failed -> {
-                    IconButton(onClick = {
-                        coroutineScope.launch {
-                            viewModel.remoteOperations(connectionSettingsId = connectionId)
-                        }
-                    }) {
-                        Icon(imageVector = Icons.Default.Refresh, contentDescription = "Reconnect")
-                    }
-                }
-
-                LoadingState.IsLoading -> {
-                    SmallCircularProgressIndicator(modifier = Modifier.padding(8.dp))
-                }
-
-                else -> Unit
+            if (state.remoteDataLoadingState == LoadingState.IsLoading) {
+                SmallCircularProgressIndicator(modifier = Modifier.padding(8.dp))
             }
             if (state.anonymousGroup != null) {
                 Box(
@@ -286,7 +320,6 @@ fun AnonymousGroupDetailsScreen(
                     }) {
                         DropdownMenuItem(leadingIcon = {
                             Checkbox(
-                                modifier = Modifier.padding(0.dp),
                                 checked = state.anonymousGroup!!.sendLocation,
                                 onCheckedChange = null
                             )
@@ -299,7 +332,7 @@ fun AnonymousGroupDetailsScreen(
                                 contentDescription = "Leave anonymous group"
                             )
                         }, text = { Text("Leave") }, onClick = {
-                            viewModel.closeDropdownMenu()
+                            viewModel.showLeaveAGDialog()
                         })
                         state.anonymousGroup?.let {
                             if(it.memberIsAGAdmin) {
@@ -324,6 +357,12 @@ fun AnonymousGroupDetailsScreen(
                 .padding(innerPadding)
                 .fillMaxSize()
         ) {
+            if (state.remoteDataLoadingState == LoadingState.Failed) {
+                ServerUnreachableBanner(onRetry = {
+                    viewModel.remoteOperations(connectionSettingsId = connectionId)
+                })
+            }
+
             // Tabs below the TopAppBar
             TabRow(
                 modifier = Modifier.fillMaxWidth(),
@@ -364,8 +403,6 @@ fun AnonymousGroupDetailsScreen(
                                         member = member,
                                         isFollowing = state.isFollowingSelectedMember,
                                         onToggleFollow = viewModel::setFollowSelectedMember,
-                                        onCopyCoordinates = { copyCoordinates(member) },
-                                        onOpenInMaps = { openInMaps(member) },
                                         onClose = viewModel::clearSelectedMember
                                     )
                                 }
@@ -386,8 +423,7 @@ fun AnonymousGroupDetailsScreen(
                                 members = state.members!!.map { (_, member) -> member },
                                 authenticatedMemberId = state.anonymousGroup!!.memberId,
                                 onTapMember = { viewModel.selectMember(it) },
-                                onCopyCoordinates = ::copyCoordinates,
-                                onOpenInMaps = ::openInMaps)
+                                onMoreOptions = viewModel::openMemberInfo)
                         }
                     }
                 }

@@ -1,6 +1,9 @@
 package com.peppeosmio.lockate.ui.screens.connection_settings
 
 import com.peppeosmio.lockate.ui.composables.ErrorDialog
+import com.peppeosmio.lockate.ui.composables.PasswordTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -113,7 +116,7 @@ fun ConnectionSettingsScreen(
                 "Welcome to Lockate"
             }, style = MaterialTheme.typography.titleLarge)
             Text(
-                "Enter a name for your Lockate server and its URL",
+                "Lockate groups live on a server that only relays encrypted data. Enter a name for it and its URL.",
                 style = MaterialTheme.typography.bodyMedium
             )
             OutlinedTextField(
@@ -127,16 +130,16 @@ fun ConnectionSettingsScreen(
                 value = state.url,
                 onValueChange = { text -> viewModel.onUrlChanged(text) },
                 label = { Text("URL") },
+                placeholder = { Text("https://") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
             if (state.requireApiKey) {
-                OutlinedTextField(
+                PasswordTextField(
                     value = state.apiKey,
                     onValueChange = { text -> viewModel.onApiKeyChanged(text) },
-                    label = { Text("API Key") },
-                    singleLine = true,
-
+                    label = "API Key",
                     modifier = Modifier.fillMaxWidth()
                 )
             }

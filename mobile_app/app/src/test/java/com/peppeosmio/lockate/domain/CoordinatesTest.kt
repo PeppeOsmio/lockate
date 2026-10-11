@@ -72,4 +72,36 @@ class CoordinatesTest {
             Locale.setDefault(previous)
         }
     }
+
+    @Test
+    fun `toGeoUri pins the point with a neutral label`() {
+        assertEquals(
+            "geo:40.851775,14.268124?q=40.851775,14.268124(Location)",
+            Coordinates.NAPOLI.toGeoUri()
+        )
+    }
+
+    @Test
+    fun `toGeoUri keeps the sign of negative coordinates`() {
+        val coordinates = Coordinates(latitude = -33.8688197, longitude = -70.6692655)
+
+        assertEquals(
+            "geo:-33.868820,-70.669266?q=-33.868820,-70.669266(Location)",
+            coordinates.toGeoUri()
+        )
+    }
+
+    @Test
+    fun `toGeoUri uses a dot decimal separator regardless of default locale`() {
+        val previous = Locale.getDefault()
+        Locale.setDefault(Locale.ITALY)
+        try {
+            assertEquals(
+                "geo:40.851775,14.268124?q=40.851775,14.268124(Location)",
+                Coordinates.NAPOLI.toGeoUri()
+            )
+        } finally {
+            Locale.setDefault(previous)
+        }
+    }
 }

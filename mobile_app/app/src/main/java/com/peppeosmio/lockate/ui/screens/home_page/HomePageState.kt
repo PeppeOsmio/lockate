@@ -4,9 +4,6 @@ import com.peppeosmio.lockate.utils.SnackbarErrorMessage
 import com.peppeosmio.lockate.domain.Connection
 
 data class HomePageState(
-    val showLoadingOverlay: Boolean = false,
-    val pageSelected: Int = 0,
-    val showLogoutDialog: Boolean = false,
     val isSearchBarOpen: Boolean = false,
     val searchText: String = "",
     val registeredOnSearch: ((query: String) -> Unit)? = null,
