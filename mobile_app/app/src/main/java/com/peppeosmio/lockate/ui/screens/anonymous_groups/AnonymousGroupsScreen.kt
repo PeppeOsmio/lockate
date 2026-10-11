@@ -1,8 +1,11 @@
 package com.peppeosmio.lockate.ui.screens.anonymous_groups
 
 import android.content.ClipData
+import android.content.Intent
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -23,9 +26,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import com.peppeosmio.lockate.ui.composables.ServerUnreachableBanner
 import com.peppeosmio.lockate.utils.SnackbarErrorMessage
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
@@ -50,6 +55,7 @@ fun AnonymousGroupsScreen(
     val agSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val focusManager = LocalFocusManager.current
     val localClipboard = LocalClipboard.current
+    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
     DisposableEffect(true) {
@@ -125,7 +131,19 @@ fun AnonymousGroupsScreen(
                             )
                         )
                     )
+                    showErrorSnackbar(SnackbarErrorMessage(text = "Anonymous group id copied"))
+                    viewModel.unselectAnonymousGroup()
+                    agSheetState.hide()
                 }
+            },
+            onTapShare = {
+                val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, state.anonymousGroups!![state.selectedAGIndex!!].id)
+                }
+                context.startActivity(Intent.createChooser(sendIntent, null))
+                viewModel.unselectAnonymousGroup()
+                coroutineScope.launch { agSheetState.hide() }
             })
     }
 
@@ -155,32 +173,44 @@ fun AnonymousGroupsScreen(
         }
     }
 
-    PullToRefreshBox(
-        modifier = Modifier
-            .fillMaxSize()
-            .clickable(interactionSource = null, indication = null) {
-                focusManager.clearFocus()
-            },
-        isRefreshing = state.isLoading,
-        onRefresh = { viewModel.getInitialData(connectionId) },
-    ) {
-        val anonymousGroups = state.anonymousGroups ?: return@PullToRefreshBox
-        LazyColumn() {
-            item { Spacer(Modifier.size(8.dp)) }
-            itemsIndexed(
-                anonymousGroups,
-                key = { _, agWithMembersCount -> agWithMembersCount.id }) { i, anonymousGroup ->
-                AnonymousGroupCard(
-                    modifier = Modifier.animateItem(),
-                    anonymousGroup = anonymousGroup,
-                    onClick = {
-                        if (anonymousGroup.existsRemote && anonymousGroup.isMember) {
-                            navigateToAGDetails(anonymousGroup.internalId, anonymousGroup.name)
-                        }
-                    },
-                    onMoreOptions = { viewModel.selectAnonymousGroup(i) })
+    Column(modifier = Modifier.fillMaxSize()) {
+        if (state.isServerUnreachable) {
+            ServerUnreachableBanner(onRetry = { viewModel.getInitialData(connectionId) })
+        }
+        PullToRefreshBox(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .clickable(interactionSource = null, indication = null) {
+                    focusManager.clearFocus()
+                },
+            isRefreshing = state.isLoading,
+            onRefresh = { viewModel.getInitialData(connectionId) },
+        ) {
+            val anonymousGroups = state.anonymousGroups ?: return@PullToRefreshBox
+            if (anonymousGroups.isEmpty() && !state.isLoading) {
+                EmptyAGState(onCreate = navigateToCreateAG, onJoin = navigateToJoinAG)
+                return@PullToRefreshBox
             }
-            item { Spacer(Modifier.size(8.dp)) }
+            LazyColumn() {
+                item { Spacer(Modifier.size(8.dp)) }
+                itemsIndexed(
+                    anonymousGroups,
+                    key = { _, agWithMembersCount -> agWithMembersCount.id }) { i, anonymousGroup ->
+                    AnonymousGroupCard(
+                        modifier = Modifier.animateItem(),
+                        anonymousGroup = anonymousGroup,
+                        onClick = {
+                            if (anonymousGroup.existsRemote && anonymousGroup.isMember) {
+                                navigateToAGDetails(anonymousGroup.internalId, anonymousGroup.name)
+                            } else {
+                                viewModel.selectAnonymousGroup(i)
+                            }
+                        },
+                        onMoreOptions = { viewModel.selectAnonymousGroup(i) })
+                }
+                item { Spacer(Modifier.size(8.dp)) }
+            }
         }
     }
 }

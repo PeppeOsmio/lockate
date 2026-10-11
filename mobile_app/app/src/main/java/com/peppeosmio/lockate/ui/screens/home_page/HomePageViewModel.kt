@@ -3,12 +3,10 @@ package com.peppeosmio.lockate.ui.screens.home_page
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.peppeosmio.lockate.exceptions.ConnectionSettingsNotFoundException
-import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
 import com.peppeosmio.lockate.service.ConnectionEvent
 import com.peppeosmio.lockate.service.ConnectionService
 import com.peppeosmio.lockate.service.PermissionsService
 import com.peppeosmio.lockate.ui.routes.ConnectionSettingsRoute
-import com.peppeosmio.lockate.utils.ErrorInfo
 import com.peppeosmio.lockate.utils.SnackbarErrorMessage
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,7 +18,6 @@ import kotlinx.coroutines.launch
 
 class HomePageViewModel(
     private val connectionService: ConnectionService,
-    private val anonymousGroupService: AnonymousGroupService,
     private val permissionsService: PermissionsService
 ) : ViewModel() {
 
@@ -86,10 +83,6 @@ class HomePageViewModel(
         }
     }
 
-    fun selectPage(page: Int) {
-        _state.update { it.copy(pageSelected = page) }
-    }
-
     fun setSearchText(searchText: String) {
         _state.update { it.copy(searchText = searchText) }
     }
@@ -120,40 +113,8 @@ class HomePageViewModel(
         _state.update { it.copy(registeredOnSearch = null) }
     }
 
-    fun openLogoutDialog() {
-        _state.update { it.copy(showLogoutDialog = true) }
-    }
-
-    fun closeLogoutDialog() {
-        _state.update { it.copy(showLogoutDialog = false) }
-    }
-
     fun checkPermissionGranted(permission: String): Boolean {
         return permissionsService.isPermissionGranted(permission)
-    }
-
-    fun disconnect() = viewModelScope.launch {
-        closeLogoutDialog()
-        if (state.value.selectedConnectionId == null) {
-            return@launch
-        }
-        _state.update { it.copy(showLoadingOverlay = true) }
-        try {
-            try {
-                anonymousGroupService.leaveAllAG(state.value.selectedConnectionId!!)
-            } catch (e: Exception) {
-                anonymousGroupService.deleteAllAG(state.value.selectedConnectionId!!)
-            }
-            connectionService.deleteConnection(state.value.selectedConnectionId!!)
-            _state.update { it.copy(showLoadingOverlay = false) }
-        } catch (e: Exception) {
-            _state.update { it.copy(showLoadingOverlay = false) }
-            _snackbarEvents.trySend(
-                SnackbarErrorMessage(
-                    text = "Connection error", errorInfo = ErrorInfo.fromException(e)
-                )
-            )
-        }
     }
 
     fun hideErrorDialog() {

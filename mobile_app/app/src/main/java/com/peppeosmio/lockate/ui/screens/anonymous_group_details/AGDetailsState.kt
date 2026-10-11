@@ -15,6 +15,7 @@ data class AGDetailsState(
     val showLoadingOverlay: Boolean = false,
     val adminPasswordText: String = "",
     val showDeleteAGDialog: Boolean = false,
+    val showLeaveAGDialog: Boolean = false,
     val dialogError: SnackbarErrorMessage? = null,
     val remoteDataLoadingState: LoadingState = LoadingState.IsLoading,
     val isDropdownMenuOpen: Boolean = false,
@@ -24,4 +25,5 @@ data class AGDetailsState(
     val myDeviceOrientation: Float? = null,
     val selectedMemberId: String? = null,
     val isFollowingSelectedMember: Boolean = false,
+    val memberInfoSheetMemberId: String? = null,
 )

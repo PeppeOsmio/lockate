@@ -7,12 +7,15 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.peppeosmio.lockate.R
@@ -78,7 +81,8 @@ fun AGActionsBottomSheet(
     onDismiss: () -> Unit,
     onTapLeave: () -> Unit,
     onTapRemove: () -> Unit,
-    onTapCopy: () -> Unit
+    onTapCopy: () -> Unit,
+    onTapShare: () -> Unit
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Text(
@@ -136,7 +140,50 @@ fun AGActionsBottomSheet(
                 },
             colors = ListItemDefaults.colors(containerColor = Color.Transparent)
         )
+        if (anonymousGroup.isMember && anonymousGroup.existsRemote) {
+            ListItem(
+                leadingContent = {
+                    Icon(
+                        imageVector = Icons.Default.Share,
+                        contentDescription = "Share anonymous group id"
+                    )
+                },
+                headlineContent = { Text("Share anonymous group id") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        onTapShare()
+                    },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+            )
+        }
         Spacer(Modifier.height(32.dp))
+    }
+}
+
+@Composable
+fun EmptyAGState(onCreate: () -> Unit, onJoin: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = "No anonymous groups yet",
+            style = MaterialTheme.typography.titleLarge,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = "Create a group to share your location, or join one with its id and password.",
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(24.dp))
+        Button(onClick = onCreate) { Text("Create a group") }
+        OutlinedButton(onClick = onJoin) { Text("Join a group") }
     }
 }
 
@@ -154,6 +201,7 @@ fun AnonymousGroupCard(
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp, horizontal = 16.dp)
+            .alpha(if (anonymousGroup.isMember && anonymousGroup.existsRemote) 1f else 0.6f)
             .clickable(onClick = onClick)
     ) {
         Column(

@@ -19,6 +19,9 @@ data class Coordinates(val latitude: Double, val longitude: Double) {
     fun toShareableString(): String =
         String.format(Locale.ROOT, "%.6f,%.6f", latitude, longitude)
 
+    // The parenthesised label makes maps apps treat q as a pin instead of a search string
+    fun toGeoUri(): String = toShareableString().let { "geo:$it?q=$it(Location)" }
+
     companion object {
         val NAPOLI = Coordinates(latitude = 40.8517746, longitude = 14.2681244)
 

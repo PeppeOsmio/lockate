@@ -10,6 +10,7 @@ data class AnonymousGroupsState(
     val showSureLeaveDialog: Boolean = false,
 
     val isLoading: Boolean = true,
+    val isServerUnreachable: Boolean = false,
 
     val anonymousGroups: List<AnonymousGroup>? = null,
 )

@@ -28,7 +28,6 @@ val viewModelModule = module {
     viewModel<HomePageViewModel> {
         HomePageViewModel(
             connectionService = get<ConnectionService>(),
-            anonymousGroupService = get<AnonymousGroupService>(),
             permissionsService = get<PermissionsService>()
         )
     }

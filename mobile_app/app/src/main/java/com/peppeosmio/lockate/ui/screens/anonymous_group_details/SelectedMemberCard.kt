@@ -27,8 +27,6 @@ fun SelectedMemberCard(
     member: AGMember,
     isFollowing: Boolean,
     onToggleFollow: (Boolean) -> Unit,
-    onCopyCoordinates: () -> Unit,
-    onOpenInMaps: () -> Unit,
     onClose: () -> Unit
 ) {
     Card(modifier = modifier.fillMaxWidth()) {
@@ -50,18 +48,6 @@ fun SelectedMemberCard(
                     Icon(
                         painter = painterResource(R.drawable.outline_navigation_24),
                         contentDescription = if (isFollowing) "Stop following" else "Follow member"
-                    )
-                }
-                IconButton(onClick = onCopyCoordinates) {
-                    Icon(
-                        painter = painterResource(R.drawable.outline_content_copy_24),
-                        contentDescription = "Copy coordinates"
-                    )
-                }
-                IconButton(onClick = onOpenInMaps) {
-                    Icon(
-                        painter = painterResource(R.drawable.outline_map_24),
-                        contentDescription = "Open in maps"
                     )
                 }
             }
