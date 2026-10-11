@@ -75,13 +75,17 @@ jobs:
             echo "expected 4 APKs, found $count" >&2
             exit 1
           fi
-      - name: Create GitHub release
+      - name: Publish GitHub release
         working-directory: mobile_app/app/build/outputs/apk/release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          prerelease=()
-          if [[ "$VERSION" == *-* ]]; then
-            prerelease=(--prerelease)
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" lockate-*.apk --clobber
+          else
+            prerelease=()
+            if [[ "$VERSION" == *-* ]]; then
+              prerelease=(--prerelease)
+            fi
+            gh release create "$GITHUB_REF_NAME" --title "Mobile $VERSION" --generate-notes "${prerelease[@]}" lockate-*.apk
           fi
-          gh release create "$GITHUB_REF_NAME" --title "Mobile $VERSION" --generate-notes "${prerelease[@]}" lockate-*.apk
