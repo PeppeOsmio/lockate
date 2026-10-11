@@ -1,0 +1,109 @@
+name: CI Backend
+
+on:
+  push:
+    branches: [main]
+    tags: ["backend-v*"]
+    paths:
+      - backend/**
+      - .github/workflows/ci-backend.yml
+      - .github/workflows/pr-backend.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    uses: ./.github/workflows/pr-backend.yml
+
+  # native-image can't cross-compile, so each arch builds on its own runner and the digests are merged
+  publish-build:
+    needs: checks
+    if: startsWith(github.ref, 'refs/tags/backend-v')
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            arch: amd64
+            runner: ubuntu-24.04
+          - platform: linux/arm64
+            arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    environment: dockerhub
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Check the tag is on main
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/metadata-action@v6
+        id: meta
+        with:
+          images: ${{ vars.DOCKERHUB_USERNAME }}/lockate-backend
+      - uses: docker/build-push-action@v7
+        id: build
+        with:
+          context: backend
+          file: backend/native.Dockerfile
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=${{ vars.DOCKERHUB_USERNAME }}/lockate-backend,push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=backend-${{ matrix.arch }}
+          cache-to: type=gha,scope=backend-${{ matrix.arch }},mode=max
+      - run: |
+          mkdir -p "$RUNNER_TEMP/digests"
+          digest="${{ steps.build.outputs.digest }}"
+          touch "$RUNNER_TEMP/digests/${digest#sha256:}"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: digests-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: publish-build
+    runs-on: ubuntu-24.04
+    environment: dockerhub
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - id: version
+        run: echo "version=${GITHUB_REF_NAME#backend-v}" >> "$GITHUB_OUTPUT"
+      - uses: docker/metadata-action@v6
+        id: meta
+        with:
+          images: ${{ vars.DOCKERHUB_USERNAME }}/lockate-backend
+          flavor: latest=false
+          tags: |
+            type=semver,pattern={{version}},value=${{ steps.version.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.version }}
+            type=semver,pattern={{major}},value=${{ steps.version.outputs.version }}
+            type=raw,value=latest,enable=${{ !contains(steps.version.outputs.version, '-') }}
+      - working-directory: ${{ runner.temp }}/digests
+        env:
+          IMAGE: ${{ vars.DOCKERHUB_USERNAME }}/lockate-backend
+        run: |
+          mapfile -t tag_args < <(jq -r '.tags[] | "-t", .' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+          digests=()
+          for digest in *; do digests+=("$IMAGE@sha256:$digest"); done
+          docker buildx imagetools create "${tag_args[@]}" "${digests[@]}"

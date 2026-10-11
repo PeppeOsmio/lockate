@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -13,10 +15,22 @@ android {
         applicationId = "com.peppeosmio.lockate"
         minSdk = 31
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = (findProperty("versionCode") as String?)?.toInt() ?: 1
+        versionName = findProperty("versionName") as String? ?: "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        create("release") {
+            val local = Properties()
+            rootProject.file("local.properties").takeIf { it.exists() }?.reader()?.use { local.load(it) }
+            fun cfg(prop: String, env: String) = local.getProperty(prop) ?: System.getenv(env)
+            cfg("lockate.keystore.path", "LOCKATE_KEYSTORE_PATH")?.let { storeFile = file(it) }
+            storePassword = cfg("lockate.keystore.password", "LOCKATE_KEYSTORE_PASSWORD")
+            keyAlias = cfg("lockate.key.alias", "LOCKATE_KEY_ALIAS")
+            keyPassword = cfg("lockate.key.password", "LOCKATE_KEY_PASSWORD")
+        }
     }
 
     ksp {
@@ -36,7 +50,7 @@ android {
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {
@@ -51,7 +65,7 @@ android {
         abi {
             isEnable = true
             reset()
-            include("arm64-v8a" ) // or "armeabi-v7a", "x86", etc.
+            include("arm64-v8a", "armeabi-v7a", "x86_64")
             isUniversalApk = true // if true, also builds a fat APK with all ABIs
         }
     }

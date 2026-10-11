@@ -14,3 +14,8 @@ mobile_app/local.properties
 
 # Env
 .env
+
+# Signing
+*.jks
+*.keystore
+mobile_app/key/
