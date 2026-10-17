@@ -47,18 +47,23 @@ public class AdminAuthInterceptor implements HandlerInterceptor {
 
     var apiKeyHeader = request.getHeader("X-API-KEY");
     if (apiKeyHeader == null) {
-      response.sendError(
-          401, objectMapper.writeValueAsString(new ErrorResponseDto("missing_api_key")));
+      writeError(response, 401, "missing_api_key");
       return false;
     }
 
     if (!adminApiKey.equals(apiKeyHeader)) {
-      response.sendError(
-          401, objectMapper.writeValueAsString(new ErrorResponseDto("invalid_api_key")));
+      writeError(response, 401, "invalid_api_key");
       return false;
     }
 
     SecurityContextHolder.getContext().setAuthentication(new AdminAuthentication());
     return true;
+  }
+
+  private void writeError(HttpServletResponse response, int status, String error)
+      throws IOException {
+    response.setStatus(status);
+    response.setContentType("application/json");
+    response.getWriter().write(objectMapper.writeValueAsString(new ErrorResponseDto(error)));
   }
 }

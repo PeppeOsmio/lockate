@@ -71,7 +71,8 @@ class AdminAuthInterceptorTest {
 
     assertThat(result).isFalse();
     assertThat(response.getStatus()).isEqualTo(401);
-    assertThat(response.getErrorMessage()).contains("missing_api_key");
+    assertThat(response.getContentType()).isEqualTo("application/json");
+    assertThat(response.getContentAsString()).isEqualTo("{\"error\":\"missing_api_key\"}");
   }
 
   @Test
@@ -82,7 +83,8 @@ class AdminAuthInterceptorTest {
 
     assertThat(result).isFalse();
     assertThat(response.getStatus()).isEqualTo(401);
-    assertThat(response.getErrorMessage()).contains("invalid_api_key");
+    assertThat(response.getContentType()).isEqualTo("application/json");
+    assertThat(response.getContentAsString()).isEqualTo("{\"error\":\"invalid_api_key\"}");
   }
 
   @Test
