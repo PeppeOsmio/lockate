@@ -6,17 +6,15 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
-import com.peppeosmio.lockate.ui.routes.AnonymousGroupDetailsRoute
 import com.peppeosmio.lockate.ui.routes.ConnectionSettingsRoute
 import com.peppeosmio.lockate.ui.routes.CreateAnonymousGroupRoute
 import com.peppeosmio.lockate.ui.routes.HomeRoute
 import com.peppeosmio.lockate.ui.routes.JoinAnonymousGroupRoute
 import com.peppeosmio.lockate.ui.routes.LoadingRoute
 import com.peppeosmio.lockate.ui.routes.ManageConnectionsRoute
-import com.peppeosmio.lockate.ui.screens.anonymous_group_details.AnonymousGroupDetailsScreen
 import com.peppeosmio.lockate.ui.screens.connection_settings.ConnectionSettingsScreen
 import com.peppeosmio.lockate.ui.screens.create_anonymous_group.CreateAnonymousGroupScreen
-import com.peppeosmio.lockate.ui.screens.home_page.HomePageScreen
+import com.peppeosmio.lockate.ui.screens.map.MapScreen
 import com.peppeosmio.lockate.ui.screens.join_anonymous_group.JoinAnonymousGroupScreen
 import com.peppeosmio.lockate.ui.screens.loading.LoadingScreen
 import com.peppeosmio.lockate.ui.screens.manage_connections.ManageConnectionsScreen
@@ -72,21 +70,8 @@ fun LockateApp(startLocationService: () -> Unit, stopLocationService: () -> Unit
                 })
             }
             composable<HomeRoute> {
-                HomePageScreen(
-                    navigateToConnectionSettings = { route ->
-                        appNavController.navigate(
-                            route
-                        ) {}
-                    },
-                    navigateToAGDetails = { connectionSettingsId, anonymousGroupInternalId, anonymousGroupName ->
-                        appNavController.navigate(
-                            AnonymousGroupDetailsRoute(
-                                connectionId = connectionSettingsId,
-                                anonymousGroupInternalId = anonymousGroupInternalId,
-                                anonymousGroupName = anonymousGroupName
-                            )
-                        )
-                    },
+                MapScreen(
+                    navigateToConnectionSettings = { route -> appNavController.navigate(route) },
                     navigateToCreateAG = { connectionSettingsId ->
                         appNavController.navigate(CreateAnonymousGroupRoute(connectionSettingsId))
                     },
@@ -96,8 +81,7 @@ fun LockateApp(startLocationService: () -> Unit, stopLocationService: () -> Unit
                     navigateToManageConnections = {
                         appNavController.navigate(ManageConnectionsRoute)
                     },
-                    startLocationService = startLocationService,
-                    stopLocationService = stopLocationService
+                    startLocationService = startLocationService
                 )
             }
             composable<ManageConnectionsRoute> {
@@ -121,18 +105,6 @@ fun LockateApp(startLocationService: () -> Unit, stopLocationService: () -> Unit
                 JoinAnonymousGroupScreen(navigateBack = {
                     appNavController.popBackStack()
                 }, connectionId = joinAnonymousGroupRoute.connectionSettingsId)
-            }
-            composable<AnonymousGroupDetailsRoute> { backStackEntry ->
-                val anonymousGroupDetailsRoute: AnonymousGroupDetailsRoute =
-                    backStackEntry.toRoute()
-                AnonymousGroupDetailsScreen(
-                    navigateBack = {
-                        appNavController.popBackStack()
-                    },
-                    connectionId = anonymousGroupDetailsRoute.connectionId,
-                    anonymousGroupInternalId = anonymousGroupDetailsRoute.anonymousGroupInternalId,
-                    anonymousGroupName = anonymousGroupDetailsRoute.anonymousGroupName
-                )
             }
             composable<ConnectionSettingsRoute> { navBackStackEntry ->
                 val connectionSettingsRoute = navBackStackEntry.toRoute<ConnectionSettingsRoute>()

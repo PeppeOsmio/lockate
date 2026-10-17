@@ -1,68 +1,95 @@
 package com.peppeosmio.lockate.ui.screens.anonymous_group_details
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.FilledTonalIconToggleButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.peppeosmio.lockate.R
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.utils.DateTimeUtils
 import kotlinx.datetime.format
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MemberInfoBottomSheet(
+fun MemberDetails(
     member: AGMember,
     isMe: Boolean,
-    onDismiss: () -> Unit,
-    onShowOnMap: () -> Unit,
+    isFollowing: Boolean,
+    canMakeAdmin: Boolean,
+    onBack: () -> Unit,
+    onToggleFollow: (Boolean) -> Unit,
     onCopyCoordinates: () -> Unit,
     onOpenInMaps: () -> Unit,
     onCopyId: () -> Unit,
-    canMakeAdmin: Boolean,
     onMakeAdmin: () -> Unit
 ) {
     val lastSeen = member.lastLocationRecord?.timestamp
-    ModalBottomSheet(
-        onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ) {
+    Column {
         Row(
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp),
+            modifier = Modifier.padding(start = 4.dp, end = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(text = member.name, style = MaterialTheme.typography.titleLarge)
-            if (isMe) {
-                Spacer(Modifier.size(8.dp))
-                MemberBadge("You")
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to members")
             }
-            if (member.isAGAdmin) {
-                Spacer(Modifier.size(8.dp))
-                MemberBadge("Admin")
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        modifier = Modifier.weight(1f, fill = false),
+                        text = member.name,
+                        style = MaterialTheme.typography.titleLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (isMe) {
+                        Spacer(Modifier.size(6.dp))
+                        Text(
+                            text = "You",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (member.isAGAdmin) {
+                        AdminIndicator()
+                        Spacer(Modifier.size(12.dp))
+                    }
+                    LastSeenText(lastSeen = lastSeen)
+                }
+            }
+            if (member.lastLocationRecord != null && !isMe) {
+                FilledTonalIconToggleButton(checked = isFollowing, onCheckedChange = onToggleFollow) {
+                    Icon(
+                        painter = painterResource(R.drawable.outline_navigation_24),
+                        contentDescription = if (isFollowing) "Stop following" else "Follow member"
+                    )
+                }
             }
         }
-        Spacer(Modifier.height(8.dp))
-
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         InfoRow(
-            label = "Last seen",
+            label = "Last location",
             value = lastSeen?.let {
                 DateTimeUtils.utcToCurrentTimeZone(it).format(DateTimeUtils.DATE_FORMAT)
             } ?: "never")
@@ -83,19 +110,17 @@ fun MemberInfoBottomSheet(
             },
             colors = ListItemDefaults.colors(containerColor = Color.Transparent)
         )
-
         if (member.lastLocationRecord != null || canMakeAdmin) {
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         }
         if (member.lastLocationRecord != null) {
-            ActionRow(R.drawable.outline_navigation_24, "Show on map", onShowOnMap)
             ActionRow(R.drawable.outline_content_copy_24, "Copy coordinates", onCopyCoordinates)
             ActionRow(R.drawable.outline_map_24, "Open in maps app", onOpenInMaps)
         }
         if (canMakeAdmin) {
             ActionRow(R.drawable.baseline_security_24, "Make admin", onMakeAdmin)
         }
-        Spacer(Modifier.height(32.dp))
+        Spacer(Modifier.height(16.dp))
     }
 }
 

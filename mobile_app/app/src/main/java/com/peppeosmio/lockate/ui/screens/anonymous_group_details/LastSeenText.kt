@@ -44,7 +44,7 @@ fun lastSeenFreshness(lastSeen: LocalDateTime?, now: Instant): LastSeenFreshness
 }
 
 /**
- * Relative "last seen" with a dot that turns green → yellow → grey as the timestamp ages.
+ * Relative "last location" with a dot that turns green → yellow → grey as the timestamp ages.
  * [lastSeen] is in UTC.
  */
 @OptIn(ExperimentalTime::class)
@@ -71,9 +71,8 @@ fun LastSeenText(modifier: Modifier = Modifier, lastSeen: LocalDateTime?) {
         Spacer(Modifier.width(6.dp))
         Text(
             text = when {
-                lastSeen == null -> "Never seen"
-                freshness == LastSeenFreshness.Live -> "Online"
-                else -> "Last seen ${DateTimeUtils.formatRelative(lastSeen.toInstant(TimeZone.UTC), now)}"
+                lastSeen == null -> "No location yet"
+                else -> "Last location ${DateTimeUtils.formatRelative(lastSeen.toInstant(TimeZone.UTC), now)}"
             }, style = MaterialTheme.typography.bodyMedium
         )
     }
