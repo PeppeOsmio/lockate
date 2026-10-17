@@ -78,14 +78,19 @@ public class AGMemberAuthInterceptor implements HandlerInterceptor {
       return true;
     } catch (AGNotFoundException e) {
       e.printStackTrace();
-      response.sendError(
-          404, objectMapper.writeValueAsString(new ErrorResponseDto("ag_not_found")));
+      writeError(response, 404, "ag_not_found");
       return false;
     } catch (UnauthorizedException e) {
       e.printStackTrace();
-      response.sendError(
-          401, objectMapper.writeValueAsString(new ErrorResponseDto("unauthorized")));
+      writeError(response, 401, "unauthorized");
       return false;
     }
+  }
+
+  private void writeError(HttpServletResponse response, int status, String error)
+      throws IOException {
+    response.setStatus(status);
+    response.setContentType("application/json");
+    response.getWriter().write(objectMapper.writeValueAsString(new ErrorResponseDto(error)));
   }
 }

@@ -133,7 +133,8 @@ class AGMemberAuthInterceptorTest {
 
     assertThat(result).isFalse();
     assertThat(response.getStatus()).isEqualTo(404);
-    assertThat(response.getErrorMessage()).contains("ag_not_found");
+    assertThat(response.getContentType()).isEqualTo("application/json");
+    assertThat(response.getContentAsString()).isEqualTo("{\"error\":\"ag_not_found\"}");
   }
 
   @Test
@@ -148,7 +149,8 @@ class AGMemberAuthInterceptorTest {
 
     assertThat(result).isFalse();
     assertThat(response.getStatus()).isEqualTo(401);
-    assertThat(response.getErrorMessage()).contains("unauthorized");
+    assertThat(response.getContentType()).isEqualTo("application/json");
+    assertThat(response.getContentAsString()).isEqualTo("{\"error\":\"unauthorized\"}");
   }
 
   @Test
