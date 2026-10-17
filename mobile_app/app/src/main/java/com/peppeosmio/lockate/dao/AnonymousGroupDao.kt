@@ -109,6 +109,12 @@ interface AnonymousGroupDao {
     )
     suspend fun getAGMemberByIdAndAGInternalId(id: String, agInternalId: Long): AGMemberEntity?
 
+    @Query("UPDATE ag_member SET isAGAdmin = :isAGAdmin WHERE id = :id AND anonymousGroupInternalId = :agInternalId")
+    suspend fun setAGMemberIsAGAdmin(id: String, agInternalId: Long, isAGAdmin: Boolean)
+
+    @Query("UPDATE anonymous_group SET memberIsAGAdmin = :memberIsAGAdmin WHERE internalId = :anonymousGroupInternalId")
+    suspend fun setAGMemberIsAGAdminSelf(anonymousGroupInternalId: Long, memberIsAGAdmin: Boolean)
+
     @Query(
         """
         UPDATE ag_member

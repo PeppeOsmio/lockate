@@ -5,6 +5,7 @@ import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
 import Stack from '@mui/material/Stack'
+import Switch from '@mui/material/Switch'
 import Typography from '@mui/material/Typography'
 import { useAdminApiClient } from '../api/AdminAPIClientContext'
 import type { AGMember } from '../api/types'
@@ -17,6 +18,8 @@ export function GroupDetailPage() {
   const [members, setMembers] = useState<AGMember[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [pendingAdminIds, setPendingAdminIds] = useState<Set<string>>(new Set())
   const client = useAdminApiClient()
   const navigate = useNavigate()
 
@@ -39,6 +42,24 @@ export function GroupDetailPage() {
     if (!anonymousGroupId) return
     await client.deleteGroupMember(anonymousGroupId, memberId)
     setMembers((prev) => prev.filter((m) => m.id !== memberId))
+  }
+
+  async function handleToggleAdmin(memberId: string, isAGAdmin: boolean) {
+    if (!anonymousGroupId) return
+    setActionError(null)
+    setPendingAdminIds((prev) => new Set(prev).add(memberId))
+    try {
+      await client.setGroupMemberAdmin(anonymousGroupId, memberId, isAGAdmin)
+      setMembers((prev) => prev.map((m) => (m.id === memberId ? { ...m, isAGAdmin } : m)))
+    } catch {
+      setActionError('Failed to update the member admin status.')
+    } finally {
+      setPendingAdminIds((prev) => {
+        const next = new Set(prev)
+        next.delete(memberId)
+        return next
+      })
+    }
   }
 
   return (
@@ -69,13 +90,29 @@ export function GroupDetailPage() {
 
       {loading && <CircularProgress />}
       {error && <Alert severity="error">{error}</Alert>}
+      {actionError && (
+        <Alert severity="error" onClose={() => setActionError(null)} sx={{ mb: 2 }}>
+          {actionError}
+        </Alert>
+      )}
 
       {!loading && !error && (
         <Table
           columns={[
             { header: 'Member ID', render: (m) => <code>{m.id}</code> },
             { header: 'Joined', render: (m) => formatDate(m.createdAt) },
-            { header: 'Admin', render: (m) => (m.isAGAdmin ? 'Yes' : 'No') },
+            {
+              header: 'Admin',
+              render: (m) => (
+                <Switch
+                  size="small"
+                  checked={m.isAGAdmin}
+                  disabled={pendingAdminIds.has(m.id)}
+                  onChange={(e) => handleToggleAdmin(m.id, e.target.checked)}
+                  slotProps={{ input: { 'aria-label': `Admin ${m.id}` } }}
+                />
+              ),
+            },
             { header: 'Last location received', render: (m) => formatDate(m.lastLocationAt) },
             {
               header: '',

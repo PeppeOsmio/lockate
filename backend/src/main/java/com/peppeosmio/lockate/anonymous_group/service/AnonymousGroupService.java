@@ -418,6 +418,22 @@ public class AnonymousGroupService {
   }
 
   @Transactional
+  public void promoteMember(
+      UUID anonymousGroupId, AGMemberAuthentication authentication, UUID agMemberId)
+      throws UnauthorizedException, AGMemberNotAdminException, AGMemberNotFoundException {
+    var caller =
+        agMemberRepository.findById(authentication.getId()).orElseThrow(UnauthorizedException::new);
+    if (!caller.isAGAdmin()) {
+      throw new AGMemberNotAdminException();
+    }
+    var target =
+        agMemberRepository
+            .findByIdAndAnonymousGroupId(agMemberId, anonymousGroupId)
+            .orElseThrow(() -> new AGMemberNotFoundException(agMemberId));
+    target.setAGAdmin(true);
+  }
+
+  @Transactional
   public void deleteAnonymousGroupForAdmin(UUID anonymousGroupId) throws AGNotFoundException {
     if (!anonymousGroupRepository.existsById(anonymousGroupId)) {
       throw new AGNotFoundException(anonymousGroupId);
@@ -433,5 +449,15 @@ public class AnonymousGroupService {
             .findByIdAndAnonymousGroupId(agMemberId, anonymousGroupId)
             .orElseThrow(() -> new AGMemberNotFoundException(agMemberId));
     agMemberRepository.deleteById(agMemberEntity.getId());
+  }
+
+  @Transactional
+  public void setMemberAdminForAdmin(UUID anonymousGroupId, UUID agMemberId, boolean isAGAdmin)
+      throws AGMemberNotFoundException {
+    var agMemberEntity =
+        agMemberRepository
+            .findByIdAndAnonymousGroupId(agMemberId, anonymousGroupId)
+            .orElseThrow(() -> new AGMemberNotFoundException(agMemberId));
+    agMemberEntity.setAGAdmin(isAGAdmin);
   }
 }

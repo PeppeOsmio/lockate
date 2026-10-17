@@ -1,6 +1,7 @@
 package com.peppeosmio.lockate.utils
 
 import com.peppeosmio.lockate.data.anonymous_group.remote.ErrorResponseDto
+import com.peppeosmio.lockate.exceptions.AGMemberNotAdminException
 import com.peppeosmio.lockate.exceptions.AGMemberUnauthorizedException
 import com.peppeosmio.lockate.exceptions.APIException
 import com.peppeosmio.lockate.exceptions.InvalidApiKeyException
@@ -15,12 +16,16 @@ import java.net.ConnectException
 import java.net.NoRouteToHostException
 
 object ErrorHandler {
-    @Throws(InvalidApiKeyException::class, UnauthorizedException::class)
+    @Throws(
+        InvalidApiKeyException::class, AGMemberNotAdminException::class, UnauthorizedException::class
+    )
     suspend fun handleUnauthorized(response: HttpResponse) {
         try {
             val errorResponseBody = response.body<ErrorResponseDto>()
             if (errorResponseBody.error == "invalid_api_key" || errorResponseBody.error == "missing_api_key") {
                 throw InvalidApiKeyException()
+            } else if (errorResponseBody.error == "ag_member_not_admin") {
+                throw AGMemberNotAdminException()
             } else {
                 throw UnauthorizedException()
             }

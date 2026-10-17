@@ -37,7 +37,9 @@ fun MemberInfoBottomSheet(
     onShowOnMap: () -> Unit,
     onCopyCoordinates: () -> Unit,
     onOpenInMaps: () -> Unit,
-    onCopyId: () -> Unit
+    onCopyId: () -> Unit,
+    canMakeAdmin: Boolean,
+    onMakeAdmin: () -> Unit
 ) {
     val lastSeen = member.lastLocationRecord?.timestamp
     ModalBottomSheet(
@@ -82,11 +84,16 @@ fun MemberInfoBottomSheet(
             colors = ListItemDefaults.colors(containerColor = Color.Transparent)
         )
 
-        if (member.lastLocationRecord != null) {
+        if (member.lastLocationRecord != null || canMakeAdmin) {
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        }
+        if (member.lastLocationRecord != null) {
             ActionRow(R.drawable.outline_navigation_24, "Show on map", onShowOnMap)
             ActionRow(R.drawable.outline_content_copy_24, "Copy coordinates", onCopyCoordinates)
             ActionRow(R.drawable.outline_map_24, "Open in maps app", onOpenInMaps)
+        }
+        if (canMakeAdmin) {
+            ActionRow(R.drawable.baseline_security_24, "Make admin", onMakeAdmin)
         }
         Spacer(Modifier.height(32.dp))
     }
