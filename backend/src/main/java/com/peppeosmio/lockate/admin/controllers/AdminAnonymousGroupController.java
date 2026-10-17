@@ -2,6 +2,7 @@ package com.peppeosmio.lockate.admin.controllers;
 
 import com.peppeosmio.lockate.admin.security.SecuredAdmin;
 import com.peppeosmio.lockate.anonymous_group.dto.AGAdminMemberDto;
+import com.peppeosmio.lockate.anonymous_group.dto.AGAdminMemberUpdateDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGAdminSummaryDto;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
@@ -49,5 +50,15 @@ public class AdminAnonymousGroupController {
   void deleteMember(@PathVariable UUID anonymousGroupId, @PathVariable UUID agMemberId)
       throws AGMemberNotFoundException {
     anonymousGroupService.deleteMemberForAdmin(anonymousGroupId, agMemberId);
+  }
+
+  @PatchMapping("/{anonymousGroupId}/members/{agMemberId}")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  void updateMember(
+      @PathVariable UUID anonymousGroupId,
+      @PathVariable UUID agMemberId,
+      @Valid @RequestBody AGAdminMemberUpdateDto body)
+      throws AGMemberNotFoundException {
+    anonymousGroupService.setMemberAdminForAdmin(anonymousGroupId, agMemberId, body.isAGAdmin());
   }
 }

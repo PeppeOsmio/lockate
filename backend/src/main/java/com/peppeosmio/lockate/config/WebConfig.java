@@ -36,7 +36,7 @@ public class WebConfig implements WebMvcConfigurer {
     registry
         .addMapping("/api/admin/**")
         .allowedOrigins(adminUiOrigin)
-        .allowedMethods("GET", "POST", "DELETE")
+        .allowedMethods("GET", "POST", "PATCH", "DELETE")
         .allowedHeaders("X-API-KEY", "Content-Type");
   }
 }

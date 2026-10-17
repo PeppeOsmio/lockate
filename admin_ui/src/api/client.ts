@@ -82,6 +82,17 @@ export class AdminAPIClient {
     })
   }
 
+  setGroupMemberAdmin(
+    anonymousGroupId: string,
+    memberId: string,
+    isAGAdmin: boolean,
+  ): Promise<void> {
+    return this.apiFetch(`/api/admin/anonymous-groups/${anonymousGroupId}/members/${memberId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isAGAdmin }),
+    })
+  }
+
   listApiKeys(page = 0, size = 20): Promise<Page<ApiKey>> {
     return this.apiFetch(`/api/admin/api-keys?page=${page}&size=${size}`)
   }

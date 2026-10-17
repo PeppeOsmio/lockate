@@ -4,6 +4,7 @@ import com.peppeosmio.lockate.anonymous_group.dto.AGGetMembersCountDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGGetMembersResDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGLocationSaveReqDto;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotAdminException;
+import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.security.AGMemberAuthentication;
 import com.peppeosmio.lockate.anonymous_group.service.AnonymousGroupService;
@@ -49,6 +50,16 @@ public class SecuredAGController {
   void memberLeave(@PathVariable UUID anonymousGroupId, AGMemberAuthentication authentication)
       throws AGNotFoundException, UnauthorizedException {
     anonymousGroupService.deleteMember(anonymousGroupId, (AGMemberAuthentication) authentication);
+  }
+
+  @PostMapping("/{anonymousGroupId}/members/{agMemberId}/promote")
+  @ResponseStatus(HttpStatus.OK)
+  void promoteMember(
+      @PathVariable UUID anonymousGroupId,
+      @PathVariable UUID agMemberId,
+      AGMemberAuthentication authentication)
+      throws UnauthorizedException, AGMemberNotAdminException, AGMemberNotFoundException {
+    anonymousGroupService.promoteMember(anonymousGroupId, authentication, agMemberId);
   }
 
   @GetMapping("/{anonymousGroupId}/members/count")

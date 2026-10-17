@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.peppeosmio.lockate.anonymous_group.dto.AGAdminMemberDto;
+import com.peppeosmio.lockate.anonymous_group.dto.AGAdminMemberUpdateDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGAdminSummaryDto;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
@@ -110,6 +111,29 @@ class AdminAnonymousGroupControllerTest {
         .deleteMemberForAdmin(groupId, memberId);
 
     assertThatThrownBy(() -> controller.deleteMember(groupId, memberId))
+        .isInstanceOf(AGMemberNotFoundException.class);
+  }
+
+  @Test
+  void updateMember_delegatesToService() throws Exception {
+    var groupId = UUID.randomUUID();
+    var memberId = UUID.randomUUID();
+
+    controller.updateMember(groupId, memberId, new AGAdminMemberUpdateDto(true));
+
+    verify(anonymousGroupService).setMemberAdminForAdmin(groupId, memberId, true);
+  }
+
+  @Test
+  void updateMember_missingMember_propagatesAGMemberNotFoundException() throws Exception {
+    var groupId = UUID.randomUUID();
+    var memberId = UUID.randomUUID();
+    doThrow(new AGMemberNotFoundException(memberId))
+        .when(anonymousGroupService)
+        .setMemberAdminForAdmin(groupId, memberId, false);
+
+    assertThatThrownBy(
+            () -> controller.updateMember(groupId, memberId, new AGAdminMemberUpdateDto(false)))
         .isInstanceOf(AGMemberNotFoundException.class);
   }
 }

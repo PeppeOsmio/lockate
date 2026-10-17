@@ -26,4 +26,5 @@ data class AGDetailsState(
     val selectedMemberId: String? = null,
     val isFollowingSelectedMember: Boolean = false,
     val memberInfoSheetMemberId: String? = null,
+    val makeAdminDialogMemberId: String? = null,
 )

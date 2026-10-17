@@ -648,6 +648,77 @@ class AnonymousGroupServiceTest {
     verify(anonymousGroupRepository, never()).deleteAnonymousGroup(any());
   }
 
+  // ---------- promoteMember ----------
+
+  @Test
+  void promoteMember_admin_promotesTarget() throws Exception {
+    var adminId = UUID.randomUUID();
+    var targetId = UUID.randomUUID();
+    var admin = newMember(adminId, "token".getBytes(), true, groupEntity);
+    var target = newMember(targetId, "token".getBytes(), false, groupEntity);
+    when(agMemberRepository.findById(adminId)).thenReturn(Optional.of(admin));
+    when(agMemberRepository.findByIdAndAnonymousGroupId(targetId, groupId))
+        .thenReturn(Optional.of(target));
+
+    service.promoteMember(groupId, new AGMemberAuthentication(adminId), targetId);
+
+    assertThat(target.isAGAdmin()).isTrue();
+  }
+
+  @Test
+  void promoteMember_targetAlreadyAdmin_succeeds() throws Exception {
+    var adminId = UUID.randomUUID();
+    var targetId = UUID.randomUUID();
+    var admin = newMember(adminId, "token".getBytes(), true, groupEntity);
+    var target = newMember(targetId, "token".getBytes(), true, groupEntity);
+    when(agMemberRepository.findById(adminId)).thenReturn(Optional.of(admin));
+    when(agMemberRepository.findByIdAndAnonymousGroupId(targetId, groupId))
+        .thenReturn(Optional.of(target));
+
+    service.promoteMember(groupId, new AGMemberAuthentication(adminId), targetId);
+
+    assertThat(target.isAGAdmin()).isTrue();
+  }
+
+  @Test
+  void promoteMember_nonAdmin_throwsAGMemberNotAdminException() {
+    var callerId = UUID.randomUUID();
+    var targetId = UUID.randomUUID();
+    var caller = newMember(callerId, "token".getBytes(), false, groupEntity);
+    when(agMemberRepository.findById(callerId)).thenReturn(Optional.of(caller));
+
+    assertThatThrownBy(
+            () -> service.promoteMember(groupId, new AGMemberAuthentication(callerId), targetId))
+        .isInstanceOf(AGMemberNotAdminException.class);
+    verify(agMemberRepository, never()).findByIdAndAnonymousGroupId(any(), any());
+  }
+
+  @Test
+  void promoteMember_targetNotInGroup_throwsAGMemberNotFoundException() {
+    var adminId = UUID.randomUUID();
+    var targetId = UUID.randomUUID();
+    var admin = newMember(adminId, "token".getBytes(), true, groupEntity);
+    when(agMemberRepository.findById(adminId)).thenReturn(Optional.of(admin));
+    when(agMemberRepository.findByIdAndAnonymousGroupId(targetId, groupId))
+        .thenReturn(Optional.empty());
+
+    assertThatThrownBy(
+            () -> service.promoteMember(groupId, new AGMemberAuthentication(adminId), targetId))
+        .isInstanceOf(AGMemberNotFoundException.class);
+  }
+
+  @Test
+  void promoteMember_unknownCaller_throwsUnauthorizedException() {
+    var callerId = UUID.randomUUID();
+    when(agMemberRepository.findById(callerId)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(
+            () ->
+                service.promoteMember(
+                    groupId, new AGMemberAuthentication(callerId), UUID.randomUUID()))
+        .isInstanceOf(UnauthorizedException.class);
+  }
+
   // ---------- deleteAnonymousGroupForAdmin ----------
 
   @Test
@@ -691,5 +762,41 @@ class AnonymousGroupServiceTest {
     assertThatThrownBy(() -> service.deleteMemberForAdmin(groupId, memberId))
         .isInstanceOf(AGMemberNotFoundException.class);
     verify(agMemberRepository, never()).deleteById(any());
+  }
+
+  // ---------- setMemberAdminForAdmin ----------
+
+  @Test
+  void setMemberAdminForAdmin_promote_setsAdminFlag() throws Exception {
+    var memberId = UUID.randomUUID();
+    var member = newMember(memberId, "token".getBytes(), false, groupEntity);
+    when(agMemberRepository.findByIdAndAnonymousGroupId(memberId, groupId))
+        .thenReturn(Optional.of(member));
+
+    service.setMemberAdminForAdmin(groupId, memberId, true);
+
+    assertThat(member.isAGAdmin()).isTrue();
+  }
+
+  @Test
+  void setMemberAdminForAdmin_demote_clearsAdminFlag() throws Exception {
+    var memberId = UUID.randomUUID();
+    var member = newMember(memberId, "token".getBytes(), true, groupEntity);
+    when(agMemberRepository.findByIdAndAnonymousGroupId(memberId, groupId))
+        .thenReturn(Optional.of(member));
+
+    service.setMemberAdminForAdmin(groupId, memberId, false);
+
+    assertThat(member.isAGAdmin()).isFalse();
+  }
+
+  @Test
+  void setMemberAdminForAdmin_missingMember_throwsAGMemberNotFoundException() {
+    var memberId = UUID.randomUUID();
+    when(agMemberRepository.findByIdAndAnonymousGroupId(memberId, groupId))
+        .thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.setMemberAdminForAdmin(groupId, memberId, true))
+        .isInstanceOf(AGMemberNotFoundException.class);
   }
 }

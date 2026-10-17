@@ -22,6 +22,7 @@ import com.peppeosmio.lockate.domain.anonymous_group.AGLocationUpdate
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.domain.anonymous_group.AnonymousGroup
 import com.peppeosmio.lockate.domain.anonymous_group.SendLocationStatus
+import com.peppeosmio.lockate.exceptions.AGMemberNotAdminException
 import com.peppeosmio.lockate.exceptions.AGMemberUnauthorizedException
 import com.peppeosmio.lockate.exceptions.APIException
 import com.peppeosmio.lockate.exceptions.Base64Exception
@@ -643,6 +644,14 @@ class AnonymousGroupService(
             }
         }.awaitAll()
         Log.d("", "Decrypted members: ${decryptedMembers.map { it.id }}")
+        decryptedMembers.firstOrNull { it.id == anonymousGroup.memberId }?.let { me ->
+            if (me.isAGAdmin != anonymousGroup.memberIsAGAdmin) {
+                anonymousGroupDao.setAGMemberIsAGAdminSelf(
+                    anonymousGroupInternalId = anonymousGroupInternalId,
+                    memberIsAGAdmin = me.isAGAdmin
+                )
+            }
+        }
         anonymousGroupDao.setAGMembers(
             anonymousGroupInternalId = anonymousGroupInternalId,
             agMemberEntities = decryptedMembers.map {
@@ -1102,4 +1111,41 @@ class AnonymousGroupService(
             }
             deleteLocalAnonymousGroup(anonymousGroup)
         }
+
+    suspend fun promoteMember(
+        connectionSettingsId: Long, anonymousGroupInternalId: Long, agMemberId: String
+    ) = withContext(Dispatchers.IO) {
+        val connectionSettings = connectionService.getConnectionSettingsById(connectionSettingsId)
+        val agEntity = anonymousGroupDao.getAGByInternalId(anonymousGroupInternalId)
+            ?: throw LocalAGNotFoundException()
+        val anonymousGroup = AnonymousGroupMapper.toDomain(
+            entity = agEntity, keyStoreService = keyStoreService
+        )
+        val response = httpClient.post {
+            url("${connectionSettings.url}/api/anonymous-groups/${anonymousGroup.id}/members/$agMemberId/promote")
+            headers {
+                connectionSettings.apiKey?.let { ak -> append("X-API-KEY", ak) }
+                append(
+                    HttpHeaders.Authorization,
+                    "AGMember ${agEntity.memberId} ${Base64.encode(anonymousGroup.memberToken)}"
+                )
+            }
+        }
+        try {
+            when (response.status.value) {
+                200 -> Unit
+                401, 403 -> ErrorHandler.handleUnauthorized(response)
+                404 -> throw RemoteAGNotFoundException()
+                else -> ErrorHandler.handleGeneric(response)
+            }
+        } catch (e: AGMemberNotAdminException) {
+            anonymousGroupDao.setAGMemberIsAGAdminSelf(
+                anonymousGroupInternalId = anonymousGroupInternalId, memberIsAGAdmin = false
+            )
+            throw e
+        }
+        anonymousGroupDao.setAGMemberIsAGAdmin(
+            id = agMemberId, agInternalId = anonymousGroupInternalId, isAGAdmin = true
+        )
+    }
 }

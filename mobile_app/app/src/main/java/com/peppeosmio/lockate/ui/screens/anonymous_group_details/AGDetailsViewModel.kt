@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.peppeosmio.lockate.domain.Coordinates
 import com.peppeosmio.lockate.domain.LocationRecord
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
+import com.peppeosmio.lockate.exceptions.AGMemberNotAdminException
 import com.peppeosmio.lockate.exceptions.LocationDisabledException
 import com.peppeosmio.lockate.exceptions.NoPermissionException
 import com.peppeosmio.lockate.exceptions.UnauthorizedException
@@ -306,8 +307,12 @@ class AGDetailsViewModel(
             }
             _state.update {
                 it.copy(
-                    members = membersMap
-                )
+                    members = membersMap,
+                    anonymousGroup = it.anonymousGroup?.let { group ->
+                        membersMap[group.memberId]?.let { me ->
+                            group.copy(memberIsAGAdmin = me.isAGAdmin)
+                        } ?: group
+                    })
             }
         } catch (e: Exception) {
             val errorInfo = ErrorInfo.fromException(e)
@@ -382,6 +387,59 @@ class AGDetailsViewModel(
 
     fun closeMemberInfo() {
         _state.update { it.copy(memberInfoSheetMemberId = null) }
+    }
+
+    fun showMakeAdminDialog(agMemberId: String) {
+        _state.update { it.copy(memberInfoSheetMemberId = null, makeAdminDialogMemberId = agMemberId) }
+    }
+
+    fun hideMakeAdminDialog() {
+        _state.update { it.copy(makeAdminDialogMemberId = null) }
+    }
+
+    fun makeMemberAdmin(connectionSettingsId: Long, anonymousGroupInternalId: Long) {
+        val agMemberId = state.value.makeAdminDialogMemberId ?: return
+        viewModelScope.launch {
+            _state.update { it.copy(showLoadingOverlay = true) }
+            try {
+                anonymousGroupService.promoteMember(
+                    connectionSettingsId = connectionSettingsId,
+                    anonymousGroupInternalId = anonymousGroupInternalId,
+                    agMemberId = agMemberId
+                )
+                _state.update {
+                    it.copy(
+                        showLoadingOverlay = false,
+                        makeAdminDialogMemberId = null,
+                        members = it.members?.let { members ->
+                            members[agMemberId]?.let { member ->
+                                members + (agMemberId to member.copy(isAGAdmin = true))
+                            } ?: members
+                        })
+                }
+            } catch (e: AGMemberNotAdminException) {
+                _state.update {
+                    it.copy(
+                        showLoadingOverlay = false,
+                        makeAdminDialogMemberId = null,
+                        anonymousGroup = it.anonymousGroup?.copy(memberIsAGAdmin = false)
+                    )
+                }
+                _snackbarEvents.trySend(
+                    SnackbarErrorMessage(
+                        text = "You are no longer an admin of this group",
+                        errorInfo = ErrorInfo.fromException(e)
+                    )
+                )
+            } catch (e: Exception) {
+                _state.update { it.copy(showLoadingOverlay = false, makeAdminDialogMemberId = null) }
+                _snackbarEvents.trySend(
+                    SnackbarErrorMessage(
+                        text = "Can't make member admin", errorInfo = ErrorInfo.fromException(e)
+                    )
+                )
+            }
+        }
     }
 
     fun showLeaveAGDialog() {

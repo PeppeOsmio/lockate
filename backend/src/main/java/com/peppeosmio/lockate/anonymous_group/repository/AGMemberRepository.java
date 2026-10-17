@@ -23,6 +23,7 @@ public interface AGMemberRepository extends JpaRepository<AGMemberEntity, UUID> 
         SELECT m FROM AGMemberEntity m
         LEFT JOIN FETCH m.lastLocation
         WHERE m.anonymousGroupId = :anonymousGroupId
+        ORDER BY m.createdAt, m.id
     """)
   List<AGMemberEntity> findMembersWithLastLocation(
       @Param("anonymousGroupId") UUID anonymousGroupId);

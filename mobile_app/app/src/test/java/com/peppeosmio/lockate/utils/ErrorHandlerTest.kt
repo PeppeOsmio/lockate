@@ -1,5 +1,6 @@
 package com.peppeosmio.lockate.utils
 
+import com.peppeosmio.lockate.exceptions.AGMemberNotAdminException
 import com.peppeosmio.lockate.exceptions.AGMemberUnauthorizedException
 import com.peppeosmio.lockate.exceptions.APIException
 import com.peppeosmio.lockate.exceptions.InvalidApiKeyException
@@ -79,6 +80,18 @@ class ErrorHandlerTest {
             ErrorHandler.handleUnauthorized(response)
             fail("Expected UnauthorizedException")
         } catch (e: UnauthorizedException) {
+            // expected
+        }
+    }
+
+    @Test
+    fun `handleUnauthorized with ag_member_not_admin error throws AGMemberNotAdminException`() = runTest {
+        val response = mockResponse("""{"error":"ag_member_not_admin"}""", HttpStatusCode.Forbidden)
+
+        try {
+            ErrorHandler.handleUnauthorized(response)
+            fail("Expected AGMemberNotAdminException")
+        } catch (e: AGMemberNotAdminException) {
             // expected
         }
     }

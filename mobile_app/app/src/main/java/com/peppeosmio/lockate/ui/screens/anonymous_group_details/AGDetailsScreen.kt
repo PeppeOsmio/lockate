@@ -259,6 +259,25 @@ fun AnonymousGroupDetailsScreen(
             onDismissRequest = { viewModel.hideLeaveAGDialog() })
     }
 
+    state.makeAdminDialogMemberId?.let { memberId ->
+        val memberName = state.members?.get(memberId)?.name ?: "this member"
+        AlertDialog(
+            title = { Text("Make $memberName an admin?") },
+            text = { Text("They will be able to delete the group and make other members admins. This can't be undone from the app.") },
+            dismissButton = {
+                TextButton(onClick = { viewModel.hideMakeAdminDialog() }) { Text("Cancel") }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.makeMemberAdmin(
+                        connectionSettingsId = connectionId,
+                        anonymousGroupInternalId = anonymousGroupInternalId
+                    )
+                }) { Text("Make admin") }
+            },
+            onDismissRequest = { viewModel.hideMakeAdminDialog() })
+    }
+
     state.memberInfoSheetMemberId?.let { memberId ->
         state.members?.get(memberId)?.let { member ->
             MemberInfoBottomSheet(
@@ -285,7 +304,10 @@ fun AnonymousGroupDetailsScreen(
                         )
                         snackbarHostState.showSnackbar("Member id copied to clipboard")
                     }
-                })
+                },
+                canMakeAdmin = state.anonymousGroup?.memberIsAGAdmin == true &&
+                        member.id != state.anonymousGroup?.memberId && !member.isAGAdmin,
+                onMakeAdmin = { viewModel.showMakeAdminDialog(member.id) })
         }
     }
 
