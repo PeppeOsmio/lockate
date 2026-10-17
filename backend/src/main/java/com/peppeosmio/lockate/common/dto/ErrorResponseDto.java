@@ -1,6 +1,6 @@
 package com.peppeosmio.lockate.common.dto;
 
-import com.peppeosmio.lockate.config.NativeReflection;
+import org.springframework.aot.hint.annotation.RegisterReflectionForBinding;
 
-@NativeReflection
+@RegisterReflectionForBinding
 public record ErrorResponseDto(String error) {}

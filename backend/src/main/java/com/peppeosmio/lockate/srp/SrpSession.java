@@ -1,7 +1,7 @@
 package com.peppeosmio.lockate.srp;
 
-import com.peppeosmio.lockate.config.NativeReflection;
 import java.time.LocalDateTime;
+import org.springframework.aot.hint.annotation.RegisterReflectionForBinding;
 
-@NativeReflection
+@RegisterReflectionForBinding
 public record SrpSession(String A, String b, String B, LocalDateTime createdAt) {}
