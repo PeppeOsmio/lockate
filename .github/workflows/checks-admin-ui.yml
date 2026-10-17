@@ -1,18 +1,24 @@
-name: PR Admin UI
+name: Checks Admin UI
 
 on:
   pull_request:
     paths:
       - admin_ui/**
-      - .github/workflows/pr-admin-ui.yml
+      - .github/workflows/checks-admin-ui.yml
+  push:
+    branches: [main]
+    paths:
+      - admin_ui/**
+      - .github/workflows/checks-admin-ui.yml
   workflow_call:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 # Literal group so it can't collide with the calling workflow's group
 concurrency:
-  group: pr-admin-ui-${{ github.ref }}
+  group: checks-admin-ui-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:

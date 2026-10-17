@@ -22,6 +22,6 @@ Build/test rules specific to this module. See the repo-root `CLAUDE.md` for arch
 ./gradlew assembleRelease -PversionName=1.2.3 -PversionCode=42
 ```
 
-Releases are published by the `release` job of `.github/workflows/ci-mobile.yml` when a `mobile-v*` tag is pushed (e.g. `mobile-v1.4.3`).
+Releases are published by the `release` job of `.github/workflows/release-mobile.yml` when a `mobile-v*` tag is pushed (e.g. `mobile-v1.4.3`).
 
 Always run these from `mobile_app/` (the Gradle wrapper lives here).
