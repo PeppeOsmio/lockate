@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -30,67 +29,77 @@ import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.utils.DateTimeUtils
 import kotlinx.datetime.format
 
+/**
+ * Name, admin flag, last location and follow toggle: the part of the member details that stays
+ * visible when the sheet is collapsed.
+ */
 @Composable
-fun MemberDetails(
+fun MemberDetailsHeader(
     member: AGMember,
     isMe: Boolean,
     isFollowing: Boolean,
-    canMakeAdmin: Boolean,
     onBack: () -> Unit,
-    onToggleFollow: (Boolean) -> Unit,
+    onToggleFollow: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.padding(start = 4.dp, end = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onBack) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to members")
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    modifier = Modifier.weight(1f, fill = false),
+                    text = member.name,
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (isMe) {
+                    Spacer(Modifier.size(6.dp))
+                    Text(
+                        text = "You",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (member.isAGAdmin) {
+                    AdminIndicator()
+                    Spacer(Modifier.size(12.dp))
+                }
+                LastSeenText(lastSeen = member.lastLocationRecord?.timestamp)
+            }
+        }
+        if (member.lastLocationRecord != null && !isMe) {
+            FilledTonalIconToggleButton(checked = isFollowing, onCheckedChange = onToggleFollow) {
+                Icon(
+                    painter = painterResource(R.drawable.outline_navigation_24),
+                    contentDescription = if (isFollowing) "Stop following" else "Follow member"
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun MemberDetailsBody(
+    modifier: Modifier = Modifier,
+    member: AGMember,
+    canMakeAdmin: Boolean,
     onCopyCoordinates: () -> Unit,
     onOpenInMaps: () -> Unit,
     onCopyId: () -> Unit,
     onMakeAdmin: () -> Unit
 ) {
-    val lastSeen = member.lastLocationRecord?.timestamp
-    Column {
-        Row(
-            modifier = Modifier.padding(start = 4.dp, end = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to members")
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        modifier = Modifier.weight(1f, fill = false),
-                        text = member.name,
-                        style = MaterialTheme.typography.titleLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    if (isMe) {
-                        Spacer(Modifier.size(6.dp))
-                        Text(
-                            text = "You",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (member.isAGAdmin) {
-                        AdminIndicator()
-                        Spacer(Modifier.size(12.dp))
-                    }
-                    LastSeenText(lastSeen = lastSeen)
-                }
-            }
-            if (member.lastLocationRecord != null && !isMe) {
-                FilledTonalIconToggleButton(checked = isFollowing, onCheckedChange = onToggleFollow) {
-                    Icon(
-                        painter = painterResource(R.drawable.outline_navigation_24),
-                        contentDescription = if (isFollowing) "Stop following" else "Follow member"
-                    )
-                }
-            }
-        }
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+    Column(modifier = modifier) {
+        HorizontalDivider(modifier = Modifier.padding(bottom = 8.dp))
         InfoRow(
             label = "Last location",
-            value = lastSeen?.let {
+            value = member.lastLocationRecord?.timestamp?.let {
                 DateTimeUtils.utcToCurrentTimeZone(it).format(DateTimeUtils.DATE_FORMAT)
             } ?: "never")
         InfoRow(
@@ -120,7 +129,6 @@ fun MemberDetails(
         if (canMakeAdmin) {
             ActionRow(R.drawable.baseline_security_24, "Make admin", onMakeAdmin)
         }
-        Spacer(Modifier.height(16.dp))
     }
 }
 

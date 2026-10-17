@@ -14,14 +14,12 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
@@ -53,6 +51,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -63,6 +62,7 @@ import com.peppeosmio.lockate.domain.Coordinates
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.domain.anonymous_group.AnonymousGroup
 import com.peppeosmio.lockate.ui.composables.ErrorDialog
+import com.peppeosmio.lockate.ui.composables.PeekHeaderBottomSheetScaffold
 import com.peppeosmio.lockate.ui.composables.PermissionsRequester
 import com.peppeosmio.lockate.ui.composables.ServerUnreachableBanner
 import com.peppeosmio.lockate.ui.routes.ConnectionSettingsRoute
@@ -84,8 +84,6 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
 
-// handle + header + one full member row (the gesture bar inset is added on top)
-private val SHEET_CONTENT_PEEK_HEIGHT = 158.dp
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalTime::class)
 @Composable
@@ -273,10 +271,6 @@ fun MapScreen(
         }
     }
 
-    fun copyGroupId(group: AnonymousGroup) {
-        copyToClipboard("anonymousGroupId", group.id, "Anonymous group id copied")
-    }
-
     fun shareGroupId(group: AnonymousGroup) {
         val sendIntent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
@@ -285,9 +279,12 @@ fun MapScreen(
         context.startActivity(Intent.createChooser(sendIntent, null))
     }
 
+    // Collapse before switching to the details, otherwise they'd show up fully expanded and then close
     fun selectMember(memberId: String) {
-        detailsViewModel.selectMember(memberId)
-        coroutineScope.launch { sheetState.partialExpand() }
+        coroutineScope.launch {
+            sheetState.partialExpand()
+            detailsViewModel.selectMember(memberId)
+        }
     }
 
     if (state.showLoadingOverlay || details.showLoadingOverlay) {
@@ -340,7 +337,7 @@ fun MapScreen(
 
     val connectionId = state.selectedConnectionId
     val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    val sheetPeekHeight = SHEET_CONTENT_PEEK_HEIGHT + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val sheetKind = sheetContentKind(state, details)
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -365,29 +362,38 @@ fun MapScreen(
                     navigateToManageConnections()
                 })
         }) {
-        BottomSheetScaffold(
+        PeekHeaderBottomSheetScaffold(
             scaffoldState = scaffoldState,
-            sheetPeekHeight = sheetPeekHeight,
+            sheetMaxHeight = LocalConfiguration.current.screenHeightDp.dp * 0.55f,
             snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
-            sheetContent = {
-                MembersSheetContent(
+            sheetHeader = {
+                MembersSheetHeader(
+                    kind = sheetKind,
                     mapState = state,
                     details = details,
                     onCreateGroup = { connectionId?.let(navigateToCreateAG) },
                     onJoinGroup = { connectionId?.let(navigateToJoinAG) },
-                    onSelectMember = ::selectMember,
-                    onBackToMembers = detailsViewModel::clearSelectedMember,
-                    onToggleFollow = detailsViewModel::setFollowSelectedMember,
-                    onCopyCoordinates = ::copyCoordinates,
-                    onOpenInMaps = ::openInMaps,
-                    onCopyMemberId = { member ->
-                        copyToClipboard("memberId", member.id, "Member id copied to clipboard")
-                    },
-                    onMakeAdmin = detailsViewModel::showMakeAdminDialog,
                     onRemoveGroup = viewModel::removeLocalGroup,
-                    onCopyGroupId = ::copyGroupId
+                    onBackToMembers = detailsViewModel::clearSelectedMember,
+                    onToggleFollow = detailsViewModel::setFollowSelectedMember
                 )
-            }) {
+            },
+            sheetBody = if (sheetKind.hasBody) {
+                {
+                    MembersSheetBody(
+                        kind = sheetKind,
+                        details = details,
+                        onSelectMember = ::selectMember,
+                        onCopyCoordinates = ::copyCoordinates,
+                        onOpenInMaps = ::openInMaps,
+                        onCopyMemberId = { member ->
+                            copyToClipboard("memberId", member.id, "Member id copied to clipboard")
+                        },
+                        onMakeAdmin = detailsViewModel::showMakeAdminDialog
+                    )
+                }
+            } else null
+        ) { sheetPeekHeight ->
             Box(modifier = Modifier.fillMaxSize()) {
                 MembersMap(
                     modifier = Modifier.fillMaxSize(),
@@ -436,7 +442,6 @@ fun MapScreen(
                                 canToggleSharing = details.anonymousGroup != null,
                                 isAdmin = details.anonymousGroup?.memberIsAGAdmin == true,
                                 onToggleSharing = { dismiss(); detailsViewModel.toggleAGShareLocation() },
-                                onCopyId = { dismiss(); selectedGroup?.let(::copyGroupId) },
                                 onShareId = { dismiss(); selectedGroup?.let(::shareGroupId) },
                                 onLeave = { dismiss(); detailsViewModel.showLeaveAGDialog() },
                                 onRemove = { dismiss(); viewModel.removeLocalGroup() },
@@ -482,7 +487,6 @@ private fun GroupMenuItems(
     canToggleSharing: Boolean,
     isAdmin: Boolean,
     onToggleSharing: () -> Unit,
-    onCopyId: () -> Unit,
     onShareId: () -> Unit,
     onLeave: () -> Unit,
     onRemove: () -> Unit,
@@ -498,11 +502,6 @@ private fun GroupMenuItems(
             onClick = onToggleSharing
         )
     }
-    DropdownMenuItem(
-        leadingIcon = {
-            Icon(painterResource(R.drawable.outline_content_copy_24), contentDescription = null)
-        }, text = { Text("Copy group id") }, onClick = onCopyId
-    )
     if (isActive) {
         DropdownMenuItem(
             leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },

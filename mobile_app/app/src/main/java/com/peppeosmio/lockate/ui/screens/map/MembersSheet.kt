@@ -7,8 +7,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -24,7 +22,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -34,74 +31,101 @@ import com.peppeosmio.lockate.domain.anonymous_group.AnonymousGroup
 import com.peppeosmio.lockate.ui.composables.SmallCircularProgressIndicator
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.AGDetailsState
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.AGMembersList
-import com.peppeosmio.lockate.ui.screens.anonymous_group_details.MemberDetails
+import com.peppeosmio.lockate.ui.screens.anonymous_group_details.MemberDetailsBody
+import com.peppeosmio.lockate.ui.screens.anonymous_group_details.MemberDetailsHeader
 import com.peppeosmio.lockate.utils.LoadingState
 
+/** [hasBody]: whether there's more than the header to reveal by dragging the sheet up */
+enum class SheetContentKind(val hasBody: Boolean) {
+    Loading(false), NoGroups(false), BrokenGroup(false), Members(true), MemberDetails(true)
+}
+
+fun sheetContentKind(mapState: MapState, details: AGDetailsState): SheetContentKind {
+    val groups = mapState.groups
+    val selectedGroup = mapState.selectedGroup
+    return when {
+        groups == null || (groups.isNotEmpty() && selectedGroup == null) -> SheetContentKind.Loading
+        groups.isEmpty() -> SheetContentKind.NoGroups
+        !selectedGroup!!.isMember || !selectedGroup.existsRemote -> SheetContentKind.BrokenGroup
+        details.members == null || details.anonymousGroup == null -> SheetContentKind.Loading
+        details.selectedMemberId?.let { details.members[it] } != null -> SheetContentKind.MemberDetails
+        else -> SheetContentKind.Members
+    }
+}
+
+/** The part of the sheet that stays visible when it's collapsed */
 @Composable
-fun MembersSheetContent(
+fun MembersSheetHeader(
+    kind: SheetContentKind,
     mapState: MapState,
     details: AGDetailsState,
     onCreateGroup: () -> Unit,
     onJoinGroup: () -> Unit,
-    onSelectMember: (memberId: String) -> Unit,
+    onRemoveGroup: () -> Unit,
     onBackToMembers: () -> Unit,
-    onToggleFollow: (Boolean) -> Unit,
+    onToggleFollow: (Boolean) -> Unit
+) {
+    when (kind) {
+        SheetContentKind.Loading -> Loading()
+        SheetContentKind.NoGroups -> EmptyGroupsState(onCreate = onCreateGroup, onJoin = onJoinGroup)
+        SheetContentKind.BrokenGroup -> BrokenGroupState(group = mapState.selectedGroup!!, onRemove = onRemoveGroup)
+        SheetContentKind.MemberDetails -> {
+            val selectedMember = details.members!![details.selectedMemberId!!]!!
+            MemberDetailsHeader(
+                member = selectedMember,
+                isMe = selectedMember.id == details.anonymousGroup!!.memberId,
+                isFollowing = details.isFollowingSelectedMember,
+                onBack = onBackToMembers,
+                onToggleFollow = onToggleFollow
+            )
+        }
+
+        SheetContentKind.Members -> MembersHeader(
+            membersCount = details.members!!.size,
+            isSharing = details.anonymousGroup!!.sendLocation,
+            isLoading = details.remoteDataLoadingState == LoadingState.IsLoading
+        )
+    }
+}
+
+/** The part of the sheet revealed by dragging it up, for the kinds where [SheetContentKind.hasBody] */
+@Composable
+fun MembersSheetBody(
+    kind: SheetContentKind,
+    details: AGDetailsState,
+    onSelectMember: (memberId: String) -> Unit,
     onCopyCoordinates: (AGMember) -> Unit,
     onOpenInMaps: (AGMember) -> Unit,
     onCopyMemberId: (AGMember) -> Unit,
-    onMakeAdmin: (memberId: String) -> Unit,
-    onRemoveGroup: () -> Unit,
-    onCopyGroupId: (AnonymousGroup) -> Unit
+    onMakeAdmin: (memberId: String) -> Unit
 ) {
-    val groups = mapState.groups
-    val selectedGroup = mapState.selectedGroup
-    val maxHeight = LocalConfiguration.current.screenHeightDp.dp * 0.55f
-    Column(
-        modifier = Modifier
-            .heightIn(max = maxHeight)
-            .navigationBarsPadding()
-            .padding(bottom = 16.dp)
-    ) {
-        when {
-            groups == null || (groups.isNotEmpty() && selectedGroup == null) -> Loading()
-            groups.isEmpty() -> EmptyGroupsState(onCreate = onCreateGroup, onJoin = onJoinGroup)
-            !selectedGroup!!.isMember || !selectedGroup.existsRemote -> BrokenGroupState(
-                group = selectedGroup,
-                onRemove = onRemoveGroup,
-                onCopyId = { onCopyGroupId(selectedGroup) })
-
-            details.members == null || details.anonymousGroup == null -> Loading()
-            else -> {
-                val group = details.anonymousGroup
-                val selectedMember = details.selectedMemberId?.let { details.members[it] }
-                if (selectedMember != null) {
-                    MemberDetails(
-                        member = selectedMember,
-                        isMe = selectedMember.id == group.memberId,
-                        isFollowing = details.isFollowingSelectedMember,
-                        canMakeAdmin = group.memberIsAGAdmin && selectedMember.id != group.memberId && !selectedMember.isAGAdmin,
-                        onBack = onBackToMembers,
-                        onToggleFollow = onToggleFollow,
-                        onCopyCoordinates = { onCopyCoordinates(selectedMember) },
-                        onOpenInMaps = { onOpenInMaps(selectedMember) },
-                        onCopyId = { onCopyMemberId(selectedMember) },
-                        onMakeAdmin = { onMakeAdmin(selectedMember.id) })
-                } else {
-                    MembersHeader(
-                        membersCount = details.members.size,
-                        isSharing = group.sendLocation,
-                        isLoading = details.remoteDataLoadingState == LoadingState.IsLoading
-                    )
-                    AGMembersList(
-                        authenticatedMemberId = group.memberId,
-                        members = details.members.values.sortedWith(
-                            compareByDescending<AGMember> { it.id == group.memberId }.thenBy { it.name.lowercase() }
-                        ),
-                        onTapMember = onSelectMember
-                    )
-                }
-            }
+    when (kind) {
+        SheetContentKind.MemberDetails -> {
+            val group = details.anonymousGroup!!
+            val selectedMember = details.members!![details.selectedMemberId!!]!!
+            MemberDetailsBody(
+                modifier = Modifier.padding(bottom = 16.dp),
+                member = selectedMember,
+                canMakeAdmin = group.memberIsAGAdmin && selectedMember.id != group.memberId && !selectedMember.isAGAdmin,
+                onCopyCoordinates = { onCopyCoordinates(selectedMember) },
+                onOpenInMaps = { onOpenInMaps(selectedMember) },
+                onCopyId = { onCopyMemberId(selectedMember) },
+                onMakeAdmin = { onMakeAdmin(selectedMember.id) })
         }
+
+        SheetContentKind.Members -> {
+            val group = details.anonymousGroup!!
+            AGMembersList(
+                modifier = Modifier.padding(bottom = 16.dp),
+                authenticatedMemberId = group.memberId,
+                members = details.members!!.values.sortedWith(
+                    compareByDescending<AGMember> { it.id == group.memberId }.thenBy { it.name.lowercase() }
+                ),
+                onTapMember = onSelectMember
+            )
+        }
+
+        else -> Unit
     }
 }
 
@@ -189,7 +213,7 @@ private fun EmptyGroupsState(onCreate: () -> Unit, onJoin: () -> Unit) {
 }
 
 @Composable
-private fun BrokenGroupState(group: AnonymousGroup, onRemove: () -> Unit, onCopyId: () -> Unit) {
+private fun BrokenGroupState(group: AnonymousGroup, onRemove: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -208,6 +232,5 @@ private fun BrokenGroupState(group: AnonymousGroup, onRemove: () -> Unit, onCopy
             textAlign = TextAlign.Center
         )
         Button(modifier = Modifier.fillMaxWidth(), onClick = onRemove) { Text("Remove from device") }
-        OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = onCopyId) { Text("Copy group id") }
     }
 }
