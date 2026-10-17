@@ -1,14 +1,8 @@
-name: CI Backend
+name: Release Backend
 
 on:
   push:
-    branches: [main]
     tags: ["backend-v*"]
-    paths:
-      - backend/**
-      - .github/workflows/ci-backend.yml
-      - .github/workflows/pr-backend.yml
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -19,12 +13,11 @@ concurrency:
 
 jobs:
   checks:
-    uses: ./.github/workflows/pr-backend.yml
+    uses: ./.github/workflows/checks-backend.yml
 
   # native-image can't cross-compile, so each arch builds on its own runner and the digests are merged
   publish-build:
     needs: checks
-    if: startsWith(github.ref, 'refs/tags/backend-v')
     strategy:
       matrix:
         include:

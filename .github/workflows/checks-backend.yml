@@ -1,18 +1,24 @@
-name: PR Mobile
+name: Checks Backend
 
 on:
   pull_request:
     paths:
-      - mobile_app/**
-      - .github/workflows/pr-mobile.yml
+      - backend/**
+      - .github/workflows/checks-backend.yml
+  push:
+    branches: [main]
+    paths:
+      - backend/**
+      - .github/workflows/checks-backend.yml
   workflow_call:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 # Literal group so it can't collide with the calling workflow's group
 concurrency:
-  group: pr-mobile-${{ github.ref }}
+  group: checks-backend-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -20,17 +26,19 @@ jobs:
     runs-on: ubuntu-24.04
     defaults:
       run:
-        working-directory: mobile_app
+        working-directory: backend
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: 21
-      - uses: gradle/actions/setup-gradle@v6
-      - run: ./gradlew testDebugUnitTest
+          java-version: 25
+          cache: maven
+      - run: make all
+        env:
+          MAVEN_ARGS: -B
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
-          name: mobile-test-reports
-          path: mobile_app/app/build/reports/tests
+          name: backend-test-reports
+          path: backend/target/surefire-reports

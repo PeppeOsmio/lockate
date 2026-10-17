@@ -1,14 +1,8 @@
-name: CI Admin UI
+name: Release Admin UI
 
 on:
   push:
-    branches: [main]
     tags: ["admin-ui-v*"]
-    paths:
-      - admin_ui/**
-      - .github/workflows/ci-admin-ui.yml
-      - .github/workflows/pr-admin-ui.yml
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -19,11 +13,10 @@ concurrency:
 
 jobs:
   checks:
-    uses: ./.github/workflows/pr-admin-ui.yml
+    uses: ./.github/workflows/checks-admin-ui.yml
 
   publish:
     needs: checks
-    if: startsWith(github.ref, 'refs/tags/admin-ui-v')
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
