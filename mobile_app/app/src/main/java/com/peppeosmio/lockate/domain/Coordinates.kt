@@ -1,7 +1,7 @@
 package com.peppeosmio.lockate.domain
 
 import com.peppeosmio.lockate.utils.DoubleBytesUtils
-import io.github.dellisd.spatialk.geojson.Position
+import org.maplibre.spatialk.geojson.Position
 import java.util.Locale
 
 data class Coordinates(val latitude: Double, val longitude: Double) {

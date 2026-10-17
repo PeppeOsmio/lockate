@@ -9,11 +9,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.draw.clip
-import dev.sargunv.maplibrecompose.core.CameraMoveReason
-import io.github.dellisd.spatialk.geojson.Position
+import org.maplibre.compose.camera.CameraMoveReason
+import org.maplibre.compose.camera.CameraUpdate
+import org.maplibre.spatialk.geojson.Position
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
@@ -38,13 +38,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
-import dev.sargunv.maplibrecompose.compose.CameraState
-import dev.sargunv.maplibrecompose.compose.MaplibreMap
-import dev.sargunv.maplibrecompose.compose.rememberStyleState
-import dev.sargunv.maplibrecompose.core.BaseStyle
-import dev.sargunv.maplibrecompose.core.MapOptions
-import dev.sargunv.maplibrecompose.core.OrnamentOptions
-import dev.sargunv.maplibrecompose.material3.controls.DisappearingCompassButton
+import org.maplibre.compose.map.MapState
+import org.maplibre.compose.map.MaplibreMap
+import org.maplibre.compose.material3.DisappearingCompassButton
+import org.maplibre.compose.style.BaseStyle
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
@@ -236,10 +233,17 @@ fun MyMarker(center: DpOffset, orientation: Float?, isOld: Boolean) {
 }
 
 
+private const val PROTOMAPS_API_KEY = "121a0e377516f8bc"
+
+fun protomapsStyle(isDarkTheme: Boolean): BaseStyle {
+    val variant = if (isDarkTheme) "dark" else "light"
+    return BaseStyle.Uri("https://api.protomaps.com/styles/v4/$variant/en.json?key=$PROTOMAPS_API_KEY")
+}
+
 @Composable
 fun MembersMap(
     modifier: Modifier = Modifier,
-    cameraState: CameraState,
+    mapState: MapState,
     membersPoints: List<MapPoint>?,
     myPoint: MapPoint?,
     myDeviceOrientation: Float?,
@@ -247,29 +251,24 @@ fun MembersMap(
     onTapMember: (memberId: String) -> Unit,
     onMapGesture: () -> Unit,
 ) {
-    val styleState = rememberStyleState()
     val coroutineScope = rememberCoroutineScope()
 
-    LaunchedEffect(cameraState) {
-        snapshotFlow { cameraState.moveReason }
-            .filter { it == CameraMoveReason.GESTURE }
+    LaunchedEffect(mapState) {
+        snapshotFlow { mapState.cameraMoveReason }
+            .filter { it == CameraMoveReason.Gesture }
             .collect { onMapGesture() }
     }
-    val variant = if (isSystemInDarkTheme()) "dark" else "light"
-    val apiKey = "121a0e377516f8bc"
-    val mapStyle = remember(variant) {
-        BaseStyle.Uri("https://api.protomaps.com/styles/v4/$variant/en.json?key=$apiKey")
-    }
 
-    val pointsClusters by remember(cameraState.position, membersPoints) {
-        Log.d("Clusters", cameraState.position.toString())
+    val pointsClusters by remember(mapState.cameraPosition, membersPoints) {
+        Log.d("Clusters", mapState.cameraPosition.toString())
         derivedStateOf {
             Log.d("Clusters", "Computing clusters")
-            val proj = cameraState.projection ?: return@derivedStateOf emptyList()
             val points = membersPoints?.toMutableList() ?: mutableListOf()
-            clusterPoints(points.map { point ->
+            // null until the map is laid out
+            clusterPoints(points.mapNotNull { point ->
                 val screen =
-                    proj.screenLocationFromPosition(point.coordinates.toMapLibreComposePosition())
+                    mapState.screenLocationFromPosition(point.coordinates.toMapLibreComposePosition())
+                        ?: return@mapNotNull null
                 Log.d("Clusters", point.coordinates.toString())
                 Log.d("Clusters", screen.toString())
                 point to screen
@@ -277,11 +276,10 @@ fun MembersMap(
         }
     }
 
-    val myPointProjection by remember(cameraState.position, myPoint) {
+    val myPointProjection by remember(mapState.cameraPosition, myPoint) {
         derivedStateOf {
-            val proj = cameraState.projection ?: return@derivedStateOf null
             myPoint?.let {
-                proj.screenLocationFromPosition(it.coordinates.toMapLibreComposePosition())
+                mapState.screenLocationFromPosition(it.coordinates.toMapLibreComposePosition())
             }
         }
     }
@@ -290,20 +288,13 @@ fun MembersMap(
     Box(
         modifier = modifier.clipToBounds()
     ) {
-        MaplibreMap(
-            cameraState = cameraState,
-            styleState = styleState,
-            options = MapOptions(
-                ornamentOptions = OrnamentOptions(
-                    isLogoEnabled = false,
-                    isAttributionEnabled = false,
-                    isCompassEnabled = true,
-                    compassAlignment = Alignment.TopEnd,
-                    isScaleBarEnabled = false,
-                )
-            ),
-            baseStyle = mapStyle,
-        ) {}
+        MaplibreMap(modifier = Modifier.fillMaxSize(), state = mapState) {
+            DisappearingCompassButton(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(start = 8.dp, end = 8.dp, bottom = 8.dp, top = compassTopPadding)
+            )
+        }
 
         // TODO consider returning to rendering via maplibre native layers
 
@@ -325,12 +316,12 @@ fun MembersMap(
                 ClusterBubble(
                     center = cluster.center, count = cluster.members.size, onClick = {
                         coroutineScope.launch {
-                            cameraState.animateTo(
-                                cameraState.position.copy(
-                                    target = Position(
-                                        latitude = cluster.members.map { it.coordinates.latitude }.average(),
-                                        longitude = cluster.members.map { it.coordinates.longitude }.average()
-                                    ), zoom = cameraState.position.zoom + 2
+                            mapState.animateCamera(
+                                CameraUpdate(
+                                    center = Position(
+                                        longitude = cluster.members.map { it.coordinates.longitude }.average(),
+                                        latitude = cluster.members.map { it.coordinates.latitude }.average()
+                                    ), zoom = mapState.cameraPosition.zoom + 2
                                 )
                             )
                         }
@@ -358,12 +349,5 @@ fun MembersMap(
             )
         }
 
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(start = 8.dp, end = 8.dp, bottom = 8.dp, top = compassTopPadding)
-        ) {
-            DisappearingCompassButton(cameraState, modifier = Modifier.align(Alignment.TopEnd))
-        }
     }
 }

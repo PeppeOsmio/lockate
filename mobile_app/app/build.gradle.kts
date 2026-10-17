@@ -3,13 +3,13 @@ import java.util.Properties
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
-    kotlin("plugin.serialization") version "2.2.10"
-    id("com.google.devtools.ksp")
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.ksp)
 }
 
 android {
     namespace = "com.peppeosmio.lockate"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.peppeosmio.lockate"
@@ -18,7 +18,6 @@ android {
         versionCode = (findProperty("versionCode") as String?)?.toInt() ?: 1
         versionName = findProperty("versionName") as String? ?: "1.0"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
@@ -76,27 +75,20 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.navigation.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
-    implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+    implementation(libs.androidx.material.icons.core)
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockk)
-    testImplementation(libs.turbine)
     testImplementation(libs.ktor.client.mock)
-    androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
-    androidTestImplementation(libs.androidx.ui.test.junit4)
-    debugImplementation(libs.androidx.ui.tooling)
-    debugImplementation(libs.androidx.ui.test.manifest)
 
     implementation(libs.androidx.datastore.preferences)
 
     implementation(libs.kotlinx.serialization.json)
-    implementation(libs.kotlin.reflect)
     implementation(libs.kotlinx.datetime)
 
     // https://ktor.io/docs/client-dependencies.html#engine-dependency
@@ -107,15 +99,14 @@ dependencies {
     implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.ktor.client.websockets)
 
-    implementation(project.dependencies.platform("io.insert-koin:koin-bom:4.1.0"))
+    implementation(platform(libs.koin.bom))
     implementation(libs.insert.koin.koin.core)
+    implementation(libs.insert.koin.koin.android)
     implementation(libs.koin.compose)
     implementation(libs.koin.compose.viewmodel)
-    implementation(libs.koin.compose.viewmodel.navigation)
 
     implementation(libs.androidx.room.runtime)
     ksp(libs.androidx.room.compiler)
-    implementation(libs.androidx.sqlite.bundled)
 
     implementation(libs.bcprov.jdk18on)
 
@@ -123,13 +114,12 @@ dependencies {
     implementation(libs.cryptography.core)
     implementation(libs.cryptography.provider.optimal)
 
-    implementation(libs.androidx.runtime.livedata)
 
     implementation(libs.play.services.location)
 
     implementation(libs.maplibre.compose)
     implementation(libs.maplibre.composeMaterial3)
+    // maplibre-compose ships no renderer: the app picks one. OpenGL is what Compose draws with on Android
+    implementation(libs.maplibre.nativeFfi.runtime.opengl)
 
-    implementation(libs.composeSettings.ui)
-    implementation(libs.composeSettings.ui.extended)
 }

@@ -8,6 +8,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -69,11 +70,12 @@ import com.peppeosmio.lockate.ui.routes.ConnectionSettingsRoute
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.AGDetailsViewModel
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.MapPoint
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.MembersMap
+import com.peppeosmio.lockate.ui.screens.anonymous_group_details.protomapsStyle
 import com.peppeosmio.lockate.utils.LoadingState
 import com.peppeosmio.lockate.utils.LockatePermissions
-import dev.sargunv.maplibrecompose.compose.rememberCameraState
-import dev.sargunv.maplibrecompose.core.CameraPosition
-import io.github.dellisd.spatialk.geojson.Position
+import org.maplibre.compose.camera.CameraPosition
+import org.maplibre.compose.camera.CameraUpdate
+import org.maplibre.compose.map.rememberMapState
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -148,20 +150,17 @@ fun MapScreen(
         viewModel.navigateToConnectionSettingsEvents.collect { navigateToConnectionSettings(it) }
     }
 
-    val mapCameraState = rememberCameraState(
-        firstPosition = CameraPosition(
-            target = Position(
-                latitude = Coordinates.NAPOLI.latitude, longitude = Coordinates.NAPOLI.longitude
-            ), zoom = 15.0
+    // rememberMapState owns the base style, so switching theme updates it on recomposition
+    val mapState = rememberMapState(
+        baseStyle = protomapsStyle(isSystemInDarkTheme()),
+        initialCameraPosition = CameraPosition(
+            center = Coordinates.NAPOLI.toMapLibreComposePosition(), zoom = 15.0
         )
     )
     LaunchedEffect(true) {
         detailsViewModel.cameraPositionEvents.collect { location ->
-            mapCameraState.animateTo(
-                finalPosition = CameraPosition(
-                    target = Position(latitude = location.latitude, longitude = location.longitude),
-                    zoom = 15.0
-                )
+            mapState.animateCamera(
+                CameraUpdate(center = location.toMapLibreComposePosition(), zoom = 15.0)
             )
         }
     }
@@ -397,7 +396,7 @@ fun MapScreen(
             Box(modifier = Modifier.fillMaxSize()) {
                 MembersMap(
                     modifier = Modifier.fillMaxSize(),
-                    cameraState = mapCameraState,
+                    mapState = mapState,
                     membersPoints = membersPoints,
                     myPoint = myPoint,
                     myDeviceOrientation = details.myDeviceOrientation,

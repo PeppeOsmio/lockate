@@ -18,6 +18,7 @@ import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.BottomSheetScaffoldState
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.rememberBottomSheetScaffoldState
@@ -28,11 +29,13 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
+import kotlinx.coroutines.flow.first
 
 /**
  * A [BottomSheetScaffold] whose collapsed height is measured instead of fixed: collapsed, the sheet
@@ -70,6 +73,16 @@ fun PeekHeaderBottomSheetScaffold(
     )
     LaunchedEffect(isMeasured) {
         if (isMeasured) animatePeekHeight = true
+    }
+
+    // Without a body, collapsed and expanded have the same height and the sheet settles as expanded.
+    // Once a body shows up the two differ again, so start from the header only
+    val hasBody = sheetBody != null
+    val sheetState = scaffoldState.bottomSheetState
+    LaunchedEffect(hasBody) {
+        if (!hasBody) return@LaunchedEffect
+        snapshotFlow { sheetState.hasPartiallyExpandedState }.first { it }
+        if (sheetState.currentValue == SheetValue.Expanded) sheetState.partialExpand()
     }
 
     BottomSheetScaffold(
