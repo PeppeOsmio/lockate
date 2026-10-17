@@ -1,0 +1,531 @@
+package com.peppeosmio.lockate.ui.screens.map
+
+import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.Intent
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.BottomSheetScaffold
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.SheetValue
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberBottomSheetScaffoldState
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.rememberStandardBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.core.net.toUri
+import com.peppeosmio.lockate.R
+import com.peppeosmio.lockate.domain.Coordinates
+import com.peppeosmio.lockate.domain.anonymous_group.AGMember
+import com.peppeosmio.lockate.domain.anonymous_group.AnonymousGroup
+import com.peppeosmio.lockate.ui.composables.ErrorDialog
+import com.peppeosmio.lockate.ui.composables.PermissionsRequester
+import com.peppeosmio.lockate.ui.composables.ServerUnreachableBanner
+import com.peppeosmio.lockate.ui.routes.ConnectionSettingsRoute
+import com.peppeosmio.lockate.ui.screens.anonymous_group_details.AGDetailsViewModel
+import com.peppeosmio.lockate.ui.screens.anonymous_group_details.MapPoint
+import com.peppeosmio.lockate.ui.screens.anonymous_group_details.MembersMap
+import com.peppeosmio.lockate.utils.LoadingState
+import com.peppeosmio.lockate.utils.LockatePermissions
+import dev.sargunv.maplibrecompose.compose.rememberCameraState
+import dev.sargunv.maplibrecompose.core.CameraPosition
+import io.github.dellisd.spatialk.geojson.Position
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toInstant
+import org.koin.compose.viewmodel.koinViewModel
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.ExperimentalTime
+
+// handle + header + one full member row (the gesture bar inset is added on top)
+private val SHEET_CONTENT_PEEK_HEIGHT = 158.dp
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalTime::class)
+@Composable
+fun MapScreen(
+    navigateToConnectionSettings: (route: ConnectionSettingsRoute) -> Unit,
+    navigateToCreateAG: (connectionSettingsId: Long) -> Unit,
+    navigateToJoinAG: (connectionSettingsId: Long) -> Unit,
+    navigateToManageConnections: () -> Unit,
+    startLocationService: () -> Unit,
+    viewModel: MapViewModel = koinViewModel(),
+    detailsViewModel: AGDetailsViewModel = koinViewModel()
+) {
+    val state by viewModel.state.collectAsState()
+    val details by detailsViewModel.state.collectAsState()
+    val coroutineScope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    val sheetState = rememberStandardBottomSheetState(skipHiddenState = true)
+    val scaffoldState = rememberBottomSheetScaffoldState(
+        bottomSheetState = sheetState, snackbarHostState = snackbarHostState
+    )
+    val clipboard = LocalClipboard.current
+    val context = LocalContext.current
+
+    var oldLocations by remember { mutableStateOf(emptySet<String>()) }
+    val oldLocationsJobs = remember { mutableMapOf<String, Job>() }
+    var isMyLocationOld by remember { mutableStateOf(false) }
+    var isMyLocationOldJob = remember<Job?> { null }
+
+    val selectedGroup = state.selectedGroup
+    val activeGroupInternalId = selectedGroup?.takeIf { it.isMember && it.existsRemote }?.internalId
+
+    LaunchedEffect(state.selectedConnectionId, activeGroupInternalId) {
+        state.selectedConnectionId?.let { detailsViewModel.selectGroup(it, activeGroupInternalId) }
+    }
+
+    LaunchedEffect(drawerState.currentValue) {
+        if (drawerState.currentValue == DrawerValue.Open) {
+            viewModel.refreshServersReachability()
+        }
+    }
+
+    LaunchedEffect(true) {
+        viewModel.snackbarEvents.collect { message ->
+            if (message.errorInfo != null) {
+                viewModel.showErrorDialog(message)
+            } else {
+                snackbarHostState.showSnackbar(message = message.text, withDismissAction = true)
+            }
+        }
+    }
+    LaunchedEffect(true) {
+        detailsViewModel.snackbarEvents.collect { message ->
+            if (message.errorInfo != null) {
+                detailsViewModel.showErrorDialog(message)
+            } else {
+                snackbarHostState.showSnackbar(message = message.text, withDismissAction = true)
+            }
+        }
+    }
+    LaunchedEffect(true) {
+        viewModel.navigateToConnectionSettingsEvents.collect { navigateToConnectionSettings(it) }
+    }
+
+    val mapCameraState = rememberCameraState(
+        firstPosition = CameraPosition(
+            target = Position(
+                latitude = Coordinates.NAPOLI.latitude, longitude = Coordinates.NAPOLI.longitude
+            ), zoom = 15.0
+        )
+    )
+    LaunchedEffect(true) {
+        detailsViewModel.cameraPositionEvents.collect { location ->
+            mapCameraState.animateTo(
+                finalPosition = CameraPosition(
+                    target = Position(latitude = location.latitude, longitude = location.longitude),
+                    zoom = 15.0
+                )
+            )
+        }
+    }
+
+    val membersPoints = remember(details.members, oldLocations, details.anonymousGroup, details.selectedMemberId) {
+        val group = details.anonymousGroup ?: return@remember null
+        details.members?.mapNotNull { (memberId, member) ->
+            if (group.memberId == memberId) {
+                return@mapNotNull null
+            }
+            val locationRecord = member.lastLocationRecord ?: return@mapNotNull null
+            MapPoint(
+                coordinates = locationRecord.coordinates,
+                name = member.name,
+                isOld = oldLocations.contains(memberId),
+                isSelected = memberId == details.selectedMemberId,
+                id = memberId
+            )
+        }
+    }
+
+    val myPoint = remember(details.myLocationRecordFromGPS, details.anonymousGroup, isMyLocationOld) {
+        val record = details.myLocationRecordFromGPS ?: return@remember null
+        MapPoint(
+            coordinates = record.coordinates,
+            name = "You",
+            isOld = isMyLocationOld,
+            isSelected = false,
+            id = details.anonymousGroup?.memberId ?: "me"
+        )
+    }
+
+    LaunchedEffect(details.members) {
+        details.members?.forEach { (memberId, member) ->
+            oldLocations -= member.id
+            oldLocationsJobs[member.id]?.cancel()
+            if (member.lastLocationRecord == null) {
+                return@forEach
+            }
+            val now = Clock.System.now()
+            val locationTimestamp = member.lastLocationRecord.timestamp.toInstant(TimeZone.UTC)
+            val msToWait = (locationTimestamp.plus(1.minutes) - now).inWholeMilliseconds.coerceAtLeast(0)
+            oldLocationsJobs[member.id] = launch {
+                delay(msToWait)
+                if (details.members?.get(memberId)?.lastLocationRecord?.timestamp == member.lastLocationRecord.timestamp) {
+                    oldLocations += memberId
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(details.myLocationRecordFromGPS) {
+        details.myLocationRecordFromGPS?.let {
+            isMyLocationOldJob?.cancel()
+            isMyLocationOld = false
+            isMyLocationOldJob = launch {
+                delay(60000L)
+                isMyLocationOld = true
+            }
+        }
+    }
+
+    val multiplePermissionsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions(),
+        onResult = { detailsViewModel.startMyLocation() })
+    PermissionsRequester(
+        permissionRequests = LockatePermissions.PERMISSION_REQUESTS,
+        requestPermissions = { permissions -> multiplePermissionsLauncher.launch(permissions.toTypedArray()) },
+        checkPermissionGranted = { permission -> viewModel.checkPermissionGranted(permission) },
+        onPermissionsRequested = {
+            startLocationService()
+            detailsViewModel.startMyLocation()
+        })
+
+    BackHandler(enabled = state.isGroupPickerOpen || details.selectedMemberId != null) {
+        if (state.isGroupPickerOpen) {
+            viewModel.closeGroupPicker()
+        } else {
+            detailsViewModel.clearSelectedMember()
+        }
+    }
+
+    BackHandler(enabled = drawerState.isOpen) {
+        coroutineScope.launch { drawerState.close() }
+    }
+
+    fun copyToClipboard(label: String, text: String, confirmation: String) {
+        coroutineScope.launch {
+            clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(label, text)))
+            snackbarHostState.showSnackbar(confirmation)
+        }
+    }
+
+    fun copyCoordinates(member: AGMember) {
+        val coordinates = member.lastLocationRecord?.coordinates ?: return
+        copyToClipboard("coordinates", coordinates.toShareableString(), "Coordinates copied to clipboard")
+    }
+
+    // The geo label is a fixed string, not the member name, so the decrypted name
+    // is never handed to a third-party app
+    fun openInMaps(member: AGMember) {
+        val geoUri = member.lastLocationRecord?.coordinates?.toGeoUri() ?: return
+        try {
+            context.startActivity(Intent(Intent.ACTION_VIEW, geoUri.toUri()))
+        } catch (_: ActivityNotFoundException) {
+            coroutineScope.launch { snackbarHostState.showSnackbar("No maps app installed") }
+        }
+    }
+
+    fun copyGroupId(group: AnonymousGroup) {
+        copyToClipboard("anonymousGroupId", group.id, "Anonymous group id copied")
+    }
+
+    fun shareGroupId(group: AnonymousGroup) {
+        val sendIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, group.id)
+        }
+        context.startActivity(Intent.createChooser(sendIntent, null))
+    }
+
+    fun selectMember(memberId: String) {
+        detailsViewModel.selectMember(memberId)
+        coroutineScope.launch { sheetState.partialExpand() }
+    }
+
+    if (state.showLoadingOverlay || details.showLoadingOverlay) {
+        Dialog(onDismissRequest = {}) { CircularProgressIndicator() }
+    }
+    state.dialogError?.let { ErrorDialog(it, onDismiss = viewModel::hideErrorDialog) }
+    details.dialogError?.let { ErrorDialog(it, onDismiss = detailsViewModel::hideErrorDialog) }
+
+    val groupName = details.anonymousGroup?.name ?: selectedGroup?.name ?: ""
+
+    if (details.showDeleteAGDialog) {
+        AlertDialog(
+            title = { Text("Delete $groupName") },
+            text = { Text("Are you sure you want to delete this anonymous group? This action is permanent!") },
+            dismissButton = {
+                TextButton(onClick = detailsViewModel::hideDeleteAGDialog) { Text("No, don't delete") }
+            },
+            confirmButton = {
+                TextButton(onClick = detailsViewModel::deleteAnonymousGroup) { Text("Yes, delete") }
+            },
+            onDismissRequest = detailsViewModel::hideDeleteAGDialog)
+    }
+
+    if (details.showLeaveAGDialog) {
+        AlertDialog(
+            title = { Text("Leave $groupName") },
+            text = { Text("Are you sure you want to leave this anonymous group?") },
+            dismissButton = {
+                TextButton(onClick = detailsViewModel::hideLeaveAGDialog) { Text("No, stay") }
+            },
+            confirmButton = {
+                TextButton(onClick = detailsViewModel::leaveAnonymousGroup) { Text("Yes, leave") }
+            },
+            onDismissRequest = detailsViewModel::hideLeaveAGDialog)
+    }
+
+    details.makeAdminDialogMemberId?.let { memberId ->
+        val memberName = details.members?.get(memberId)?.name ?: "this member"
+        AlertDialog(
+            title = { Text("Make $memberName an admin?") },
+            text = { Text("They will be able to delete the group and make other members admins. This can't be undone from the app.") },
+            dismissButton = {
+                TextButton(onClick = detailsViewModel::hideMakeAdminDialog) { Text("Cancel") }
+            },
+            confirmButton = {
+                TextButton(onClick = detailsViewModel::makeMemberAdmin) { Text("Make admin") }
+            },
+            onDismissRequest = detailsViewModel::hideMakeAdminDialog)
+    }
+
+    val connectionId = state.selectedConnectionId
+    val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val sheetPeekHeight = SHEET_CONTENT_PEEK_HEIGHT + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        gesturesEnabled = drawerState.isOpen,
+        drawerContent = {
+            ServerDrawer(
+                connections = state.connections?.values?.toList() ?: emptyList(),
+                selectedConnectionId = connectionId,
+                unreachableConnectionIds = state.unreachableConnectionIds,
+                onSelectConnection = {
+                    viewModel.selectConnection(it)
+                    coroutineScope.launch { drawerState.close() }
+                },
+                onAddServer = {
+                    coroutineScope.launch { drawerState.close() }
+                    navigateToConnectionSettings(
+                        ConnectionSettingsRoute(initialConnectionSettingsId = null, showBackButton = true)
+                    )
+                },
+                onManageServers = {
+                    coroutineScope.launch { drawerState.close() }
+                    navigateToManageConnections()
+                })
+        }) {
+        BottomSheetScaffold(
+            scaffoldState = scaffoldState,
+            sheetPeekHeight = sheetPeekHeight,
+            snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+            sheetContent = {
+                MembersSheetContent(
+                    mapState = state,
+                    details = details,
+                    onCreateGroup = { connectionId?.let(navigateToCreateAG) },
+                    onJoinGroup = { connectionId?.let(navigateToJoinAG) },
+                    onSelectMember = ::selectMember,
+                    onBackToMembers = detailsViewModel::clearSelectedMember,
+                    onToggleFollow = detailsViewModel::setFollowSelectedMember,
+                    onCopyCoordinates = ::copyCoordinates,
+                    onOpenInMaps = ::openInMaps,
+                    onCopyMemberId = { member ->
+                        copyToClipboard("memberId", member.id, "Member id copied to clipboard")
+                    },
+                    onMakeAdmin = detailsViewModel::showMakeAdminDialog,
+                    onRemoveGroup = viewModel::removeLocalGroup,
+                    onCopyGroupId = ::copyGroupId
+                )
+            }) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                MembersMap(
+                    modifier = Modifier.fillMaxSize(),
+                    cameraState = mapCameraState,
+                    membersPoints = membersPoints,
+                    myPoint = myPoint,
+                    myDeviceOrientation = details.myDeviceOrientation,
+                    compassTopPadding = statusBarTop + 72.dp,
+                    onTapMember = ::selectMember,
+                    onMapGesture = detailsViewModel::onMapGesture
+                )
+
+                if (state.isGroupPickerOpen) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.32f))
+                            .clickable(interactionSource = null, indication = null) {
+                                viewModel.closeGroupPicker()
+                            })
+                }
+
+                Column(modifier = Modifier.align(Alignment.TopCenter)) {
+                    FloatingGroupBar(
+                        selectedGroup = selectedGroup,
+                        groups = filterGroups(sortGroups(state.groups ?: emptyList()), state.groupQuery),
+                        isPickerOpen = state.isGroupPickerOpen,
+                        query = state.groupQuery,
+                        onQueryChange = viewModel::setGroupQuery,
+                        onOpenDrawer = { coroutineScope.launch { drawerState.open() } },
+                        onOpenPicker = viewModel::openGroupPicker,
+                        onClosePicker = viewModel::closeGroupPicker,
+                        onSelectGroup = viewModel::selectGroup,
+                        onCreateGroup = {
+                            viewModel.closeGroupPicker()
+                            connectionId?.let(navigateToCreateAG)
+                        },
+                        onJoinGroup = {
+                            viewModel.closeGroupPicker()
+                            connectionId?.let(navigateToJoinAG)
+                        },
+                        groupMenu = { dismiss ->
+                            GroupMenuItems(
+                                group = selectedGroup,
+                                isSharingLocation = details.anonymousGroup?.sendLocation == true,
+                                canToggleSharing = details.anonymousGroup != null,
+                                isAdmin = details.anonymousGroup?.memberIsAGAdmin == true,
+                                onToggleSharing = { dismiss(); detailsViewModel.toggleAGShareLocation() },
+                                onCopyId = { dismiss(); selectedGroup?.let(::copyGroupId) },
+                                onShareId = { dismiss(); selectedGroup?.let(::shareGroupId) },
+                                onLeave = { dismiss(); detailsViewModel.showLeaveAGDialog() },
+                                onRemove = { dismiss(); viewModel.removeLocalGroup() },
+                                onDelete = { dismiss(); detailsViewModel.showDeleteAGDialog() })
+                        })
+                    if (!state.isGroupPickerOpen &&
+                        (state.isServerUnreachable || details.remoteDataLoadingState == LoadingState.Failed)
+                    ) {
+                        ServerUnreachableBanner(
+                            modifier = Modifier
+                                .padding(horizontal = 12.dp)
+                                .clip(RoundedCornerShape(16.dp)),
+                            onRetry = {
+                                viewModel.retryServer()
+                                detailsViewModel.remoteOperations()
+                            })
+                    }
+                }
+
+                if (scaffoldState.bottomSheetState.targetValue != SheetValue.Expanded) {
+                    FloatingActionButton(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(16.dp)
+                            .padding(bottom = sheetPeekHeight),
+                        onClick = detailsViewModel::onTapMyLocation
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.outline_location_searching_24),
+                            contentDescription = "My location"
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GroupMenuItems(
+    group: AnonymousGroup?,
+    isSharingLocation: Boolean,
+    canToggleSharing: Boolean,
+    isAdmin: Boolean,
+    onToggleSharing: () -> Unit,
+    onCopyId: () -> Unit,
+    onShareId: () -> Unit,
+    onLeave: () -> Unit,
+    onRemove: () -> Unit,
+    onDelete: () -> Unit
+) {
+    group ?: return
+    val isActive = group.isMember && group.existsRemote
+    if (isActive) {
+        DropdownMenuItem(
+            leadingIcon = { Checkbox(checked = isSharingLocation, onCheckedChange = null) },
+            text = { Text("Share location") },
+            enabled = canToggleSharing,
+            onClick = onToggleSharing
+        )
+    }
+    DropdownMenuItem(
+        leadingIcon = {
+            Icon(painterResource(R.drawable.outline_content_copy_24), contentDescription = null)
+        }, text = { Text("Copy group id") }, onClick = onCopyId
+    )
+    if (isActive) {
+        DropdownMenuItem(
+            leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
+            text = { Text("Share group id") },
+            onClick = onShareId
+        )
+        DropdownMenuItem(
+            leadingIcon = { Icon(painterResource(R.drawable.outline_logout_24), contentDescription = null) },
+            text = { Text("Leave") },
+            onClick = onLeave
+        )
+        if (isAdmin) {
+            DropdownMenuItem(
+                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
+                text = { Text("Delete") },
+                onClick = onDelete
+            )
+        }
+    } else {
+        DropdownMenuItem(
+            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
+            text = { Text("Remove from device") },
+            onClick = onRemove
+        )
+    }
+}

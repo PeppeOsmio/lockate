@@ -110,6 +110,17 @@ class ConnectionService(
             }
         }
 
+    suspend fun getLastAGInternalId(connectionId: Long): Long? = withContext(Dispatchers.IO) {
+        context.dataStore.data.map { it[ConfigSettings.lastAGInternalId(connectionId)] }.first()
+    }
+
+    suspend fun saveLastAGInternalId(connectionId: Long, anonymousGroupInternalId: Long) =
+        withContext(Dispatchers.IO) {
+            context.dataStore.edit { prefs ->
+                prefs[ConfigSettings.lastAGInternalId(connectionId)] = anonymousGroupInternalId
+            }
+        }
+
     suspend fun saveConnectionSettings(connection: Connection): Connection =
         withContext(Dispatchers.IO) {
             if (connection.id != null) {

@@ -18,13 +18,11 @@ data class AGDetailsState(
     val showLeaveAGDialog: Boolean = false,
     val dialogError: SnackbarErrorMessage? = null,
     val remoteDataLoadingState: LoadingState = LoadingState.IsLoading,
-    val isDropdownMenuOpen: Boolean = false,
     // this is LocationRecord and not Coordinates so that we can understand if the
     // coordinates are newer even if they are equal to the previous ones
     val myLocationRecordFromGPS: LocationRecord? = null,
     val myDeviceOrientation: Float? = null,
     val selectedMemberId: String? = null,
     val isFollowingSelectedMember: Boolean = false,
-    val memberInfoSheetMemberId: String? = null,
     val makeAdminDialogMemberId: String? = null,
 )

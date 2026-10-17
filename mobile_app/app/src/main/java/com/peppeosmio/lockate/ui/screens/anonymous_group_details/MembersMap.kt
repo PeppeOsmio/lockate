@@ -5,8 +5,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
@@ -23,7 +21,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -36,13 +33,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
-import com.peppeosmio.lockate.R
 import dev.sargunv.maplibrecompose.compose.CameraState
 import dev.sargunv.maplibrecompose.compose.MaplibreMap
 import dev.sargunv.maplibrecompose.compose.rememberStyleState
@@ -248,10 +243,9 @@ fun MembersMap(
     membersPoints: List<MapPoint>?,
     myPoint: MapPoint?,
     myDeviceOrientation: Float?,
-    onTapMyLocation: () -> Unit,
+    compassTopPadding: Dp,
     onTapMember: (memberId: String) -> Unit,
     onMapGesture: () -> Unit,
-    bottomContent: @Composable () -> Unit
 ) {
     val styleState = rememberStyleState()
     val coroutineScope = rememberCoroutineScope()
@@ -367,25 +361,9 @@ fun MembersMap(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(8.dp)
+                .padding(start = 8.dp, end = 8.dp, bottom = 8.dp, top = compassTopPadding)
         ) {
             DisappearingCompassButton(cameraState, modifier = Modifier.align(Alignment.TopEnd))
-        }
-
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(16.dp),
-            horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            FloatingActionButton(onClick = onTapMyLocation) {
-                Icon(
-                    painter = painterResource(R.drawable.outline_location_searching_24),
-                    contentDescription = "My location"
-                )
-            }
-            bottomContent()
         }
     }
 }

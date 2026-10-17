@@ -18,15 +18,14 @@ import com.peppeosmio.lockate.utils.ErrorHandler
 import com.peppeosmio.lockate.utils.ErrorInfo
 import com.peppeosmio.lockate.utils.LoadingState
 import com.peppeosmio.lockate.utils.SnackbarErrorMessage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -39,35 +38,62 @@ class AGDetailsViewModel(
     private val deviceOrientationService: DeviceOrientationService
 ) : ViewModel() {
 
-    enum class AGDetailsTab {
-        Map, Members
-    }
-
     private val _state = MutableStateFlow(AGDetailsState())
     val state = _state.asStateFlow()
     private val _snackbarEvents = Channel<SnackbarErrorMessage>()
     val snackbarEvents = _snackbarEvents.receiveAsFlow()
-    private val _cameraPositionEvents = Channel<Coordinates>()
+
+    // conflated so that a camera move requested before the map starts collecting isn't lost
+    private val _cameraPositionEvents = Channel<Coordinates>(Channel.CONFLATED)
     val cameraPositionEvents = _cameraPositionEvents.receiveAsFlow()
-    private val _navigateBackEvents = Channel<Unit>()
-    val navigateBackEvents = _navigateBackEvents.receiveAsFlow()
-    private val _pagerEvents = Channel<AGDetailsTab>()
-    val pagerEvents = _pagerEvents.receiveAsFlow()
     private var listenForUserLocationJob: Job? = null
     private var listenForDeviceOrientationJob: Job? = null
+    private var groupJob: Job? = null
+    private var remoteJob: Job? = null
+    private var connectionId: Long? = null
 
-    fun getInitialDetails(anonymousGroupInternalId: Long, connectionSettings: Long) {
-        viewModelScope.launch {
-            runCatching { getAndMoveToMyLocation() }
-        }
+    init {
         viewModelScope.launch {
             collectAGEvents()
         }
+        startMyLocation()
+    }
+
+    fun startMyLocation() {
         viewModelScope.launch {
-            runCatching {
+            runCatching { getAndMoveToMyLocation() }
+        }
+    }
+
+    /**
+     * Loads the given group, cancelling any work done for the previously selected one.
+     * A null [anonymousGroupInternalId] means no group is selected.
+     */
+    fun selectGroup(connectionId: Long, anonymousGroupInternalId: Long?) {
+        groupJob?.cancel()
+        remoteJob?.cancel()
+        this.connectionId = connectionId
+        _state.update {
+            it.copy(
+                anonymousGroup = null,
+                members = null,
+                selectedMemberId = null,
+                isFollowingSelectedMember = false,
+                makeAdminDialogMemberId = null,
+                remoteDataLoadingState = LoadingState.IsLoading
+            )
+        }
+        if (anonymousGroupInternalId == null) {
+            return
+        }
+        groupJob = viewModelScope.launch {
+            try {
                 getLocalAG(anonymousGroupInternalId)
                 getLocalMembers()
-                remoteOperations(connectionSettings)
+                remoteOperations()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
             }
         }
     }
@@ -96,28 +122,30 @@ class AGDetailsViewModel(
         }
     }
 
-    fun remoteOperations(connectionSettingsId: Long) {
-        viewModelScope.launch {
+    fun remoteOperations() {
+        val connectionSettingsId = connectionId ?: return
+        remoteJob?.cancel()
+        remoteJob = viewModelScope.launch {
             try {
-                coroutineScope {
-                    _state.update { it.copy(remoteDataLoadingState = LoadingState.IsLoading) }
-                    joinAll(launch {
-                        getRemoteMembers(connectionSettingsId)
-                    })
-                    _state.update { it.copy(remoteDataLoadingState = LoadingState.Success) }
-                    while (true) {
-                        try {
-                            streamLocations(connectionSettingsId)
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                            Log.e(
-                                "",
-                                "Streaming location for connectionSettingsId=$connectionSettingsId failed, retrying in 10 s"
-                            )
-                            delay(10000L)
-                        }
+                _state.update { it.copy(remoteDataLoadingState = LoadingState.IsLoading) }
+                getRemoteMembers(connectionSettingsId)
+                _state.update { it.copy(remoteDataLoadingState = LoadingState.Success) }
+                while (true) {
+                    try {
+                        streamLocations(connectionSettingsId)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        Log.e(
+                            "",
+                            "Streaming location for connectionSettingsId=$connectionSettingsId failed, retrying in 10 s"
+                        )
+                        delay(10000L)
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 e.printStackTrace()
                 _state.update { it.copy(remoteDataLoadingState = LoadingState.Failed) }
@@ -139,9 +167,6 @@ class AGDetailsViewModel(
      */
     @OptIn(ExperimentalTime::class)
     private fun listenForUserLocation() {
-        if (state.value.anonymousGroup == null) {
-            return
-        }
         listenForDeviceOrientation()
         listenForUserLocationJob?.cancel()
         listenForUserLocationJob = viewModelScope.launch {
@@ -204,6 +229,10 @@ class AGDetailsViewModel(
 
     fun onTapMyLocation() {
         clearSelectedMember()
+        moveToMyLocation()
+    }
+
+    private fun moveToMyLocation() {
         viewModelScope.launch {
             try {
                 getAndMoveToMyLocation()
@@ -235,6 +264,9 @@ class AGDetailsViewModel(
             anonymousGroupService.getAGByInternalId(anonymousGroupInternalId)
         }
         if (result.errorInfo != null) {
+            if (result.errorInfo.exception is CancellationException) {
+                throw result.errorInfo.exception
+            }
             _snackbarEvents.trySend(
                 SnackbarErrorMessage(
                     text = "Can't get local anonymous group", errorInfo = result.errorInfo
@@ -272,6 +304,8 @@ class AGDetailsViewModel(
                 )
             }
             return
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             _snackbarEvents.trySend(
                 SnackbarErrorMessage(
@@ -314,6 +348,8 @@ class AGDetailsViewModel(
                         } ?: group
                     })
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             val errorInfo = ErrorInfo.fromException(e)
             if (!errorInfo.isConnectionError) {
@@ -374,30 +410,24 @@ class AGDetailsViewModel(
 
 
     fun showDeleteAGDialog() {
-        _state.update { it.copy(showDeleteAGDialog = true, isDropdownMenuOpen = false) }
+        _state.update { it.copy(showDeleteAGDialog = true) }
     }
 
     fun hideDeleteAGDialog() {
         _state.update { it.copy(showDeleteAGDialog = false) }
     }
 
-    fun openMemberInfo(agMemberId: String) {
-        _state.update { it.copy(memberInfoSheetMemberId = agMemberId) }
-    }
-
-    fun closeMemberInfo() {
-        _state.update { it.copy(memberInfoSheetMemberId = null) }
-    }
-
     fun showMakeAdminDialog(agMemberId: String) {
-        _state.update { it.copy(memberInfoSheetMemberId = null, makeAdminDialogMemberId = agMemberId) }
+        _state.update { it.copy(makeAdminDialogMemberId = agMemberId) }
     }
 
     fun hideMakeAdminDialog() {
         _state.update { it.copy(makeAdminDialogMemberId = null) }
     }
 
-    fun makeMemberAdmin(connectionSettingsId: Long, anonymousGroupInternalId: Long) {
+    fun makeMemberAdmin() {
+        val connectionSettingsId = connectionId ?: return
+        val anonymousGroupInternalId = state.value.anonymousGroup?.internalId ?: return
         val agMemberId = state.value.makeAdminDialogMemberId ?: return
         viewModelScope.launch {
             _state.update { it.copy(showLoadingOverlay = true) }
@@ -443,14 +473,16 @@ class AGDetailsViewModel(
     }
 
     fun showLeaveAGDialog() {
-        _state.update { it.copy(showLeaveAGDialog = true, isDropdownMenuOpen = false) }
+        _state.update { it.copy(showLeaveAGDialog = true) }
     }
 
     fun hideLeaveAGDialog() {
         _state.update { it.copy(showLeaveAGDialog = false) }
     }
 
-    fun leaveAnonymousGroup(connectionSettingsId: Long, anonymousGroupInternalId: Long) {
+    fun leaveAnonymousGroup() {
+        val connectionSettingsId = connectionId ?: return
+        val anonymousGroupInternalId = state.value.anonymousGroup?.internalId ?: return
         viewModelScope.launch {
             _state.update { it.copy(showLoadingOverlay = true) }
             try {
@@ -459,7 +491,6 @@ class AGDetailsViewModel(
                     anonymousGroupInternalId = anonymousGroupInternalId
                 )
                 _state.update { it.copy(showLoadingOverlay = false, showLeaveAGDialog = false) }
-                _navigateBackEvents.trySend(Unit)
             } catch (e: Exception) {
                 _state.update { it.copy(showLoadingOverlay = false, showLeaveAGDialog = false) }
                 _snackbarEvents.trySend(
@@ -471,10 +502,9 @@ class AGDetailsViewModel(
         }
     }
 
-    @Throws
-    fun deleteAnonymousGroup(
-        connectionSettingsId: Long, anonymousGroupInternalId: Long
-    ) {
+    fun deleteAnonymousGroup() {
+        val connectionSettingsId = connectionId ?: return
+        val anonymousGroupInternalId = state.value.anonymousGroup?.internalId ?: return
         viewModelScope.launch {
             _state.update { it.copy(showLoadingOverlay = true) }
             try {
@@ -483,7 +513,6 @@ class AGDetailsViewModel(
                     anonymousGroupInternalId = anonymousGroupInternalId
                 )
                 _state.update { it.copy(showLoadingOverlay = false, showDeleteAGDialog = false) }
-                _navigateBackEvents.trySend(Unit)
             } catch (e: Exception) {
                 _state.update { it.copy(showLoadingOverlay = false, showDeleteAGDialog = false) }
                 _snackbarEvents.trySend(
@@ -493,14 +522,6 @@ class AGDetailsViewModel(
                 )
             }
         }
-    }
-
-    fun toggleDropdownMenu() {
-        _state.update { it.copy(isDropdownMenuOpen = !it.isDropdownMenuOpen) }
-    }
-
-    fun closeDropdownMenu() {
-        _state.update { it.copy(isDropdownMenuOpen = false) }
     }
 
     fun toggleAGShareLocation() {
@@ -532,19 +553,19 @@ class AGDetailsViewModel(
         _state.update { it.copy(dialogError = error) }
     }
 
-    fun selectMember(agMemberId: String) = viewModelScope.launch {
-        val anonymousGroup = state.value.anonymousGroup ?: return@launch
-        val member = state.value.members?.get(agMemberId) ?: return@launch
+    fun selectMember(agMemberId: String) {
+        val anonymousGroup = state.value.anonymousGroup ?: return
+        val member = state.value.members?.get(agMemberId) ?: return
         if (agMemberId == anonymousGroup.memberId) {
-            onTapMyLocation()
-            _pagerEvents.send(AGDetailsTab.Map)
-            return@launch
+            _state.update { it.copy(selectedMemberId = agMemberId, isFollowingSelectedMember = false) }
+            moveToMyLocation()
+            return
         }
+        val coordinates = member.lastLocationRecord?.coordinates
         _state.update {
-            it.copy(selectedMemberId = agMemberId, isFollowingSelectedMember = true)
+            it.copy(selectedMemberId = agMemberId, isFollowingSelectedMember = coordinates != null)
         }
-        member.lastLocationRecord?.let { _cameraPositionEvents.trySend(it.coordinates) }
-        _pagerEvents.send(AGDetailsTab.Map)
+        coordinates?.let { _cameraPositionEvents.trySend(it) }
     }
 
     fun setFollowSelectedMember(follow: Boolean) {
