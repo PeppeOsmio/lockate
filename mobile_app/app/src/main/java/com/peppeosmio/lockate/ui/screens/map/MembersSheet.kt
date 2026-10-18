@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
@@ -52,6 +54,9 @@ fun sheetContentKind(mapState: MapState, details: AGDetailsState): SheetContentK
         else -> SheetContentKind.Members
     }
 }
+
+// Keeps the last row clear of the gesture bar, where a tap can trigger the system gesture instead
+private val SHEET_BODY_BOTTOM_PADDING = 32.dp
 
 /** The part of the sheet that stays visible when it's collapsed */
 @Composable
@@ -104,7 +109,9 @@ fun MembersSheetBody(
             val group = details.anonymousGroup!!
             val selectedMember = details.members!![details.selectedMemberId!!]!!
             MemberDetailsBody(
-                modifier = Modifier.padding(bottom = 16.dp),
+                modifier = Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(bottom = SHEET_BODY_BOTTOM_PADDING),
                 member = selectedMember,
                 canMakeAdmin = group.memberIsAGAdmin && selectedMember.id != group.memberId && !selectedMember.isAGAdmin,
                 onCopyCoordinates = { onCopyCoordinates(selectedMember) },
@@ -116,7 +123,7 @@ fun MembersSheetBody(
         SheetContentKind.Members -> {
             val group = details.anonymousGroup!!
             AGMembersList(
-                modifier = Modifier.padding(bottom = 16.dp),
+                modifier = Modifier.padding(bottom = SHEET_BODY_BOTTOM_PADDING),
                 authenticatedMemberId = group.memberId,
                 members = details.members!!.values.sortedWith(
                     compareByDescending<AGMember> { it.id == group.memberId }.thenBy { it.name.lowercase() }

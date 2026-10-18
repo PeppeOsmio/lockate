@@ -12,12 +12,14 @@ import com.peppeosmio.lockate.ui.routes.HomeRoute
 import com.peppeosmio.lockate.ui.routes.JoinAnonymousGroupRoute
 import com.peppeosmio.lockate.ui.routes.LoadingRoute
 import com.peppeosmio.lockate.ui.routes.ManageConnectionsRoute
+import com.peppeosmio.lockate.ui.routes.SettingsRoute
 import com.peppeosmio.lockate.ui.screens.connection_settings.ConnectionSettingsScreen
 import com.peppeosmio.lockate.ui.screens.create_anonymous_group.CreateAnonymousGroupScreen
 import com.peppeosmio.lockate.ui.screens.map.MapScreen
 import com.peppeosmio.lockate.ui.screens.join_anonymous_group.JoinAnonymousGroupScreen
 import com.peppeosmio.lockate.ui.screens.loading.LoadingScreen
 import com.peppeosmio.lockate.ui.screens.manage_connections.ManageConnectionsScreen
+import com.peppeosmio.lockate.ui.screens.settings.SettingsScreen
 import com.peppeosmio.lockate.ui.theme.LockateTheme
 
 @Composable
@@ -81,8 +83,12 @@ fun LockateApp(startLocationService: () -> Unit, stopLocationService: () -> Unit
                     navigateToManageConnections = {
                         appNavController.navigate(ManageConnectionsRoute)
                     },
+                    navigateToSettings = { appNavController.navigate(SettingsRoute) },
                     startLocationService = startLocationService
                 )
+            }
+            composable<SettingsRoute> {
+                SettingsScreen(navigateBack = { appNavController.popBackStack() })
             }
             composable<ManageConnectionsRoute> {
                 ManageConnectionsScreen(

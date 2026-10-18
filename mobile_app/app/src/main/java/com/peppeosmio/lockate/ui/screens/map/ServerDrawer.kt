@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -32,7 +33,8 @@ fun ServerDrawer(
     unreachableConnectionIds: Set<Long>,
     onSelectConnection: (connectionId: Long) -> Unit,
     onAddServer: () -> Unit,
-    onManageServers: () -> Unit
+    onManageServers: () -> Unit,
+    onSettings: () -> Unit
 ) {
     ModalDrawerSheet {
         Text(
@@ -81,6 +83,13 @@ fun ServerDrawer(
             icon = { Icon(painterResource(R.drawable.outline_data_table_24), contentDescription = null) },
             selected = false,
             onClick = onManageServers
+        )
+        NavigationDrawerItem(
+            modifier = Modifier.padding(horizontal = 12.dp),
+            label = { Text("Settings") },
+            icon = { Icon(Icons.Default.Settings, contentDescription = null) },
+            selected = false,
+            onClick = onSettings
         )
         Spacer(Modifier.size(12.dp))
     }

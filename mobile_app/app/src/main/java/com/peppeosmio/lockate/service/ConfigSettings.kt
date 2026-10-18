@@ -14,6 +14,8 @@ val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "lo
 object ConfigSettings {
     val SELECTED_CONNECTION_SETTINGS_ID = longPreferencesKey("selected_connection_settings_id")
     val LAST_MAP_LOCATION = stringPreferencesKey("last_map_location")
+    val MAP_STYLE_URL_LIGHT = stringPreferencesKey("map_style_url_light")
+    val MAP_STYLE_URL_DARK = stringPreferencesKey("map_style_url_dark")
 
     fun lastAGInternalId(connectionId: Long) = longPreferencesKey("last_ag_internal_id_$connectionId")
 }

@@ -8,6 +8,7 @@ import com.peppeosmio.lockate.exceptions.RemoteAGNotFoundException
 import com.peppeosmio.lockate.exceptions.UnauthorizedException
 import com.peppeosmio.lockate.service.ConnectionEvent
 import com.peppeosmio.lockate.service.ConnectionService
+import com.peppeosmio.lockate.service.MapStyleService
 import com.peppeosmio.lockate.service.PermissionsService
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupEvent
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
@@ -27,7 +28,8 @@ import kotlinx.coroutines.launch
 class MapViewModel(
     private val connectionService: ConnectionService,
     private val anonymousGroupService: AnonymousGroupService,
-    private val permissionsService: PermissionsService
+    private val permissionsService: PermissionsService,
+    private val mapStyleService: MapStyleService
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(MapState())
@@ -45,6 +47,9 @@ class MapViewModel(
         viewModelScope.launch { loadConnections() }
         viewModelScope.launch { collectConnectionEvents() }
         viewModelScope.launch { collectAGEvents() }
+        viewModelScope.launch {
+            mapStyleService.mapStyleUrls.collect { urls -> _state.update { it.copy(mapStyleUrls = urls) } }
+        }
     }
 
     private suspend fun loadConnections() {

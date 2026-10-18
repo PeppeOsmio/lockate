@@ -2,6 +2,7 @@ package com.peppeosmio.lockate.ui.screens.map
 
 import com.peppeosmio.lockate.domain.Connection
 import com.peppeosmio.lockate.domain.anonymous_group.AnonymousGroup
+import com.peppeosmio.lockate.service.MapStyleUrls
 import com.peppeosmio.lockate.utils.SnackbarErrorMessage
 
 data class MapState(
@@ -15,6 +16,7 @@ data class MapState(
     val groupQuery: String = "",
     val showLoadingOverlay: Boolean = false,
     val dialogError: SnackbarErrorMessage? = null,
+    val mapStyleUrls: MapStyleUrls = MapStyleUrls(),
 ) {
     val selectedGroup: AnonymousGroup?
         get() = groups?.firstOrNull { it.internalId == selectedGroupInternalId }

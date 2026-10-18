@@ -18,6 +18,9 @@ data object HomeRoute : Route
 data object ManageConnectionsRoute : Route
 
 @Serializable
+data object SettingsRoute : Route
+
+@Serializable
 data class CreateAnonymousGroupRoute(val connectionSettingsId: Long) : Route
 
 @Serializable
