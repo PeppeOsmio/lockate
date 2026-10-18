@@ -70,12 +70,12 @@ import com.peppeosmio.lockate.ui.routes.ConnectionSettingsRoute
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.AGDetailsViewModel
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.MapPoint
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.MembersMap
-import com.peppeosmio.lockate.ui.screens.anonymous_group_details.protomapsStyle
 import com.peppeosmio.lockate.utils.LoadingState
 import com.peppeosmio.lockate.utils.LockatePermissions
 import org.maplibre.compose.camera.CameraPosition
 import org.maplibre.compose.camera.CameraUpdate
 import org.maplibre.compose.map.rememberMapState
+import org.maplibre.compose.style.BaseStyle
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -94,6 +94,7 @@ fun MapScreen(
     navigateToCreateAG: (connectionSettingsId: Long) -> Unit,
     navigateToJoinAG: (connectionSettingsId: Long) -> Unit,
     navigateToManageConnections: () -> Unit,
+    navigateToSettings: () -> Unit,
     startLocationService: () -> Unit,
     viewModel: MapViewModel = koinViewModel(),
     detailsViewModel: AGDetailsViewModel = koinViewModel()
@@ -150,9 +151,11 @@ fun MapScreen(
         viewModel.navigateToConnectionSettingsEvents.collect { navigateToConnectionSettings(it) }
     }
 
-    // rememberMapState owns the base style, so switching theme updates it on recomposition
+    // rememberMapState owns the base style, so switching theme or style setting updates it on recomposition
     val mapState = rememberMapState(
-        baseStyle = protomapsStyle(isSystemInDarkTheme()),
+        baseStyle = BaseStyle.Uri(
+            resolveMapStyleUrl(isSystemInDarkTheme(), state.mapStyleUrls.light, state.mapStyleUrls.dark)
+        ),
         initialCameraPosition = CameraPosition(
             center = Coordinates.NAPOLI.toMapLibreComposePosition(), zoom = 15.0
         )
@@ -359,6 +362,10 @@ fun MapScreen(
                 onManageServers = {
                     coroutineScope.launch { drawerState.close() }
                     navigateToManageConnections()
+                },
+                onSettings = {
+                    coroutineScope.launch { drawerState.close() }
+                    navigateToSettings()
                 })
         }) {
         PeekHeaderBottomSheetScaffold(
@@ -401,6 +408,7 @@ fun MapScreen(
                     myPoint = myPoint,
                     myDeviceOrientation = details.myDeviceOrientation,
                     compassTopPadding = statusBarTop + 72.dp,
+                    bottomPadding = sheetPeekHeight,
                     onTapMember = ::selectMember,
                     onMapGesture = detailsViewModel::onMapGesture
                 )

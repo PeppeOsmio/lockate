@@ -40,8 +40,9 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import org.maplibre.compose.map.MapState
 import org.maplibre.compose.map.MaplibreMap
+import org.maplibre.compose.material3.AttributionLinks
 import org.maplibre.compose.material3.DisappearingCompassButton
-import org.maplibre.compose.style.BaseStyle
+import org.maplibre.compose.material3.ExpandingAttributionButton
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
@@ -233,13 +234,6 @@ fun MyMarker(center: DpOffset, orientation: Float?, isOld: Boolean) {
 }
 
 
-private const val PROTOMAPS_API_KEY = "121a0e377516f8bc"
-
-fun protomapsStyle(isDarkTheme: Boolean): BaseStyle {
-    val variant = if (isDarkTheme) "dark" else "light"
-    return BaseStyle.Uri("https://api.protomaps.com/styles/v4/$variant/en.json?key=$PROTOMAPS_API_KEY")
-}
-
 @Composable
 fun MembersMap(
     modifier: Modifier = Modifier,
@@ -248,6 +242,7 @@ fun MembersMap(
     myPoint: MapPoint?,
     myDeviceOrientation: Float?,
     compassTopPadding: Dp,
+    bottomPadding: Dp,
     onTapMember: (memberId: String) -> Unit,
     onMapGesture: () -> Unit,
 ) {
@@ -293,6 +288,16 @@ fun MembersMap(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(start = 8.dp, end = 8.dp, bottom = 8.dp, top = compassTopPadding)
+            )
+            // The data licences require showing the attribution declared by the style's sources
+            ExpandingAttributionButton(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    // leaves room for the my-location button, so the text wraps instead of going under it
+                    .padding(start = 8.dp, end = 88.dp, bottom = bottomPadding + 8.dp),
+                expandedContent = { attributions, textStyle ->
+                    AttributionLinks(attributions, textStyle = textStyle, breakWithinAttribution = true)
+                }
             )
         }
 

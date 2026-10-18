@@ -12,6 +12,7 @@ import com.peppeosmio.lockate.platform_service.DeviceOrientationService
 import com.peppeosmio.lockate.platform_service.KeyStoreService
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
 import com.peppeosmio.lockate.service.ConnectionService
+import com.peppeosmio.lockate.service.MapStyleService
 import com.peppeosmio.lockate.service.PermissionsService
 import com.peppeosmio.lockate.service.crypto.CryptoService
 import com.peppeosmio.lockate.platform_service.LocationService
@@ -87,6 +88,10 @@ val appModule = module {
             connectionDao = get(),
             keyStoreService = get()
         )
+    }
+
+    single<MapStyleService> {
+        MapStyleService(context = androidContext(), httpClient = get())
     }
 
     single<CryptoService> {
