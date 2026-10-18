@@ -2,6 +2,15 @@ package com.peppeosmio.lockate.ui.screens.anonymous_group_details
 
 import android.util.Log
 import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.draw.shadow
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -32,7 +41,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -43,8 +51,6 @@ import org.maplibre.compose.map.MaplibreMap
 import org.maplibre.compose.material3.AttributionLinks
 import org.maplibre.compose.material3.DisappearingCompassButton
 import org.maplibre.compose.material3.ExpandingAttributionButton
-import kotlin.math.cos
-import kotlin.math.sin
 import kotlin.math.sqrt
 
 data class MembersCluster(
@@ -179,60 +185,73 @@ fun MemberMarker(
     )
 }
 
+/**
+ * The user's own position, drawn like Google Maps' blue dot: a white-ringed dot with a soft pulse
+ * and a beam fading out in the heading direction.
+ */
 @Composable
 fun MyMarker(center: DpOffset, orientation: Float?, isOld: Boolean) {
-    var color = MaterialTheme.colorScheme.primary
-    if (isOld) color = color.copy(alpha = 0.5f)
+    val color = MaterialTheme.colorScheme.primary.let { if (isOld) it.copy(alpha = 0.5f) else it }
+    val dotSize = 20.dp
+    val ringWidth = 3.dp
+    val beamRadius = 56.dp
+    val markerSize = beamRadius * 2
 
-    val circleSize = 16.dp
-    val coneSize = 60.dp     // overall box for the cone
-    val coneLength = 26.dp   // how far the tip is from center
-    val coneWidth = 22.dp    // how wide the base is (at the center)
+    val pulse = rememberInfiniteTransition(label = "myMarkerPulse").animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(durationMillis = 2200, easing = LinearEasing)),
+        label = "myMarkerPulseProgress"
+    )
 
     Box(
         modifier = Modifier
-            .offset(x = center.x - coneSize / 2, y = center.y - coneSize / 2)
-            .size(coneSize)
+            .offset(x = center.x - markerSize / 2, y = center.y - markerSize / 2)
+            .size(markerSize)
     ) {
-        orientation?.let {
-            Canvas(Modifier.matchParentSize()) {
-                val c = Offset(size.width / 2f, size.height / 2f)
+        Canvas(Modifier.matchParentSize()) {
+            val c = Offset(size.width / 2f, size.height / 2f)
 
-                // 0° = up (north)
-                val rad = Math.toRadians((orientation - 90f).toDouble()).toFloat()
+            orientation?.let { heading ->
+                val radius = beamRadius.toPx()
+                drawArc(
+                    brush = Brush.radialGradient(
+                        colors = listOf(color.copy(alpha = if (isOld) 0.3f else 0.55f), Color.Transparent),
+                        center = c,
+                        radius = radius
+                    ),
+                    startAngle = beamStartAngle(heading, BEAM_SPREAD_DEGREES),
+                    sweepAngle = BEAM_SPREAD_DEGREES,
+                    useCenter = true,
+                    topLeft = Offset(c.x - radius, c.y - radius),
+                    size = Size(radius * 2, radius * 2)
+                )
+            }
 
-                val len = coneLength.toPx()
-                val halfW = (coneWidth.toPx() / 2f)
-
-                // tip point in heading direction
-                val tip = Offset(c.x + len * cos(rad), c.y + len * sin(rad))
-
-                // base points (perpendicular to heading)
-                val perp = rad + (Math.PI.toFloat() / 2f)
-                val left = Offset(c.x + halfW * cos(perp), c.y + halfW * sin(perp))
-                val right = Offset(c.x - halfW * cos(perp), c.y - halfW * sin(perp))
-
-                val path = Path().apply {
-                    moveTo(tip.x, tip.y)
-                    lineTo(left.x, left.y)
-                    lineTo(right.x, right.y)
-                    close()
-                }
-
-                drawPath(path, color = color.copy(alpha = if (isOld) 0.18f else 0.25f))
+            if (!isOld) {
+                val minRadius = (dotSize / 2).toPx()
+                val maxRadius = (dotSize * 1.9f).toPx()
+                drawCircle(
+                    color = color.copy(alpha = 0.3f * (1f - pulse.value)),
+                    radius = minRadius + (maxRadius - minRadius) * pulse.value,
+                    center = c
+                )
             }
         }
 
-        // circle on top
         Box(
             modifier = Modifier
                 .align(Alignment.Center)
-                .size(circleSize)
+                .shadow(elevation = 3.dp, shape = CircleShape)
+                .size(dotSize)
+                .background(Color.White, CircleShape)
+                .padding(ringWidth)
                 .background(color, CircleShape)
         )
     }
 }
 
+private const val BEAM_SPREAD_DEGREES = 70f
 
 @Composable
 fun MembersMap(
