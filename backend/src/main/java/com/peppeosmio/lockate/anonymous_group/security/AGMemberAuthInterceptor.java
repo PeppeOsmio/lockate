@@ -77,11 +77,9 @@ public class AGMemberAuthInterceptor implements HandlerInterceptor {
       SecurityContextHolder.getContext().setAuthentication(authentication);
       return true;
     } catch (AGNotFoundException e) {
-      e.printStackTrace();
       writeError(response, 404, "ag_not_found");
       return false;
     } catch (UnauthorizedException e) {
-      e.printStackTrace();
       writeError(response, 401, "unauthorized");
       return false;
     }
