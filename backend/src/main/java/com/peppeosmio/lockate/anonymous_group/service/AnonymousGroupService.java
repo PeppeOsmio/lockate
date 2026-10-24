@@ -13,18 +13,15 @@ import com.peppeosmio.lockate.anonymous_group.repository.AGLocationRepository;
 import com.peppeosmio.lockate.anonymous_group.repository.AGMemberRepository;
 import com.peppeosmio.lockate.anonymous_group.repository.AnonymousGroupRepository;
 import com.peppeosmio.lockate.anonymous_group.security.AGMemberAuthentication;
-import com.peppeosmio.lockate.common.classes.EncryptedString;
 import com.peppeosmio.lockate.common.dto.EncryptedDataDto;
 import com.peppeosmio.lockate.common.dto.PageQueryDto;
 import com.peppeosmio.lockate.common.dto.PageResponseDto;
-import com.peppeosmio.lockate.common.exceptions.NotFoundException;
 import com.peppeosmio.lockate.common.exceptions.UnauthorizedException;
+import com.peppeosmio.lockate.invite.InviteService;
+import com.peppeosmio.lockate.invite.exceptions.InvalidJoinTokenException;
 import com.peppeosmio.lockate.redis.RedisService;
-import com.peppeosmio.lockate.srp.InvalidSrpSessionException;
-import com.peppeosmio.lockate.srp.SrpService;
 import jakarta.annotation.Nullable;
 import jakarta.transaction.Transactional;
-import java.math.BigInteger;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -33,7 +30,6 @@ import java.util.*;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
-import org.bouncycastle.crypto.CryptoException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.bcrypt.BCrypt;
@@ -49,7 +45,7 @@ public class AnonymousGroupService {
   private final AGMemberRepository agMemberRepository;
   private final AGLocationRepository agLocationRepository;
   private final RedisService redisService;
-  private final SrpService srpService;
+  private final InviteService inviteService;
   private final ObjectMapper objectMapper;
   private final AnonymousGroupMapper anonymousGroupMapper;
   private final AGMemberMapper agMemberMapper;
@@ -60,7 +56,7 @@ public class AnonymousGroupService {
       AGMemberRepository agMemberRepository,
       AGLocationRepository agLocationRepository,
       RedisService redisService,
-      SrpService srpService,
+      InviteService inviteService,
       ObjectMapper objectMapper,
       AnonymousGroupMapper anonymousGroupMapper,
       AGMemberMapper agMemberMapper) {
@@ -69,7 +65,7 @@ public class AnonymousGroupService {
     this.anonymousGroupRepository = anonymousGroupRepository;
     this.agLocationRepository = agLocationRepository;
     this.redisService = redisService;
-    this.srpService = srpService;
+    this.inviteService = inviteService;
     this.objectMapper = objectMapper;
     this.anonymousGroupMapper = anonymousGroupMapper;
     this.agMemberMapper = agMemberMapper;
@@ -121,7 +117,7 @@ public class AnonymousGroupService {
     }
     var decoder = Base64.getDecoder();
     if (!BCrypt.checkpw(decoder.decode(memberToken), agMemberEntity.getTokenHash())) {
-      log.error("Wrong token " + memberToken);
+      log.error("Wrong token for member " + agMemberId);
       throw new UnauthorizedException();
     }
     return new AGMemberAuthentication(agMemberId);
@@ -155,90 +151,26 @@ public class AnonymousGroupService {
   public AGCreateResDto createAnonymousGroup(AGCreateReqDto dto) throws Base64Exception {
     var agEntity =
         anonymousGroupRepository.save(
-            AnonymousGroupEntity.fromBase64Fields(
-                dto.encryptedGroupName(),
-                dto.memberPasswordSrpVerifier(),
-                dto.memberPasswordSrpSalt(),
-                dto.keySalt()));
+            AnonymousGroupEntity.fromBase64Fields(dto.encryptedGroupName()));
     var agMemberWithTokenDto = createMember(dto.encryptedMemberName(), true, agEntity);
     return new AGCreateResDto(anonymousGroupMapper.toDto(agEntity), agMemberWithTokenDto);
   }
 
-  public AGGetMemberPasswordSrpInfoResDto getMemberSrpInfo(UUID anonymousGroupId)
-      throws AGNotFoundException {
-    var anonymousGroupEntity =
-        anonymousGroupRepository
-            .findById(anonymousGroupId)
-            .orElseThrow(() -> new AGNotFoundException(anonymousGroupId));
-    var encoder = Base64.getEncoder();
-    return new AGGetMemberPasswordSrpInfoResDto(
-        EncryptedDataDto.fromEncryptedString(
-            new EncryptedString(
-                anonymousGroupEntity.getNameCipher(), anonymousGroupEntity.getNameIv())),
-        encoder.encodeToString(anonymousGroupEntity.getMemberPasswordSrpSalt()),
-        encoder.encodeToString(anonymousGroupEntity.getKeySalt()));
-  }
-
+  /**
+   * Adds a member with the join token an existing member sent inside the invite payload. The group
+   * is looked up first so a typo in the group id doesn't burn the token.
+   */
   @Transactional
-  public AGMemberAuthStartResDto startMemberSrpAuth(
-      UUID anonymousGroupId, AGMemberAuthStartReqDto dto)
-      throws Base64Exception,
-          UnauthorizedException,
-          AGNotFoundException,
-          InvalidSrpSessionException {
-    var anonymousGroupEntity =
-        anonymousGroupRepository
-            .findById(anonymousGroupId)
-            .orElseThrow(() -> new AGNotFoundException(anonymousGroupId));
-    try {
-      var decoder = Base64.getDecoder();
-      var srpSessionResult =
-          srpService.startSrp(
-              new BigInteger(decoder.decode(dto.A())),
-              new BigInteger(anonymousGroupEntity.getMemberPasswordSrpVerifier()));
-      return new AGMemberAuthStartResDto(
-          srpSessionResult.sessionId(), srpSessionResult.srpSession().B());
-    } catch (CryptoException e) {
-      e.printStackTrace();
-      throw new UnauthorizedException();
-    } catch (IllegalArgumentException e) {
-      e.printStackTrace();
-      throw new Base64Exception();
-    }
-  }
-
-  @Transactional
-  public AGMemberAuthVerifyResDto verifyMemberSrpAuth(
-      UUID anonymousGroupId, AGMemberAuthVerifyReqDto dto)
-      throws UnauthorizedException, NotFoundException, InvalidSrpSessionException, Base64Exception {
+  public AGJoinResDto joinWithInvite(UUID anonymousGroupId, AGJoinReqDto dto)
+      throws AGNotFoundException, InvalidJoinTokenException {
     var agEntity =
         anonymousGroupRepository
             .findById(anonymousGroupId)
             .orElseThrow(() -> new AGNotFoundException(anonymousGroupId));
-    var decoder = Base64.getDecoder();
-    var isValid = false;
-    try {
-      isValid =
-          srpService.verifySrp(
-              dto.srpSessionId(),
-              new BigInteger(agEntity.getMemberPasswordSrpVerifier()),
-              new BigInteger(decoder.decode(dto.M1())));
-
-    } catch (CryptoException e) {
-      e.printStackTrace();
-      throw new UnauthorizedException();
-    } catch (IllegalArgumentException e) {
-      e.printStackTrace();
-      throw new Base64Exception();
-    }
-    if (isValid) {
-      var agMemberWithTokenDto = createMember(dto.encryptedMemberName(), false, agEntity);
-      var agMembers = listMembers(agEntity);
-      return new AGMemberAuthVerifyResDto(
-          anonymousGroupMapper.toDto(agEntity), agMemberWithTokenDto, agMembers);
-    } else {
-      throw new UnauthorizedException();
-    }
+    inviteService.consumeJoinToken(anonymousGroupId, dto.joinToken());
+    var agMemberWithTokenDto = createMember(dto.encryptedMemberName(), false, agEntity);
+    var agMembers = listMembers(agEntity);
+    return new AGJoinResDto(anonymousGroupMapper.toDto(agEntity), agMemberWithTokenDto, agMembers);
   }
 
   @Transactional

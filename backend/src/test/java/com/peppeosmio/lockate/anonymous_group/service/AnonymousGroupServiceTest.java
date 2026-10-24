@@ -4,10 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.peppeosmio.lockate.anonymous_group.configuration_properties.AGLocationConfigurationProperties;
 import com.peppeosmio.lockate.anonymous_group.dto.*;
 import com.peppeosmio.lockate.anonymous_group.entity.AGMemberEntity;
@@ -15,7 +19,6 @@ import com.peppeosmio.lockate.anonymous_group.entity.AnonymousGroupEntity;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotAdminException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
-import com.peppeosmio.lockate.anonymous_group.exceptions.Base64Exception;
 import com.peppeosmio.lockate.anonymous_group.mapper.AGMemberMapper;
 import com.peppeosmio.lockate.anonymous_group.mapper.AnonymousGroupMapper;
 import com.peppeosmio.lockate.anonymous_group.repository.AGLocationRepository;
@@ -26,11 +29,9 @@ import com.peppeosmio.lockate.common.classes.EncryptedString;
 import com.peppeosmio.lockate.common.dto.EncryptedDataDto;
 import com.peppeosmio.lockate.common.dto.PageQueryDto;
 import com.peppeosmio.lockate.common.exceptions.UnauthorizedException;
+import com.peppeosmio.lockate.invite.InviteService;
+import com.peppeosmio.lockate.invite.exceptions.InvalidJoinTokenException;
 import com.peppeosmio.lockate.redis.RedisService;
-import com.peppeosmio.lockate.srp.SrpService;
-import com.peppeosmio.lockate.srp.SrpSession;
-import com.peppeosmio.lockate.srp.SrpSessionResult;
-import java.math.BigInteger;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -39,13 +40,13 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
-import org.bouncycastle.crypto.CryptoException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -61,7 +62,7 @@ class AnonymousGroupServiceTest {
   @Mock private AGMemberRepository agMemberRepository;
   @Mock private AGLocationRepository agLocationRepository;
   @Mock private RedisService redisService;
-  @Mock private SrpService srpService;
+  @Mock private InviteService inviteService;
   @Mock private ObjectMapper objectMapper;
   @Mock private AnonymousGroupMapper anonymousGroupMapper;
   @Mock private AGMemberMapper agMemberMapper;
@@ -80,17 +81,14 @@ class AnonymousGroupServiceTest {
             agMemberRepository,
             agLocationRepository,
             redisService,
-            srpService,
+            inviteService,
             objectMapper,
             anonymousGroupMapper,
             agMemberMapper);
 
     groupEntity =
         new AnonymousGroupEntity(
-            new EncryptedString("group-name".getBytes(), "group-iv".getBytes()),
-            BigInteger.valueOf(123456789L).toByteArray(),
-            "salt".getBytes(),
-            "keysalt".getBytes());
+            new EncryptedString("group-name".getBytes(), "group-iv".getBytes()));
     groupEntity.setId(groupId);
   }
 
@@ -139,13 +137,32 @@ class AnonymousGroupServiceTest {
   }
 
   @Test
+  void authenticateMember_wrongToken_neverLogsTheToken() {
+    var memberId = UUID.randomUUID();
+    var member = newMember(memberId, "correct-token".getBytes(), false, groupEntity);
+    when(anonymousGroupRepository.findById(groupId)).thenReturn(Optional.of(groupEntity));
+    when(agMemberRepository.findById(memberId)).thenReturn(Optional.of(member));
+    var sentToken = Base64.getEncoder().encodeToString("wrong-token".getBytes());
+    var logger = (Logger) LoggerFactory.getLogger(AnonymousGroupService.class);
+    var appender = new ListAppender<ILoggingEvent>();
+    appender.start();
+    logger.addAppender(appender);
+
+    try {
+      assertThatThrownBy(() -> service.authenticateMember(groupId, memberId, sentToken))
+          .isInstanceOf(UnauthorizedException.class);
+    } finally {
+      logger.detachAppender(appender);
+    }
+
+    assertThat(appender.list).isNotEmpty();
+    assertThat(appender.list).noneMatch(event -> event.getFormattedMessage().contains(sentToken));
+  }
+
+  @Test
   void authenticateMember_memberBelongsToDifferentGroup_throwsUnauthorized() {
     var otherGroup =
-        new AnonymousGroupEntity(
-            new EncryptedString("other".getBytes(), "other-iv".getBytes()),
-            "verifier".getBytes(),
-            "salt".getBytes(),
-            "keysalt".getBytes());
+        new AnonymousGroupEntity(new EncryptedString("other".getBytes(), "other-iv".getBytes()));
     otherGroup.setId(UUID.randomUUID());
     var memberId = UUID.randomUUID();
     var rawToken = "correct-token".getBytes();
@@ -174,10 +191,7 @@ class AnonymousGroupServiceTest {
                 encoder.encodeToString("miv".getBytes())),
             new EncryptedDataDto(
                 encoder.encodeToString("group".getBytes()),
-                encoder.encodeToString("giv".getBytes())),
-            encoder.encodeToString("verifier".getBytes()),
-            encoder.encodeToString("salt".getBytes()),
-            encoder.encodeToString("keysalt".getBytes()));
+                encoder.encodeToString("giv".getBytes())));
 
     var result = service.createAnonymousGroup(dto);
 
@@ -191,136 +205,49 @@ class AnonymousGroupServiceTest {
     assertThat(BCrypt.checkpw(rawToken, savedMember.getTokenHash())).isTrue();
   }
 
-  // ---------- getMemberSrpInfo ----------
+  // ---------- joinWithInvite ----------
 
-  @Test
-  void getMemberSrpInfo_existingGroup_returnsEncryptedNameAndSalts() throws Exception {
-    when(anonymousGroupRepository.findById(groupId)).thenReturn(Optional.of(groupEntity));
-
-    var result = service.getMemberSrpInfo(groupId);
-
-    assertThat(result.encryptedName().cipherText())
-        .isEqualTo(Base64.getEncoder().encodeToString("group-name".getBytes()));
-    assertThat(result.keySalt())
-        .isEqualTo(Base64.getEncoder().encodeToString("keysalt".getBytes()));
+  private AGJoinReqDto joinReq(String joinToken) {
+    var encoder = Base64.getEncoder();
+    return new AGJoinReqDto(
+        joinToken,
+        new EncryptedDataDto(
+            encoder.encodeToString("member".getBytes()), encoder.encodeToString("miv".getBytes())));
   }
 
   @Test
-  void getMemberSrpInfo_missingGroup_throwsAGNotFoundException() {
-    when(anonymousGroupRepository.findById(groupId)).thenReturn(Optional.empty());
-
-    assertThatThrownBy(() -> service.getMemberSrpInfo(groupId))
-        .isInstanceOf(AGNotFoundException.class);
-  }
-
-  // ---------- startMemberSrpAuth ----------
-
-  @Test
-  void startMemberSrpAuth_success_returnsSessionAndB() throws Exception {
+  void joinWithInvite_validToken_createsNonAdminMemberAndReturnsMembers() throws Exception {
     when(anonymousGroupRepository.findById(groupId)).thenReturn(Optional.of(groupEntity));
-    var session =
-        new SrpSession("encoded-A", "encoded-b", "encoded-B", LocalDateTime.now(ZoneOffset.UTC));
-    when(srpService.startSrp(any(), any())).thenReturn(new SrpSessionResult("srp:abc", session));
-    var dto = new AGMemberAuthStartReqDto(Base64.getEncoder().encodeToString("A".getBytes()));
-
-    var result = service.startMemberSrpAuth(groupId, dto);
-
-    assertThat(result.srpSessionId()).isEqualTo("srp:abc");
-    assertThat(result.B()).isEqualTo("encoded-B");
-  }
-
-  @Test
-  void startMemberSrpAuth_cryptoException_throwsUnauthorized() throws Exception {
-    when(anonymousGroupRepository.findById(groupId)).thenReturn(Optional.of(groupEntity));
-    when(srpService.startSrp(any(), any())).thenThrow(new CryptoException("bad"));
-    var dto = new AGMemberAuthStartReqDto(Base64.getEncoder().encodeToString("A".getBytes()));
-
-    assertThatThrownBy(() -> service.startMemberSrpAuth(groupId, dto))
-        .isInstanceOf(UnauthorizedException.class);
-  }
-
-  @Test
-  void startMemberSrpAuth_invalidBase64_throwsBase64Exception() {
-    when(anonymousGroupRepository.findById(groupId)).thenReturn(Optional.of(groupEntity));
-    var dto = new AGMemberAuthStartReqDto("not-valid-base64!!!");
-
-    assertThatThrownBy(() -> service.startMemberSrpAuth(groupId, dto))
-        .isInstanceOf(Base64Exception.class);
-  }
-
-  // ---------- verifyMemberSrpAuth ----------
-
-  @Test
-  void verifyMemberSrpAuth_success_createsNonAdminMemberAndReturnsMembers() throws Exception {
-    when(anonymousGroupRepository.findById(groupId)).thenReturn(Optional.of(groupEntity));
-    when(srpService.verifySrp(any(), any(), any())).thenReturn(true);
     when(agMemberRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
     when(agMemberRepository.findMembersWithLastLocation(groupId)).thenReturn(List.of());
-    var encoder = Base64.getEncoder();
-    var dto =
-        new AGMemberAuthVerifyReqDto(
-            new EncryptedDataDto(
-                encoder.encodeToString("member".getBytes()),
-                encoder.encodeToString("miv".getBytes())),
-            "srp:abc",
-            encoder.encodeToString("M1".getBytes()));
 
-    var result = service.verifyMemberSrpAuth(groupId, dto);
+    var result = service.joinWithInvite(groupId, joinReq("token"));
 
+    verify(inviteService).consumeJoinToken(groupId, "token");
     var memberCaptor = ArgumentCaptor.forClass(AGMemberEntity.class);
     verify(agMemberRepository).save(memberCaptor.capture());
     assertThat(memberCaptor.getValue().isAGAdmin()).isFalse();
+    assertThat(Base64.getDecoder().decode(result.authenticatedMemberInfo().token())).hasSize(32);
     assertThat(result.members()).isEmpty();
   }
 
   @Test
-  void verifyMemberSrpAuth_wrongPassword_throwsUnauthorized() throws Exception {
+  void joinWithInvite_invalidToken_createsNoMember() throws Exception {
     when(anonymousGroupRepository.findById(groupId)).thenReturn(Optional.of(groupEntity));
-    when(srpService.verifySrp(any(), any(), any())).thenReturn(false);
-    var encoder = Base64.getEncoder();
-    var dto =
-        new AGMemberAuthVerifyReqDto(
-            new EncryptedDataDto(
-                encoder.encodeToString("member".getBytes()),
-                encoder.encodeToString("miv".getBytes())),
-            "srp:abc",
-            encoder.encodeToString("M1".getBytes()));
+    doThrow(new InvalidJoinTokenException()).when(inviteService).consumeJoinToken(groupId, "bad");
 
-    assertThatThrownBy(() -> service.verifyMemberSrpAuth(groupId, dto))
-        .isInstanceOf(UnauthorizedException.class);
+    assertThatThrownBy(() -> service.joinWithInvite(groupId, joinReq("bad")))
+        .isInstanceOf(InvalidJoinTokenException.class);
+    verify(agMemberRepository, never()).save(any());
   }
 
   @Test
-  void verifyMemberSrpAuth_cryptoException_throwsUnauthorized() throws Exception {
-    when(anonymousGroupRepository.findById(groupId)).thenReturn(Optional.of(groupEntity));
-    when(srpService.verifySrp(any(), any(), any())).thenThrow(new CryptoException("bad"));
-    var encoder = Base64.getEncoder();
-    var dto =
-        new AGMemberAuthVerifyReqDto(
-            new EncryptedDataDto(
-                encoder.encodeToString("member".getBytes()),
-                encoder.encodeToString("miv".getBytes())),
-            "srp:abc",
-            encoder.encodeToString("M1".getBytes()));
+  void joinWithInvite_missingGroup_throwsAGNotFoundWithoutConsumingTheToken() throws Exception {
+    when(anonymousGroupRepository.findById(groupId)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.verifyMemberSrpAuth(groupId, dto))
-        .isInstanceOf(UnauthorizedException.class);
-  }
-
-  @Test
-  void verifyMemberSrpAuth_invalidBase64M1_throwsBase64Exception() {
-    when(anonymousGroupRepository.findById(groupId)).thenReturn(Optional.of(groupEntity));
-    var encoder = Base64.getEncoder();
-    var dto =
-        new AGMemberAuthVerifyReqDto(
-            new EncryptedDataDto(
-                encoder.encodeToString("member".getBytes()),
-                encoder.encodeToString("miv".getBytes())),
-            "srp:abc",
-            "not-valid-base64!!!");
-
-    assertThatThrownBy(() -> service.verifyMemberSrpAuth(groupId, dto))
-        .isInstanceOf(Base64Exception.class);
+    assertThatThrownBy(() -> service.joinWithInvite(groupId, joinReq("token")))
+        .isInstanceOf(AGNotFoundException.class);
+    verify(inviteService, never()).consumeJoinToken(any(), any());
   }
 
   // ---------- deleteMember ----------
@@ -340,11 +267,7 @@ class AnonymousGroupServiceTest {
   @Test
   void deleteMember_memberFromDifferentGroup_throwsUnauthorized() {
     var otherGroup =
-        new AnonymousGroupEntity(
-            new EncryptedString("other".getBytes(), "other-iv".getBytes()),
-            "verifier".getBytes(),
-            "salt".getBytes(),
-            "keysalt".getBytes());
+        new AnonymousGroupEntity(new EncryptedString("other".getBytes(), "other-iv".getBytes()));
     otherGroup.setId(UUID.randomUUID());
     var memberId = UUID.randomUUID();
     var member = newMember(memberId, "token".getBytes(), false, otherGroup);
@@ -530,11 +453,7 @@ class AnonymousGroupServiceTest {
   @Test
   void listGroupsForAdmin_groupWithMembers_returnsSummary() {
     var otherGroup =
-        new AnonymousGroupEntity(
-            new EncryptedString("other".getBytes(), "other-iv".getBytes()),
-            "verifier".getBytes(),
-            "salt".getBytes(),
-            "keysalt".getBytes());
+        new AnonymousGroupEntity(new EncryptedString("other".getBytes(), "other-iv".getBytes()));
     var otherGroupId = UUID.randomUUID();
     otherGroup.setId(otherGroupId);
     var pageable = PageRequest.of(0, 20, Sort.by("createdAt").descending());

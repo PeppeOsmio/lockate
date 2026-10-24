@@ -4,9 +4,8 @@ import com.peppeosmio.lockate.anonymous_group.dto.*;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.Base64Exception;
 import com.peppeosmio.lockate.anonymous_group.service.AnonymousGroupService;
-import com.peppeosmio.lockate.common.exceptions.NotFoundException;
-import com.peppeosmio.lockate.common.exceptions.UnauthorizedException;
-import com.peppeosmio.lockate.srp.InvalidSrpSessionException;
+import com.peppeosmio.lockate.invite.exceptions.InvalidJoinTokenException;
+import jakarta.validation.Valid;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -27,32 +26,16 @@ public class AnonymousGroupController {
 
   @PostMapping("")
   @ResponseStatus(HttpStatus.CREATED)
-  AGCreateResDto createAnonymousGroup(@RequestBody AGCreateReqDto dto) throws Base64Exception {
+  AGCreateResDto createAnonymousGroup(@Valid @RequestBody AGCreateReqDto dto)
+      throws Base64Exception {
     return anonymousGroupService.createAnonymousGroup(dto);
   }
 
-  @GetMapping("/{anonymousGroupId}/members/auth/srp/info")
+  @PostMapping("/{anonymousGroupId}/members/join")
   @ResponseStatus(HttpStatus.OK)
-  AGGetMemberPasswordSrpInfoResDto getMemberSrpInfo(@PathVariable UUID anonymousGroupId)
-      throws AGNotFoundException {
-    return anonymousGroupService.getMemberSrpInfo(anonymousGroupId);
-  }
-
-  @PostMapping("/{anonymousGroupId}/members/auth/srp/start")
-  AGMemberAuthStartResDto memberAuthStart(
-      @PathVariable UUID anonymousGroupId, @RequestBody AGMemberAuthStartReqDto dto)
-      throws UnauthorizedException,
-          Base64Exception,
-          AGNotFoundException,
-          InvalidSrpSessionException {
-    return anonymousGroupService.startMemberSrpAuth(anonymousGroupId, dto);
-  }
-
-  @PostMapping("/{anonymousGroupId}/members/auth/srp/verify")
-  @ResponseStatus(HttpStatus.OK)
-  AGMemberAuthVerifyResDto memberAuthVerify(
-      @PathVariable UUID anonymousGroupId, @RequestBody AGMemberAuthVerifyReqDto dto)
-      throws UnauthorizedException, NotFoundException, InvalidSrpSessionException, Base64Exception {
-    return anonymousGroupService.verifyMemberSrpAuth(anonymousGroupId, dto);
+  AGJoinResDto joinWithInvite(
+      @PathVariable UUID anonymousGroupId, @Valid @RequestBody AGJoinReqDto dto)
+      throws AGNotFoundException, InvalidJoinTokenException {
+    return anonymousGroupService.joinWithInvite(anonymousGroupId, dto);
   }
 }

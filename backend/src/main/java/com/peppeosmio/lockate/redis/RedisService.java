@@ -45,6 +45,29 @@ public class RedisService {
     redisTemplate.delete(key);
   }
 
+  /** Sets the value only if the key doesn't exist yet; returns whether it was set */
+  public boolean setIfAbsent(String key, String value, Duration ttl) {
+    return Boolean.TRUE.equals(redisTemplate.opsForValue().setIfAbsent(key, value, ttl));
+  }
+
+  /** Atomically reads and deletes the key, so only one caller can ever get the value */
+  public Optional<String> getAndDelete(String key) {
+    return Optional.ofNullable(redisTemplate.opsForValue().getAndDelete(key));
+  }
+
+  /**
+   * Increments a counter, starting its expiry window on the first increment. INCR and EXPIRE are
+   * separate commands, so a counter left without expiry gets one on the next call instead of
+   * blocking forever.
+   */
+  public long increment(String key, Duration window) {
+    var count = redisTemplate.opsForValue().increment(key);
+    if (count != null && (count == 1 || redisTemplate.getExpire(key) == -1)) {
+      redisTemplate.expire(key, window);
+    }
+    return count == null ? 0 : count;
+  }
+
   public void publish(String channel, String message) {
     redisTemplate.convertAndSend(channel, message);
   }

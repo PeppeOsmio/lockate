@@ -6,7 +6,6 @@ import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotAdminExcepti
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.Base64Exception;
-import com.peppeosmio.lockate.srp.InvalidSrpSessionException;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -21,14 +20,6 @@ class AGExceptionHandlerTest {
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     assertThat(response.getBody().error()).isEqualTo("invalid_base64");
-  }
-
-  @Test
-  void handleInvalidSrpSession_returns500() {
-    var response = handler.handleInvalidSrpSession(new InvalidSrpSessionException());
-
-    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
-    assertThat(response.getBody().error()).isEqualTo("invalid_srp_session");
   }
 
   @Test
