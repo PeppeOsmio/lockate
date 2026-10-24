@@ -7,13 +7,6 @@ on:
       - dev-docker-compose.yml
       - .env.example
       - .github/workflows/checks-docker-compose.yml
-  push:
-    branches: [main]
-    paths:
-      - docker-compose.yml
-      - dev-docker-compose.yml
-      - .env.example
-      - .github/workflows/checks-docker-compose.yml
   workflow_call:
   workflow_dispatch:
 

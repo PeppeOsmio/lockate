@@ -5,11 +5,6 @@ on:
     paths:
       - admin_ui/**
       - .github/workflows/checks-admin-ui.yml
-  push:
-    branches: [main]
-    paths:
-      - admin_ui/**
-      - .github/workflows/checks-admin-ui.yml
   workflow_call:
   workflow_dispatch:
 

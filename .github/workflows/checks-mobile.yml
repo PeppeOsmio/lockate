@@ -5,11 +5,6 @@ on:
     paths:
       - mobile_app/**
       - .github/workflows/checks-mobile.yml
-  push:
-    branches: [main]
-    paths:
-      - mobile_app/**
-      - .github/workflows/checks-mobile.yml
   workflow_call:
   workflow_dispatch:
 
