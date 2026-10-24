@@ -24,4 +24,12 @@ Build/test rules specific to this module. See the repo-root `CLAUDE.md` for arch
 
 Releases are published by the `release` job of `.github/workflows/release-mobile.yml` when a `mobile-v*` tag is pushed (e.g. `mobile-v1.4.3`).
 
+The EC-JPAKE native library (`jpake-native`, built from the Mbed TLS submodule in `third_party/mbedtls`) needs, once:
+
+```bash
+git submodule update --init --recursive
+```
+
+Android builds need the NDK and CMake 3.22.1 (Gradle installs them when the SDK licenses are accepted). `:jpake:jvmTest` and the app unit tests build the same C code for the host (`:jpake:buildJpakeHost`) with the system `cmake` and a C compiler.
+
 Always run these from `mobile_app/` (the Gradle wrapper lives here).

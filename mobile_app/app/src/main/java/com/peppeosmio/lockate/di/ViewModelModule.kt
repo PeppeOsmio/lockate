@@ -5,10 +5,12 @@ import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
 import com.peppeosmio.lockate.service.ConnectionService
 import com.peppeosmio.lockate.service.MapStyleService
 import com.peppeosmio.lockate.service.PermissionsService
+import com.peppeosmio.lockate.service.invite.InviteService
 import com.peppeosmio.lockate.platform_service.LocationService
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.AGDetailsViewModel
 import com.peppeosmio.lockate.ui.screens.connection_settings.ConnectionSettingsViewModel
 import com.peppeosmio.lockate.ui.screens.create_anonymous_group.CreateAnonymousGroupViewModel
+import com.peppeosmio.lockate.ui.screens.invite.InviteViewModel
 import com.peppeosmio.lockate.ui.screens.map.MapViewModel
 import com.peppeosmio.lockate.ui.screens.join_anonymous_group.JoinAnonymousGroupViewModel
 import com.peppeosmio.lockate.ui.screens.loading.LoadingViewModel
@@ -40,7 +42,14 @@ val viewModelModule = module {
     }
 
     viewModel<JoinAnonymousGroupViewModel> {
-        JoinAnonymousGroupViewModel(anonymousGroupService = get<AnonymousGroupService>())
+        JoinAnonymousGroupViewModel(inviteService = get<InviteService>())
+    }
+
+    viewModel<InviteViewModel> {
+        InviteViewModel(
+            anonymousGroupService = get<AnonymousGroupService>(),
+            inviteService = get<InviteService>()
+        )
     }
 
     viewModel<AGDetailsViewModel> {

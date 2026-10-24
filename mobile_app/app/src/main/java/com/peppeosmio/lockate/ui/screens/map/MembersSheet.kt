@@ -215,7 +215,7 @@ private fun EmptyGroupsState(onCreate: () -> Unit, onJoin: () -> Unit) {
         )
         Spacer(Modifier.size(16.dp))
         Button(modifier = Modifier.fillMaxWidth(), onClick = onCreate) { Text("Create group") }
-        OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = onJoin) { Text("Join with ID and password") }
+        OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = onJoin) { Text("Join with an invite code") }
     }
 }
 

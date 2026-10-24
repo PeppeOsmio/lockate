@@ -15,8 +15,8 @@ import com.peppeosmio.lockate.service.ConnectionService
 import com.peppeosmio.lockate.service.MapStyleService
 import com.peppeosmio.lockate.service.PermissionsService
 import com.peppeosmio.lockate.service.crypto.CryptoService
+import com.peppeosmio.lockate.service.invite.InviteService
 import com.peppeosmio.lockate.platform_service.LocationService
-import com.peppeosmio.lockate.service.srp.SrpClientService
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -34,7 +34,7 @@ val appModule = module {
     single<AppDatabase> {
         Room.databaseBuilder(
             androidContext(), AppDatabase::class.java, "lockate.db"
-        ).addMigrations().build()
+        ).addMigrations(AppDatabase.MIGRATION_2_3).build()
     }
 
     // DAO from the database
@@ -98,10 +98,6 @@ val appModule = module {
         CryptoService()
     }
 
-    single<SrpClientService> {
-        SrpClientService()
-    }
-
     single<PermissionsService> {
         PermissionsService(context = androidContext())
     }
@@ -135,10 +131,13 @@ val appModule = module {
             cryptoService = get(),
             connectionService = get(),
             httpClient = get(),
-            srpClientService = get(),
             locationService = get(),
             connectivityService = get(),
             keyStoreService = get()
         )
+    }
+
+    single<InviteService> {
+        InviteService(anonymousGroupService = get(), connectionService = get(), httpClient = get())
     }
 }

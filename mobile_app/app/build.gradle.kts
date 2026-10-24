@@ -36,13 +36,6 @@ android {
         arg("room.schemaLocation", "$projectDir/schemas")
     }
 
-    // bouncycastle
-    packaging {
-        resources {
-            excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
-        }
-    }
-
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -85,6 +78,8 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockk)
     testImplementation(libs.ktor.client.mock)
+    // The unit tests run the invite exchange on the host, with the jna jar's native part and libjpake
+    testImplementation(libs.jna)
 
     implementation(libs.androidx.datastore.preferences)
 
@@ -108,9 +103,8 @@ dependencies {
     implementation(libs.androidx.room.runtime)
     ksp(libs.androidx.room.compiler)
 
-    implementation(libs.bcprov.jdk18on)
+    implementation(project(":jpake"))
 
-    implementation(libs.cryptography.bigint)
     implementation(libs.cryptography.core)
     implementation(libs.cryptography.provider.optimal)
 
@@ -122,4 +116,11 @@ dependencies {
     // maplibre-compose ships no renderer: the app picks one. OpenGL is what Compose draws with on Android
     implementation(libs.maplibre.nativeFfi.runtime.opengl)
 
+}
+
+tasks.withType<Test>().configureEach {
+    dependsOn(":jpake:buildJpakeHost")
+    systemProperty(
+        "jna.library.path", project(":jpake").layout.buildDirectory.dir("jpake-host").get().asFile.absolutePath
+    )
 }

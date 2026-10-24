@@ -26,37 +26,26 @@ class CreateAnonymousGroupViewModel(
         _state.update { it.copy(groupNameText = text) }
     }
 
-    fun setMemberPasswordText(text: String) {
-        _state.update { it.copy(memberPasswordText = text) }
-    }
-
     fun setUserNameText(text: String) {
         _state.update { it.copy(userNameText = text) }
     }
 
     private fun canConfirm(): Boolean {
         val groupNameBlank = state.value.groupNameText.isBlank()
-        val memberPasswordBlank = state.value.memberPasswordText.isBlank()
         val userNameBlank = state.value.userNameText.isBlank()
         if (groupNameBlank) {
             _state.update { it.copy(groupNameError = "Please enter the group name") }
         }
-        if (memberPasswordBlank) {
-            _state.update { it.copy(memberPasswordError = "Please enter the member password") }
-        }
         if (userNameBlank) {
             _state.update { it.copy(userNameError = "Please enter the user name") }
         }
-        val canConfirm =
-            !(groupNameBlank || memberPasswordBlank || userNameBlank)
-        return canConfirm
+        return !(groupNameBlank || userNameBlank)
     }
 
     private fun clearFieldsErrors() {
         _state.update {
             it.copy(
                 groupNameError = null,
-                memberPasswordError = null,
                 userNameError = null
             )
         }
@@ -74,7 +63,6 @@ class CreateAnonymousGroupViewModel(
                     connectionId = connectionSettingsId,
                     groupName = state.value.groupNameText,
                     memberName = state.value.userNameText,
-                    memberPassword = state.value.memberPasswordText,
                 )
                 _state.update { it.copy(showLoadingOverlay = false) }
                 _navigateBackEvents.trySend(Unit)

@@ -5,8 +5,6 @@ import dev.whyoleg.cryptography.BinarySize.Companion.bits
 import dev.whyoleg.cryptography.CryptographyProvider
 import dev.whyoleg.cryptography.DelicateCryptographyApi
 import dev.whyoleg.cryptography.algorithms.AES
-import dev.whyoleg.cryptography.algorithms.PBKDF2
-import dev.whyoleg.cryptography.algorithms.SHA256
 import dev.whyoleg.cryptography.random.CryptographyRandom
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -15,9 +13,7 @@ class CryptoService(
 ) {
 
     companion object {
-        const val PBKDF2_KEY_BITS = 256
-        const val PBKDF2_ITERATIONS = 600_000
-        const val PBKDF2_SALT_BYTES = 16
+        const val GROUP_KEY_BYTES = 32
         const val AES_GCM_IV_BYTES = 12
         const val AES_GCM_TAG_BITS = 128
         const val AES_GCM_TAG_BYTES = AES_GCM_TAG_BITS / 8
@@ -29,25 +25,13 @@ class CryptoService(
         return bytes
     }
 
-    fun getKeySalt(): ByteArray {
-        return getRandomBytes(PBKDF2_SALT_BYTES)
+    /** The group's AES-256 key: random, and shared with new members only through invites */
+    fun generateGroupKey(): ByteArray {
+        return getRandomBytes(GROUP_KEY_BYTES)
     }
 
     private fun getIv(): ByteArray {
         return getRandomBytes(AES_GCM_IV_BYTES)
-    }
-
-    suspend fun createKey(passwordBytes: ByteArray, keySalt: ByteArray): ByteArray {
-        val provider = CryptographyProvider.Default
-        val pbkdf2 = provider.get(PBKDF2)
-        val sha256 = provider.get(SHA256)
-        val secretDerivation = pbkdf2.secretDerivation(
-            digest = sha256.id,
-            iterations = PBKDF2_ITERATIONS,
-            outputSize = PBKDF2_KEY_BITS.bits,
-            salt = keySalt
-        )
-        return secretDerivation.deriveSecret(passwordBytes).toByteArray()
     }
 
     @OptIn(DelicateCryptographyApi::class)

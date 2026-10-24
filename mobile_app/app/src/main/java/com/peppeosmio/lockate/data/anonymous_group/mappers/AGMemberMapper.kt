@@ -26,7 +26,7 @@ object AGMemberMapper {
             lastLocationRecord = entity.lastLatitude?.let {
                 LocationRecord(
                     coordinates = Coordinates(
-                        latitude = entity.lastLatitude!!,
+                        latitude = it,
                         longitude = entity.lastLongitude!!
 
                     ),

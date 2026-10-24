@@ -19,7 +19,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -93,6 +93,7 @@ fun MapScreen(
     navigateToConnectionSettings: (route: ConnectionSettingsRoute) -> Unit,
     navigateToCreateAG: (connectionSettingsId: Long) -> Unit,
     navigateToJoinAG: (connectionSettingsId: Long) -> Unit,
+    navigateToInvite: (anonymousGroupInternalId: Long) -> Unit,
     navigateToManageConnections: () -> Unit,
     navigateToSettings: () -> Unit,
     startLocationService: () -> Unit,
@@ -273,14 +274,6 @@ fun MapScreen(
         }
     }
 
-    fun shareGroupId(group: AnonymousGroup) {
-        val sendIntent = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_TEXT, group.id)
-        }
-        context.startActivity(Intent.createChooser(sendIntent, null))
-    }
-
     // Collapse before switching to the details, otherwise they'd show up fully expanded and then close
     fun selectMember(memberId: String) {
         coroutineScope.launch {
@@ -449,7 +442,7 @@ fun MapScreen(
                                 canToggleSharing = details.anonymousGroup != null,
                                 isAdmin = details.anonymousGroup?.memberIsAGAdmin == true,
                                 onToggleSharing = { dismiss(); detailsViewModel.toggleAGShareLocation() },
-                                onShareId = { dismiss(); selectedGroup?.let(::shareGroupId) },
+                                onInvite = { dismiss(); selectedGroup?.let { navigateToInvite(it.internalId) } },
                                 onLeave = { dismiss(); detailsViewModel.showLeaveAGDialog() },
                                 onRemove = { dismiss(); viewModel.removeLocalGroup() },
                                 onDelete = { dismiss(); detailsViewModel.showDeleteAGDialog() })
@@ -494,7 +487,7 @@ private fun GroupMenuItems(
     canToggleSharing: Boolean,
     isAdmin: Boolean,
     onToggleSharing: () -> Unit,
-    onShareId: () -> Unit,
+    onInvite: () -> Unit,
     onLeave: () -> Unit,
     onRemove: () -> Unit,
     onDelete: () -> Unit
@@ -511,9 +504,9 @@ private fun GroupMenuItems(
     }
     if (isActive) {
         DropdownMenuItem(
-            leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
-            text = { Text("Share group id") },
-            onClick = onShareId
+            leadingIcon = { Icon(Icons.Default.Add, contentDescription = null) },
+            text = { Text("Invite") },
+            onClick = onInvite
         )
         DropdownMenuItem(
             leadingIcon = { Icon(painterResource(R.drawable.outline_logout_24), contentDescription = null) },
