@@ -3,20 +3,20 @@
 all: ci
 
 test:
-	npx tsc --noEmit
+	yarn tsc --noEmit
 
 format:
-	npx prettier --write src
+	yarn prettier --write src
 
 format-check:
-	npx prettier --check src
+	yarn prettier --check src
 
 lint:
-	npm run lint
+	yarn lint
 
 check: format-check lint
 
 ci: format-check lint test
 
 build:
-	npm run build
+	yarn build

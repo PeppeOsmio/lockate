@@ -2,11 +2,11 @@ FROM --platform=$BUILDPLATFORM node:22-alpine AS builder
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
-RUN npm install
+COPY package.json yarn.lock .yarnrc.yml ./
+RUN corepack enable && yarn install --immutable
 
 COPY . .
-RUN npm run build
+RUN yarn build
 
 FROM nginx:alpine AS app
 
