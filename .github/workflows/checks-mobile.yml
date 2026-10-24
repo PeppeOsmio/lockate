@@ -29,12 +29,14 @@ jobs:
         working-directory: mobile_app
     steps:
       - uses: actions/checkout@v7
+        with:
+          submodules: recursive
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 21
       - uses: gradle/actions/setup-gradle@v6
-      - run: ./gradlew testDebugUnitTest
+      - run: ./gradlew testDebugUnitTest :jpake:jvmTest
       - uses: actions/upload-artifact@v7
         if: failure()
         with:

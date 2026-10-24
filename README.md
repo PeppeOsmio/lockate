@@ -17,9 +17,9 @@ Share your location with the people you choose, and nobody else. Not even the se
 
 ## How it works
 
-1. **Create a group.** Pick a name and a password.
-2. **Share the group ID and the password** with your people, in person or in a message.
-3. **They join.** Each person enters the ID and password and chooses the name the others will see.
+1. **Create a group.** Just pick a name.
+2. **Invite people.** Tap **Invite** and read out the code that appears, like `7-guitar-ocean-lamp`. Any member can invite.
+3. **They join.** Each person taps **Join**, enters the code and chooses the name the others will see.
 4. **Everyone appears on a live map.** Tap a person to see their name and when they were last seen.
 
 There is no sign-up. No email, no phone number, no account.
@@ -28,9 +28,9 @@ There is no sign-up. No email, no phone number, no account.
 
 Most location apps send your position to a company's server, which can read it. Lockate doesn't work that way.
 
-Before anything leaves your phone, your location, your name and the group's name are locked with a key made from the group password. Only phones that know the password can unlock them. The server in the middle is like a mail carrier handling sealed envelopes: it delivers them to the right people but cannot open them.
+Before anything leaves your phone, your location, your name and the group's name are locked with a random key that only the group's phones have. The server in the middle is like a mail carrier handling sealed envelopes: it delivers them to the right people but cannot open them.
 
-Your password never leaves your phone either. To let you in, the app proves to the server that you know it without ever sending it.
+Inviting someone hands them that key without the server ever seeing it. The two phones use the invite code to agree on a secret lock of their own, and the key travels inside it. If someone else tries the code, or it's typed wrong, the inviter's phone notices and nothing is sent. Each code works once and expires after 10 minutes.
 
 Your phone also keeps sending updates when you're standing still. If it only sent them when you moved, the server could guess when you stopped, so Lockate doesn't give it that clue.
 
@@ -39,8 +39,8 @@ Location history is deleted automatically after 7 days, by default.
 ## What it doesn't do
 
 - It runs on Android only for now.
-- If everyone forgets the group password, the group can't be recovered. Nobody can reset it, because nobody else has it.
-- Anyone who has the group ID and password can join and see the group. Share them only with people you trust.
+- If every member leaves or uninstalls the app, the group can't be recovered. Nobody else has its key.
+- Whoever enters an invite code first gets in. Read it out only to the person you're inviting.
 - It needs a Lockate server to connect through. That is usually one run by someone you know, or by you. See [self-hosting](#self-hosting) if that's you.
 
 ## Getting started
@@ -48,7 +48,7 @@ Location history is deleted automatically after 7 days, by default.
 1. Download the latest APK from the [Releases page](../../releases). Pick `arm64-v8a` for most phones, `armeabi-v7a` for older 32-bit phones, or `universal` if you're not sure (it's larger but works everywhere). `x86_64` is for emulators.
 2. Open it on your phone. Android will ask you to allow installing apps from outside the Play Store. Allow it for this install.
 3. Open Lockate and enter the server address. If whoever runs the server gave you an access key, enter that too.
-4. Create a group, or join one with the ID and password you were given.
+4. Create a group, or join one with an invite code from one of its members.
 5. When the app asks for location access, choose **Allow all the time**. Without it, sharing stops when your screen turns off.
 
 ## Questions
@@ -74,8 +74,9 @@ Yes. Lockate is open source under the MIT license.
 
 ## Under the hood
 
-- Group names, member names and coordinates are encrypted client-side with AES-GCM. The key is derived from the group password with PBKDF2-SHA256 (600K iterations), so it never leaves the device.
-- Authentication uses SRP6: the server stores a verifier and salt, never the password.
+- Group names, member names and coordinates are encrypted client-side with AES-256-GCM, with a random group key that never leaves the members' devices.
+- Invites use EC-JPAKE ([RFC 8236](https://www.rfc-editor.org/rfc/rfc8236)) keyed by the words of the invite code, from [Mbed TLS](https://github.com/Mbed-TLS/mbedtls) (Apache-2.0), called from Kotlin through `mobile_app/jpake`, a generic Kotlin Multiplatform J-PAKE module with RFC 8236 key confirmation. The server relays the messages through a short-lived Redis mailbox. Both phones confirm they derived the same key before the inviter sends the group key and a single-use join token, encrypted with a key derived from the shared secret.
+- Members authenticate with a random 32-byte token that the server stores BCrypt-hashed.
 - Locations are sent over WebSocket and received over SSE. The server relays them through Redis pub/sub without decrypting.
 
 ## Self-hosting
@@ -121,7 +122,7 @@ Run all tests:
 Run a single test class:
 
 ```bash
-./mvnw test -Pdev -Dtest=SrpServiceTest
+./mvnw test -Pdev -Dtest=InviteServiceTest
 ```
 
 **Run a background job manually** - activate the job's profile, e.g. to run location retention cleanup:
