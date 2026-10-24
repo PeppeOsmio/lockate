@@ -6,7 +6,4 @@ import kotlinx.serialization.Serializable
 data class AGCreateReqDto(
     val encryptedMemberName: EncryptedDataDto,
     val encryptedGroupName: EncryptedDataDto,
-    val memberPasswordSrpVerifier: String,
-    val memberPasswordSrpSalt: String,
-    val keySalt: String
 )

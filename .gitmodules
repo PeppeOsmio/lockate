@@ -1,0 +1,3 @@
+[submodule "mobile_app/third_party/mbedtls"]
+	path = mobile_app/third_party/mbedtls
+	url = https://github.com/Mbed-TLS/mbedtls

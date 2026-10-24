@@ -8,13 +8,10 @@ import com.peppeosmio.lockate.data.anonymous_group.mappers.AnonymousGroupMapper
 import com.peppeosmio.lockate.data.anonymous_group.mappers.EncryptedDataMapper
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGCreateReqDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGCreateResDto
-import com.peppeosmio.lockate.data.anonymous_group.remote.AGGetMemberPasswordSrpInfoResDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGGetMembersResDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGLocationSaveReqDto
-import com.peppeosmio.lockate.data.anonymous_group.remote.AGMemberAuthStartReqDto
-import com.peppeosmio.lockate.data.anonymous_group.remote.AGMemberAuthStartResDto
-import com.peppeosmio.lockate.data.anonymous_group.remote.AGMemberAuthVerifyReqDto
-import com.peppeosmio.lockate.data.anonymous_group.remote.AGMemberAuthVerifyResDto
+import com.peppeosmio.lockate.data.anonymous_group.remote.AGJoinReqDto
+import com.peppeosmio.lockate.data.anonymous_group.remote.AGJoinResDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.LocationUpdateDto
 import com.peppeosmio.lockate.domain.Connection
 import com.peppeosmio.lockate.domain.LocationRecord
@@ -25,7 +22,6 @@ import com.peppeosmio.lockate.domain.anonymous_group.SendLocationStatus
 import com.peppeosmio.lockate.exceptions.AGMemberNotAdminException
 import com.peppeosmio.lockate.exceptions.AGMemberUnauthorizedException
 import com.peppeosmio.lockate.exceptions.APIException
-import com.peppeosmio.lockate.exceptions.Base64Exception
 import com.peppeosmio.lockate.exceptions.ConnectionSettingsNotFoundException
 import com.peppeosmio.lockate.exceptions.InvalidApiKeyException
 import com.peppeosmio.lockate.exceptions.LocalAGExistsException
@@ -40,10 +36,7 @@ import com.peppeosmio.lockate.platform_service.KeyStoreService
 import com.peppeosmio.lockate.platform_service.LocationService
 import com.peppeosmio.lockate.service.ConnectionService
 import com.peppeosmio.lockate.service.crypto.CryptoService
-import com.peppeosmio.lockate.service.srp.SrpClientService
 import com.peppeosmio.lockate.utils.ErrorHandler
-import dev.whyoleg.cryptography.bigint.decodeToBigInt
-import dev.whyoleg.cryptography.bigint.encodeToByteArray
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.ResponseException
@@ -112,7 +105,6 @@ class AnonymousGroupService(
     private val cryptoService: CryptoService,
     private val connectionService: ConnectionService,
     private val httpClient: HttpClient,
-    private val srpClientService: SrpClientService,
     private val locationService: LocationService,
     private val connectivityService: ConnectivityService,
     private val keyStoreService: KeyStoreService
@@ -302,19 +294,12 @@ class AnonymousGroupService(
         connectionId: Long,
         groupName: String,
         memberName: String,
-        memberPassword: String,
     ): AnonymousGroup = withContext(Dispatchers.IO) {
-        val keySalt = cryptoService.getKeySalt()
-        val passwordBytes = memberPassword.toByteArray(Charsets.UTF_8)
-        val key = cryptoService.createKey(passwordBytes = passwordBytes, keySalt = keySalt)
+        val key = cryptoService.generateGroupKey()
         val encryptedMemberName = cryptoService.encrypt(
             data = memberName.toByteArray(Charsets.UTF_8), key = key
         )
         val encryptedMemberNameDto = EncryptedDataMapper.toDto(encryptedMemberName)
-        val memberSrpSalt = cryptoService.getKeySalt()
-        val memberSrpVerifier = srpClientService.generateVerifier(
-            identifier = groupName, password = memberPassword, salt = memberSrpSalt
-        )
         val connectionSettings = connectionService.getConnectionSettingsById(connectionId)
         val encryptedGroupNameDto = EncryptedDataMapper.toDto(
             cryptoService.encrypt(
@@ -332,9 +317,6 @@ class AnonymousGroupService(
                 AGCreateReqDto(
                     encryptedMemberName = encryptedMemberNameDto,
                     encryptedGroupName = encryptedGroupNameDto,
-                    memberPasswordSrpVerifier = Base64.encode(memberSrpVerifier.toByteArray()),
-                    memberPasswordSrpSalt = Base64.encode(memberSrpSalt),
-                    keySalt = Base64.encode(keySalt)
                 )
             )
         }
@@ -401,146 +383,96 @@ class AnonymousGroupService(
         )
     }
 
+    /**
+     * Joins with the credentials an invite delivered. The group name is decrypted with [groupKey]
+     * before anything is stored, so a wrong key never ends up on the device.
+     */
     @Throws(
         ConnectionSettingsNotFoundException::class,
         SerializationException::class,
         RemoteAGNotFoundException::class,
         UnauthorizedException::class,
+        LocalAGExistsException::class,
         ConnectException::class
     )
-    suspend fun authMember(
-        connectionId: Long, anonymousGroupId: String, memberName: String, memberPassword: String
-    ): String = withContext(Dispatchers.IO) {
-        val agEntity = anonymousGroupDao.getAGByIdAndConnectionId(
-            anonymousGroupId = anonymousGroupId, connectionId = connectionId
-        )
-        if (agEntity != null) {
+    suspend fun joinWithInvite(
+        connectionId: Long,
+        anonymousGroupId: String,
+        groupKey: ByteArray,
+        joinToken: ByteArray,
+        memberName: String
+    ): AnonymousGroup = withContext(Dispatchers.IO) {
+        if (anonymousGroupDao.getAGByIdAndConnectionId(
+                anonymousGroupId = anonymousGroupId, connectionId = connectionId
+            ) != null
+        ) {
             throw LocalAGExistsException()
         }
-        val srpClient = srpClientService.getSrpClient()
         val connectionSettings = connectionService.getConnectionSettingsById(connectionId)
-        val agGetMemberPasswordSrpInfoResponse = httpClient.get {
-            url("${connectionSettings.url}/api/anonymous-groups/${anonymousGroupId}/members/auth/srp/info")
-            headers {
-                connectionSettings.apiKey?.let { ak -> append("X-API-KEY", ak) }
-            }
-        }
-        when (agGetMemberPasswordSrpInfoResponse.status.value) {
-            200 -> Unit
-            401, 403 -> ErrorHandler.handleUnauthorized(agGetMemberPasswordSrpInfoResponse)
-            404 -> throw RemoteAGNotFoundException()
-            else -> ErrorHandler.handleGeneric(agGetMemberPasswordSrpInfoResponse)
-        }
-        val agGetMemberPasswordSrpInfoResponseBody =
-            agGetMemberPasswordSrpInfoResponse.body<AGGetMemberPasswordSrpInfoResDto>()
-        val agName: String
-        val keySalt = Base64.decode(agGetMemberPasswordSrpInfoResponseBody.keySalt)
-        val key = cryptoService.createKey(
-            passwordBytes = memberPassword.toByteArray(Charsets.UTF_8), keySalt = keySalt
-        )
-        try {
-            agName = cryptoService.decrypt(
-                encryptedData = EncryptedDataMapper.toDomain(agGetMemberPasswordSrpInfoResponseBody.encryptedName),
-                key = key
-            ).toString(Charsets.UTF_8)
-        } catch (e: Exception) {
-            Log.d("", "Anonymous group encrypted name decryption failed.")
-            throw UnauthorizedException()
-        }
-        val A = srpClientService.getA(
-            srpClient = srpClient,
-            salt = agGetMemberPasswordSrpInfoResponseBody.srpSalt,
-            identifier = agName,
-            password = memberPassword
-        )
-
-        val memberAuthStartResponse = httpClient.post {
-            url("${connectionSettings.url}/api/anonymous-groups/${anonymousGroupId}/members/auth/srp/start")
-            headers {
-                connectionSettings.apiKey?.let { ak -> append("X-API-KEY", ak) }
-                append(HttpHeaders.ContentType, "application/json")
-            }
-            setBody<AGMemberAuthStartReqDto>(
-                AGMemberAuthStartReqDto(
-                    A = Base64.encode(A.encodeToByteArray())
-                )
-            )
-        }
-        when (memberAuthStartResponse.status.value) {
-            200 -> Unit
-            400 -> throw Base64Exception()
-            401, 403 -> ErrorHandler.handleUnauthorized(memberAuthStartResponse)
-            404 -> throw RemoteAGNotFoundException()
-            else -> ErrorHandler.handleGeneric(memberAuthStartResponse)
-        }
-        val memberAuthStartResponseBody = memberAuthStartResponse.body<AGMemberAuthStartResDto>()
-        val M1 = srpClientService.getM1(
-            srpClient = srpClient, B = Base64.decode(memberAuthStartResponseBody.B).decodeToBigInt()
-        )
         val encryptedMemberName = cryptoService.encrypt(
-            data = memberName.toByteArray(Charsets.UTF_8), key = key
+            data = memberName.toByteArray(Charsets.UTF_8), key = groupKey
         )
-        val memberAuthVerifyResponse = httpClient.post {
-            url("${connectionSettings.url}/api/anonymous-groups/${anonymousGroupId}/members/auth/srp/verify")
+        val response = httpClient.post {
+            url("${connectionSettings.url}/api/anonymous-groups/${anonymousGroupId}/members/join")
             headers {
                 connectionSettings.apiKey?.let { ak -> append("X-API-KEY", ak) }
                 append(HttpHeaders.ContentType, "application/json")
             }
-            setBody<AGMemberAuthVerifyReqDto>(
-                AGMemberAuthVerifyReqDto(
-                    encryptedMemberName = EncryptedDataMapper.toDto(encryptedMemberName),
-                    srpSessionId = memberAuthStartResponseBody.srpSessionId,
-                    M1 = Base64.encode(M1.encodeToByteArray()),
+            setBody(
+                AGJoinReqDto(
+                    joinToken = Base64.encode(joinToken),
+                    encryptedMemberName = EncryptedDataMapper.toDto(encryptedMemberName)
                 )
             )
         }
-        when (memberAuthVerifyResponse.status.value) {
+        when (response.status.value) {
             200 -> Unit
-            400 -> throw Base64Exception()
-            401, 403 -> ErrorHandler.handleUnauthorized(memberAuthVerifyResponse)
+            401, 403 -> ErrorHandler.handleUnauthorized(response)
             404 -> throw RemoteAGNotFoundException()
-            else -> ErrorHandler.handleGeneric(memberAuthVerifyResponse)
+            else -> ErrorHandler.handleGeneric(response)
         }
-        val memberAuthVerifyResBody = memberAuthVerifyResponse.body<AGMemberAuthVerifyResDto>()
+        val body = response.body<AGJoinResDto>()
+        val groupName = cryptoService.decrypt(
+            encryptedData = EncryptedDataMapper.toDomain(body.anonymousGroup.encryptedName),
+            key = groupKey
+        ).toString(Charsets.UTF_8)
         val agMember = AGMemberMapper.dtoToDomain(
-            encryptedAGMemberDto = memberAuthVerifyResBody.authenticatedMemberInfo.member,
+            encryptedAGMemberDto = body.authenticatedMemberInfo.member,
             cryptoService = cryptoService,
-            key = key
+            key = groupKey
         )
         val agMemberEntity = AGMemberMapper.domainToEntity(
             agMember = agMember, anonymousGroupInternalId = 0
         )
+        val anonymousGroup = AnonymousGroup(
+            internalId = 0,
+            id = body.anonymousGroup.id,
+            name = groupName,
+            createdAt = body.anonymousGroup.createdAt,
+            joinedAt = body.authenticatedMemberInfo.member.createdAt,
+            memberName = memberName,
+            memberId = agMemberEntity.id,
+            memberToken = Base64.decode(body.authenticatedMemberInfo.token),
+            memberIsAGAdmin = body.authenticatedMemberInfo.member.isAGAdmin,
+            isMember = true,
+            existsRemote = true,
+            sendLocation = true,
+            key = groupKey,
+            connectionId = connectionId
+        )
         val anonymousGroupInternalId = anonymousGroupDao.createAGWithMembers(
             agEntity = AnonymousGroupMapper.toEntity(
-                anonymousGroup = AnonymousGroup(
-                    internalId = 0,
-                    id = memberAuthVerifyResBody.anonymousGroup.id,
-                    name = agName,
-                    createdAt = memberAuthVerifyResBody.anonymousGroup.createdAt,
-                    joinedAt = memberAuthVerifyResBody.authenticatedMemberInfo.member.createdAt,
-                    memberName = cryptoService.decrypt(
-                        encryptedData = EncryptedDataMapper.toDomain(memberAuthVerifyResBody.authenticatedMemberInfo.member.encryptedName),
-                        key = key
-                    ).toString(Charsets.UTF_8),
-                    memberId = agMemberEntity.id,
-                    isMember = true,
-                    existsRemote = true,
-                    sendLocation = true,
-                    memberToken = Base64.decode(memberAuthVerifyResBody.authenticatedMemberInfo.token),
-                    memberIsAGAdmin = memberAuthVerifyResBody.authenticatedMemberInfo.member.isAGAdmin, // should be true
-                    key = key,
-                    connectionId = connectionId
-                ), keyStoreService = keyStoreService
+                anonymousGroup = anonymousGroup, keyStoreService = keyStoreService
             ), agMemberEntities = listOf(agMemberEntity)
         )
         _events.tryEmit(
             AnonymousGroupEvent.NewAnonymousGroupEvent(
                 anonymousGroupInternalId = anonymousGroupInternalId,
-                anonymousGroupId = memberAuthVerifyResBody.anonymousGroup.id,
+                anonymousGroupId = anonymousGroup.id,
                 connectionId = connectionId
             )
         )
-        memberAuthVerifyResBody.authenticatedMemberInfo.token
+        anonymousGroup.copy(internalId = anonymousGroupInternalId)
     }
 
     suspend fun verifyMemberAuth(connectionSettingsId: Long, anonymousGroupInternalId: Long) =
@@ -1041,10 +973,8 @@ class AnonymousGroupService(
                 incoming.collect { event ->
                     when (event.event) {
                         "location" -> {
-                            if (event.data == null) {
-                                Unit
-                            } else {
-                                val agLocationUpdate = deserialize<LocationUpdateDto>(event.data)
+                            event.data?.let { data ->
+                                val agLocationUpdate = deserialize<LocationUpdateDto>(data)
 
                                 if (agLocationUpdate != null) {
                                     val agLocation = AGLocationUpdateMapper.toDomain(

@@ -15,7 +15,7 @@ class CryptoServiceTest {
 
     @Test
     fun `encrypt then decrypt with the same key returns the original plaintext`() = runTest {
-        val key = cryptoService.createKey("password".toByteArray(), cryptoService.getKeySalt())
+        val key = cryptoService.generateGroupKey()
         val plaintext = "hello world".toByteArray()
 
         val encrypted = cryptoService.encrypt(plaintext, key)
@@ -26,7 +26,7 @@ class CryptoServiceTest {
 
     @Test
     fun `encrypt then decrypt with empty plaintext returns empty plaintext`() = runTest {
-        val key = cryptoService.createKey("password".toByteArray(), cryptoService.getKeySalt())
+        val key = cryptoService.generateGroupKey()
         val plaintext = ByteArray(0)
 
         val encrypted = cryptoService.encrypt(plaintext, key)
@@ -37,9 +37,8 @@ class CryptoServiceTest {
 
     @Test
     fun `decrypt with the wrong key throws CryptoException`() = runTest {
-        val salt = cryptoService.getKeySalt()
-        val key = cryptoService.createKey("password".toByteArray(), salt)
-        val wrongKey = cryptoService.createKey("different-password".toByteArray(), salt)
+        val key = cryptoService.generateGroupKey()
+        val wrongKey = cryptoService.generateGroupKey()
         val encrypted = cryptoService.encrypt("hello world".toByteArray(), key)
 
         try {
@@ -52,7 +51,7 @@ class CryptoServiceTest {
 
     @Test
     fun `decrypt with tampered cipherText throws CryptoException`() = runTest {
-        val key = cryptoService.createKey("password".toByteArray(), cryptoService.getKeySalt())
+        val key = cryptoService.generateGroupKey()
         val encrypted = cryptoService.encrypt("hello world".toByteArray(), key)
         val tamperedCipherText = encrypted.cipherText.copyOf()
         tamperedCipherText[0] = (tamperedCipherText[0] + 1).toByte()
@@ -68,7 +67,7 @@ class CryptoServiceTest {
 
     @Test
     fun `decrypt with tampered iv throws CryptoException`() = runTest {
-        val key = cryptoService.createKey("password".toByteArray(), cryptoService.getKeySalt())
+        val key = cryptoService.generateGroupKey()
         val encrypted = cryptoService.encrypt("hello world".toByteArray(), key)
         val tamperedIv = encrypted.iv.copyOf()
         tamperedIv[0] = (tamperedIv[0] + 1).toByte()
@@ -85,7 +84,7 @@ class CryptoServiceTest {
     @Test
     fun `two encrypt calls on the same plaintext and key produce different iv and cipherText`() =
         runTest {
-            val key = cryptoService.createKey("password".toByteArray(), cryptoService.getKeySalt())
+            val key = cryptoService.generateGroupKey()
             val plaintext = "hello world".toByteArray()
 
             val first = cryptoService.encrypt(plaintext, key)
@@ -96,25 +95,11 @@ class CryptoServiceTest {
         }
 
     @Test
-    fun `createKey is deterministic for the same password and salt`() = runTest {
-        val salt = cryptoService.getKeySalt()
+    fun `generateGroupKey returns a new 32-byte key every time`() {
+        val key1 = cryptoService.generateGroupKey()
+        val key2 = cryptoService.generateGroupKey()
 
-        val key1 = cryptoService.createKey("password".toByteArray(), salt)
-        val key2 = cryptoService.createKey("password".toByteArray(), salt)
-
-        assertArrayEquals(key1, key2)
-    }
-
-    @Test
-    fun `createKey differs across salts for the same password`() = runTest {
-        val key1 = cryptoService.createKey("password".toByteArray(), cryptoService.getKeySalt())
-        val key2 = cryptoService.createKey("password".toByteArray(), cryptoService.getKeySalt())
-
+        assertEquals(32, key1.size)
         assertNotEquals(key1.toList(), key2.toList())
-    }
-
-    @Test
-    fun `getKeySalt returns 16 bytes`() {
-        assertEquals(16, cryptoService.getKeySalt().size)
     }
 }

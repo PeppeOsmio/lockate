@@ -8,6 +8,4 @@ data class EncryptedAGDto(
     val id: String,
     val encryptedName: EncryptedDataDto,
     val createdAt: LocalDateTime,
-    val keySalt: String
-) {
-}
+)

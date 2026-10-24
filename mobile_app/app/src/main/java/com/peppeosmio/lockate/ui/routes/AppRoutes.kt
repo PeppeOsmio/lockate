@@ -25,3 +25,6 @@ data class CreateAnonymousGroupRoute(val connectionSettingsId: Long) : Route
 
 @Serializable
 data class JoinAnonymousGroupRoute(val connectionSettingsId: Long) : Route
+
+@Serializable
+data class InviteRoute(val anonymousGroupInternalId: Long) : Route

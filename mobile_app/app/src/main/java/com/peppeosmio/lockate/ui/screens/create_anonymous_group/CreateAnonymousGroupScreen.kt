@@ -1,7 +1,6 @@
 package com.peppeosmio.lockate.ui.screens.create_anonymous_group
 
 import com.peppeosmio.lockate.ui.composables.ErrorDialog
-import com.peppeosmio.lockate.ui.composables.PasswordTextField
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -113,20 +112,6 @@ fun CreateAnonymousGroupScreen(
                     if (state.groupNameError != null) {
                         Text(
                             text = state.groupNameError!!, color = MaterialTheme.colorScheme.error,
-                        )
-                    }
-                })
-            PasswordTextField(
-                modifier = Modifier.fillMaxWidth(),
-                value = state.memberPasswordText,
-                onValueChange = { text -> viewModel.setMemberPasswordText(text) },
-                label = "Member password",
-                isError = state.memberPasswordError != null,
-                supportingText = {
-                    if (state.memberPasswordError != null) {
-                        Text(
-                            text = state.memberPasswordError!!,
-                            color = MaterialTheme.colorScheme.error
                         )
                     }
                 })

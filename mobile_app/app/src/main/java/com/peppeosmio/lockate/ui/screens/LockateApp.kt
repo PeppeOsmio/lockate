@@ -9,12 +9,14 @@ import androidx.navigation.toRoute
 import com.peppeosmio.lockate.ui.routes.ConnectionSettingsRoute
 import com.peppeosmio.lockate.ui.routes.CreateAnonymousGroupRoute
 import com.peppeosmio.lockate.ui.routes.HomeRoute
+import com.peppeosmio.lockate.ui.routes.InviteRoute
 import com.peppeosmio.lockate.ui.routes.JoinAnonymousGroupRoute
 import com.peppeosmio.lockate.ui.routes.LoadingRoute
 import com.peppeosmio.lockate.ui.routes.ManageConnectionsRoute
 import com.peppeosmio.lockate.ui.routes.SettingsRoute
 import com.peppeosmio.lockate.ui.screens.connection_settings.ConnectionSettingsScreen
 import com.peppeosmio.lockate.ui.screens.create_anonymous_group.CreateAnonymousGroupScreen
+import com.peppeosmio.lockate.ui.screens.invite.InviteScreen
 import com.peppeosmio.lockate.ui.screens.map.MapScreen
 import com.peppeosmio.lockate.ui.screens.join_anonymous_group.JoinAnonymousGroupScreen
 import com.peppeosmio.lockate.ui.screens.loading.LoadingScreen
@@ -80,6 +82,9 @@ fun LockateApp(startLocationService: () -> Unit, stopLocationService: () -> Unit
                     navigateToJoinAG = { connectionSettingsId ->
                         appNavController.navigate(JoinAnonymousGroupRoute(connectionSettingsId))
                     },
+                    navigateToInvite = { anonymousGroupInternalId ->
+                        appNavController.navigate(InviteRoute(anonymousGroupInternalId))
+                    },
                     navigateToManageConnections = {
                         appNavController.navigate(ManageConnectionsRoute)
                     },
@@ -111,6 +116,12 @@ fun LockateApp(startLocationService: () -> Unit, stopLocationService: () -> Unit
                 JoinAnonymousGroupScreen(navigateBack = {
                     appNavController.popBackStack()
                 }, connectionId = joinAnonymousGroupRoute.connectionSettingsId)
+            }
+            composable<InviteRoute> { navBackStackEntry ->
+                val inviteRoute = navBackStackEntry.toRoute<InviteRoute>()
+                InviteScreen(
+                    anonymousGroupInternalId = inviteRoute.anonymousGroupInternalId,
+                    navigateBack = { appNavController.popBackStack() })
             }
             composable<ConnectionSettingsRoute> { navBackStackEntry ->
                 val connectionSettingsRoute = navBackStackEntry.toRoute<ConnectionSettingsRoute>()

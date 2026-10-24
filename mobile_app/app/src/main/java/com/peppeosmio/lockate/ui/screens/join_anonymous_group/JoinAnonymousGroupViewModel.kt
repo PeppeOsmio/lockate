@@ -2,11 +2,18 @@ package com.peppeosmio.lockate.ui.screens.join_anonymous_group
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.peppeosmio.lockate.exceptions.InviteAlreadyClaimedException
+import com.peppeosmio.lockate.exceptions.InviteExpiredException
+import com.peppeosmio.lockate.exceptions.InviteNotFoundException
+import com.peppeosmio.lockate.exceptions.InviteRejectedException
 import com.peppeosmio.lockate.exceptions.LocalAGExistsException
-import com.peppeosmio.lockate.exceptions.UnauthorizedException
-import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
+import com.peppeosmio.lockate.exceptions.TooManyRequestsException
+import com.peppeosmio.lockate.service.invite.InviteCode
+import com.peppeosmio.lockate.service.invite.InviteService
 import com.peppeosmio.lockate.utils.ErrorInfo
 import com.peppeosmio.lockate.utils.SnackbarErrorMessage
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,7 +22,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class JoinAnonymousGroupViewModel(
-    private val anonymousGroupService: AnonymousGroupService
+    private val inviteService: InviteService
 ) : ViewModel() {
     private val _state = MutableStateFlow(JoinAnonymousGroupState())
     val state = _state.asStateFlow()
@@ -23,81 +30,77 @@ class JoinAnonymousGroupViewModel(
     val snackbarEvents = _snackbarEvents.receiveAsFlow()
     private val _navigateBackEvents = Channel<Unit>()
     val navigateBackEvents = _navigateBackEvents.receiveAsFlow()
+    private var joinJob: Job? = null
 
-    fun setIdText(text: String) {
-        _state.update { it.copy(idText = text) }
-    }
-
-    fun setMemberPasswordText(text: String) {
-        _state.update { it.copy(memberPasswordText = text) }
+    fun setCodeText(text: String) {
+        _state.update { it.copy(codeText = text, codeError = null) }
     }
 
     fun setUserNameText(text: String) {
-        _state.update { it.copy(memberNameText = text) }
-    }
-
-    private fun canConfirm(): Boolean {
-        val idBlank = state.value.idText.isBlank()
-        val memberPasswordBlank = state.value.memberPasswordText.isBlank()
-        val memberNameBlank = state.value.memberNameText.isBlank()
-        if (idBlank) {
-            _state.update { it.copy(idError = "Please enter the group id") }
-        }
-        if (memberPasswordBlank) {
-            _state.update { it.copy(memberPasswordError = "Please enter the member password") }
-        }
-        if (memberNameBlank) {
-            _state.update { it.copy(memberNameError = "Please enter your member name") }
-        }
-        val canConfirm = !(idBlank || memberPasswordBlank || memberNameBlank)
-        return canConfirm
-    }
-
-    private fun clearTextErrors() {
-        _state.update {
-            it.copy(
-                idError = null,
-                memberPasswordError = null,
-                memberNameError = null,
-                dialogError = null
-            )
-        }
+        _state.update { it.copy(memberNameText = text, memberNameError = null) }
     }
 
     fun joinAnonymousGroup(connectionSettingsId: Long) {
-        viewModelScope.launch {
-            if (!canConfirm()) {
-                return@launch
-            }
-            clearTextErrors()
-            _state.update { it.copy(showLoadingOverlay = true) }
+        if (joinJob?.isActive == true) return
+        val code = InviteCode.parse(state.value.codeText)
+        val memberName = state.value.memberNameText.trim()
+        _state.update {
+            it.copy(
+                codeError = if (code == null) "Enter a code like 7-word-word-word" else null,
+                memberNameError = if (memberName.isEmpty()) "Please enter your member name" else null,
+            )
+        }
+        if (code == null || memberName.isEmpty()) return
+        joinJob = viewModelScope.launch {
+            _state.update { it.copy(isJoining = true) }
             try {
-                anonymousGroupService.authMember(
-                    connectionId = connectionSettingsId,
-                    anonymousGroupId = state.value.idText.trim(),
-                    memberName = state.value.memberNameText.trim(),
-                    memberPassword = state.value.memberPasswordText.trim()
+                inviteService.joinWithCode(
+                    connectionId = connectionSettingsId, code = code, memberName = memberName
                 )
-                _state.update { it.copy(showLoadingOverlay = false) }
                 _navigateBackEvents.trySend(Unit)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                val snackbarErrorMessage = when (e) {
-                    is LocalAGExistsException -> SnackbarErrorMessage(
-                        "You already joined this anonymous group"
-                    )
+                _snackbarEvents.trySend(
+                    when (e) {
+                        is InviteNotFoundException -> SnackbarErrorMessage(
+                            "There's no invite with this number. It may have expired."
+                        )
 
-                    is UnauthorizedException -> SnackbarErrorMessage(
-                        "The member password provided is invalid."
-                    )
+                        is InviteAlreadyClaimedException -> SnackbarErrorMessage(
+                            "Someone else already used this code. Ask for a new one."
+                        )
 
-                    else -> SnackbarErrorMessage(
-                        text = "Can't join anonymous group", errorInfo = ErrorInfo.fromException(e)
-                    )
-                }
-                _state.update { it.copy(showLoadingOverlay = false) }
-                _snackbarEvents.trySend(snackbarErrorMessage)
+                        is InviteRejectedException -> SnackbarErrorMessage(
+                            "The code is wrong or the invite was cancelled. Ask for a new one."
+                        )
+
+                        is InviteExpiredException -> SnackbarErrorMessage(
+                            "The invite expired. Ask for a new one."
+                        )
+
+                        is TooManyRequestsException -> SnackbarErrorMessage(
+                            "Too many attempts. Try again in a minute."
+                        )
+
+                        is LocalAGExistsException -> SnackbarErrorMessage(
+                            "You already joined this anonymous group"
+                        )
+
+                        else -> SnackbarErrorMessage(
+                            text = "Can't join anonymous group",
+                            errorInfo = ErrorInfo.fromException(e)
+                        )
+                    }
+                )
+            } finally {
+                _state.update { it.copy(isJoining = false) }
             }
         }
+    }
+
+    fun cancelJoin() {
+        joinJob?.cancel()
     }
 
     fun hideErrorDialog() {

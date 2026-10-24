@@ -22,4 +22,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "Lockate"
 include(":app")
+include(":jpake")
  
+include(":jpake-native")
