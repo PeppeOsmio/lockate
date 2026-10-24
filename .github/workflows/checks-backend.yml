@@ -5,15 +5,13 @@ on:
     paths:
       - backend/**
       - .github/workflows/checks-backend.yml
-  workflow_call:
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# Literal group so it can't collide with the calling workflow's group
 concurrency:
-  group: checks-backend-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:

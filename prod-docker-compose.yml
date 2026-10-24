@@ -29,7 +29,7 @@ services:
     <<: *logging
 
   backend:
-    image: "peppeosmio/lockate-backend:${BACKEND_VERSION:-latest}"
+    image: "peppeosmio/lockate-backend:${LOCKATE_VERSION:-latest}"
     restart: unless-stopped
     ports:
       - "3118:3118"
@@ -51,7 +51,7 @@ services:
     <<: *logging
 
   admin-ui:
-    image: "peppeosmio/lockate-admin-ui:${ADMIN_UI_VERSION:-latest}"
+    image: "peppeosmio/lockate-admin-ui:${LOCKATE_VERSION:-latest}"
     restart: unless-stopped
     environment:
       VITE_API_BASE_URL: "${VITE_API_BASE_URL}"

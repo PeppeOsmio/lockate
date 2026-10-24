@@ -5,15 +5,13 @@ on:
     paths:
       - mobile_app/**
       - .github/workflows/checks-mobile.yml
-  workflow_call:
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# Literal group so it can't collide with the calling workflow's group
 concurrency:
-  group: checks-mobile-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
