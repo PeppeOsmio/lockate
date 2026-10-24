@@ -1,4 +1,4 @@
-name: Release Backend
+name: Release Backend and Admin UI
 
 on:
   push:
@@ -12,12 +12,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  checks:
-    uses: ./.github/workflows/checks-backend.yml
-
   # native-image can't cross-compile, so each arch builds on its own runner and the digests are merged
-  publish-build:
-    needs: checks
+  publish-backend-build:
     strategy:
       matrix:
         include:
@@ -64,8 +60,8 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  publish:
-    needs: publish-build
+  publish-backend:
+    needs: publish-backend-build
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@v8
@@ -98,3 +94,39 @@ jobs:
           digests=()
           for digest in *; do digests+=("$IMAGE@sha256:$digest"); done
           docker buildx imagetools create "${tag_args[@]}" "${digests[@]}"
+
+  publish-admin-ui:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Check the tag is on main
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - id: version
+        run: echo "version=${GITHUB_REF_NAME#backend-v}" >> "$GITHUB_OUTPUT"
+      - uses: docker/metadata-action@v6
+        id: meta
+        with:
+          images: ${{ vars.DOCKERHUB_USERNAME }}/lockate-admin-ui
+          flavor: latest=false
+          tags: |
+            type=semver,pattern={{version}},value=${{ steps.version.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.version }}
+            type=semver,pattern={{major}},value=${{ steps.version.outputs.version }}
+            type=raw,value=latest,enable=${{ !contains(steps.version.outputs.version, '-') }}
+      - uses: docker/build-push-action@v7
+        with:
+          context: admin_ui
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=admin-ui
+          cache-to: type=gha,scope=admin-ui,mode=max

@@ -50,6 +50,12 @@ Three core domain entities:
 - Use `_events: MutableSharedFlow<AnonymousGroupEvent>` for cross-layer communication; do not add new state channels without a clear reason
 - Room stores decrypted data only; never persist ciphertext or IVs in Room tables
 
+## Releases
+
+- `backend-vX.Y.Z` tag → `.github/workflows/release-backend.yml` publishes both `lockate-backend` and `lockate-admin-ui` to Docker Hub with the same version, so the two always match (`prod-docker-compose.yml` pins both with `LOCKATE_VERSION`).
+- `mobile-vX.Y.Z` tag → `.github/workflows/release-mobile.yml` builds the signed APKs and attaches them to a GitHub release.
+- Release workflows only build and publish; the `checks-*` workflows run on pull requests only.
+
 ## Backend
 
 ### Commands

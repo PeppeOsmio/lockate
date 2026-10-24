@@ -5,15 +5,13 @@ on:
     paths:
       - admin_ui/**
       - .github/workflows/checks-admin-ui.yml
-  workflow_call:
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# Literal group so it can't collide with the calling workflow's group
 concurrency:
-  group: checks-admin-ui-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
