@@ -18,31 +18,18 @@ class AnonymousGroupEntityTest {
         new EncryptedDataDto(
             encoder.encodeToString("cipher".getBytes()), encoder.encodeToString("iv".getBytes()));
 
-    var entity =
-        AnonymousGroupEntity.fromBase64Fields(
-            dto,
-            encoder.encodeToString("verifier".getBytes()),
-            encoder.encodeToString("salt".getBytes()),
-            encoder.encodeToString("keysalt".getBytes()));
+    var entity = AnonymousGroupEntity.fromBase64Fields(dto);
 
     assertThat(entity.getNameCipher()).isEqualTo("cipher".getBytes());
     assertThat(entity.getNameIv()).isEqualTo("iv".getBytes());
-    assertThat(entity.getMemberPasswordSrpVerifier()).isEqualTo("verifier".getBytes());
-    assertThat(entity.getMemberPasswordSrpSalt()).isEqualTo("salt".getBytes());
-    assertThat(entity.getKeySalt()).isEqualTo("keysalt".getBytes());
     assertThat(entity.getCreatedAt()).isNotNull();
   }
 
   @Test
   void fromBase64Fields_invalidBase64_throwsBase64Exception() {
-    var dto =
-        new EncryptedDataDto(
-            encoder.encodeToString("cipher".getBytes()), encoder.encodeToString("iv".getBytes()));
+    var dto = new EncryptedDataDto("not-valid-base64!!!", "not-valid-base64!!!");
 
-    assertThatThrownBy(
-            () ->
-                AnonymousGroupEntity.fromBase64Fields(
-                    dto, "not-valid-base64!!!", "not-valid-base64!!!", "not-valid-base64!!!"))
+    assertThatThrownBy(() -> AnonymousGroupEntity.fromBase64Fields(dto))
         .isInstanceOf(Base64Exception.class);
   }
 }

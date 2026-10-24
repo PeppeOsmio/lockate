@@ -20,11 +20,7 @@ class AGMemberMapperTest {
   @BeforeEach
   void setUp() {
     anonymousGroupEntity =
-        new AnonymousGroupEntity(
-            new EncryptedString("groupname".getBytes(), "groupiv".getBytes()),
-            "verifier".getBytes(),
-            "salt".getBytes(),
-            "keysalt".getBytes());
+        new AnonymousGroupEntity(new EncryptedString("groupname".getBytes(), "groupiv".getBytes()));
   }
 
   @Test

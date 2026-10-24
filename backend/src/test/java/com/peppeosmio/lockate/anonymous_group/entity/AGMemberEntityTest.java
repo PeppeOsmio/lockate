@@ -11,11 +11,7 @@ import org.springframework.security.crypto.bcrypt.BCrypt;
 class AGMemberEntityTest {
 
   private final AnonymousGroupEntity anonymousGroupEntity =
-      new AnonymousGroupEntity(
-          new EncryptedString("groupname".getBytes(), "groupiv".getBytes()),
-          "verifier".getBytes(),
-          "salt".getBytes(),
-          "keysalt".getBytes());
+      new AnonymousGroupEntity(new EncryptedString("groupname".getBytes(), "groupiv".getBytes()));
 
   @Test
   void constructor_hashesTokenAndSetsUtcCreatedAt() {

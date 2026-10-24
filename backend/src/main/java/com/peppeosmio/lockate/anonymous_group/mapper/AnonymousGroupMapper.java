@@ -15,7 +15,6 @@ public class AnonymousGroupMapper {
         new EncryptedDataDto(
             encoder.encodeToString(entity.getNameCipher()),
             encoder.encodeToString(entity.getNameIv())),
-        entity.getCreatedAt(),
-        encoder.encodeToString(entity.getKeySalt()));
+        entity.getCreatedAt());
   }
 }

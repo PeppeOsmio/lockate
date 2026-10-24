@@ -4,5 +4,4 @@ import com.peppeosmio.lockate.common.dto.EncryptedDataDto;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-public record AnonymousGroupDto(
-    UUID id, EncryptedDataDto encryptedName, LocalDateTime createdAt, String keySalt) {}
+public record AnonymousGroupDto(UUID id, EncryptedDataDto encryptedName, LocalDateTime createdAt) {}

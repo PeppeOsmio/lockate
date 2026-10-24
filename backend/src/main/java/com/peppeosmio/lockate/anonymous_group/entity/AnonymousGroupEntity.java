@@ -6,7 +6,6 @@ import com.peppeosmio.lockate.common.dto.EncryptedDataDto;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
-import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
 import lombok.*;
@@ -20,32 +19,16 @@ import lombok.extern.slf4j.Slf4j;
 @Setter
 public class AnonymousGroupEntity {
 
-  public AnonymousGroupEntity(
-      EncryptedString encryptedName,
-      byte[] memberPasswordSrpVerifier,
-      byte[] memberPasswordSrpSalt,
-      byte[] keySalt) {
+  public AnonymousGroupEntity(EncryptedString encryptedName) {
     this.nameCipher = encryptedName.cipherText();
     this.nameIv = encryptedName.iv();
-    this.memberPasswordSrpVerifier = memberPasswordSrpVerifier;
-    this.memberPasswordSrpSalt = memberPasswordSrpSalt;
     this.createdAt = LocalDateTime.now(ZoneOffset.UTC);
-    this.keySalt = keySalt;
   }
 
-  public static AnonymousGroupEntity fromBase64Fields(
-      EncryptedDataDto encryptedNameDto,
-      String memberPasswordSrpVerifier,
-      String memberPasswordSrpSalt,
-      String keySalt)
+  public static AnonymousGroupEntity fromBase64Fields(EncryptedDataDto encryptedNameDto)
       throws Base64Exception {
-    var decoder = Base64.getDecoder();
     try {
-      return new AnonymousGroupEntity(
-          encryptedNameDto.toEncryptedString(),
-          decoder.decode(memberPasswordSrpVerifier),
-          decoder.decode(memberPasswordSrpSalt),
-          decoder.decode(keySalt));
+      return new AnonymousGroupEntity(encryptedNameDto.toEncryptedString());
     } catch (IllegalArgumentException e) {
       throw new Base64Exception();
     }
@@ -62,17 +45,8 @@ public class AnonymousGroupEntity {
   @Column(name = "name_iv", nullable = false)
   private byte[] nameIv;
 
-  @Column(name = "member_password_srp_verifier", nullable = false)
-  private byte[] memberPasswordSrpVerifier;
-
-  @Column(name = "member_password_srp_salt", nullable = false)
-  private byte[] memberPasswordSrpSalt;
-
   @Column(name = "created_at", nullable = false)
   private LocalDateTime createdAt;
-
-  @Column(name = "key_salt", nullable = false)
-  private byte[] keySalt;
 
   @OneToMany(mappedBy = "anonymousGroupEntity", fetch = FetchType.LAZY)
   @OrderBy("createdAt DESC, id DESC")
