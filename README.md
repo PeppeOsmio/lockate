@@ -3,9 +3,10 @@
 Share your location with the people you choose, and nobody else. Not even the server it travels through.
 
 <p>
-  <img src="docs/screenshots/map.png" width="220" alt="Live map of group members">
-  <img src="docs/screenshots/groups.png" width="220" alt="List of your groups">
-  <img src="docs/screenshots/join.png" width="220" alt="Joining a group">
+  <img src="docs/screenshots/map.png" width="200" alt="Live map showing two group members near the Pantheon in Rome">
+  <img src="docs/screenshots/members.png" width="200" alt="Group members with when each was last seen">
+  <img src="docs/screenshots/invite.png" width="200" alt="Invite screen showing a code like 3604-set-cover-shush">
+  <img src="docs/screenshots/groups.png" width="200" alt="Group switcher with Create and Join buttons and three groups">
 </p>
 
 ## What it's for
@@ -34,8 +35,6 @@ Inviting someone hands them that key without the server ever seeing it. The two 
 
 Your phone also keeps sending updates when you're standing still. If it only sent them when you moved, the server could guess when you stopped, so Lockate doesn't give it that clue.
 
-Location history is deleted automatically after 7 days, by default.
-
 ## What it doesn't do
 
 - It runs on Android only for now.
@@ -54,7 +53,7 @@ Location history is deleted automatically after 7 days, by default.
 ## Questions
 
 **Can the person running the server see where I am?**
-No. They see sealed data they can't read: not locations, not names, not the group's name.
+No. They see encrypted data they can't read: not locations, not names, not the group's name.
 
 **Do I need to keep the app open?**
 No. Sharing continues in the background once you've allowed location access all the time.
