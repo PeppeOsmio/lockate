@@ -5,7 +5,7 @@ Share your location with the people you choose, and nobody else. Not even the se
 <p>
   <img src="docs/screenshots/map.png" width="200" alt="Live map showing two group members near the Pantheon in Rome">
   <img src="docs/screenshots/members.png" width="200" alt="Group members with when each was last seen">
-  <img src="docs/screenshots/invite.png" width="200" alt="Invite screen showing a code like 3604-set-cover-shush">
+  <img src="docs/screenshots/invite.png" width="200" alt="Invite screen showing a code like 6075-fog-dimly-old">
   <img src="docs/screenshots/groups.png" width="200" alt="Group switcher with Create and Join buttons and three groups">
 </p>
 
