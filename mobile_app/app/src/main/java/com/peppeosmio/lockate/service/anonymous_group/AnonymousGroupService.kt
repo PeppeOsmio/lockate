@@ -41,6 +41,7 @@ import com.peppeosmio.lockate.utils.SendLoopLog
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.ResponseException
+import io.ktor.client.plugins.sse.SSEClientException
 import io.ktor.client.plugins.sse.deserialize
 import io.ktor.client.plugins.sse.sse
 import io.ktor.client.plugins.websocket.webSocket
@@ -63,7 +64,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -98,6 +99,18 @@ internal fun classifyReconnect(e: Throwable, isNetworkAvailable: Boolean): Recon
     e is LocationDisabledException || e is NoPermissionException -> ReconnectAction.AwaitLocationEnabled
     !isNetworkAvailable -> ReconnectAction.AwaitNetwork
     else -> ReconnectAction.Backoff
+}
+
+internal enum class StreamRetryAction { Stop, AwaitNetwork, Backoff }
+
+/**
+ * Decides what the location stream does after it ended: [e] is null when the server closed it
+ * cleanly. Errors that retrying can't fix stop the stream.
+ */
+internal fun classifyStreamFailure(e: Throwable?, isNetworkAvailable: Boolean): StreamRetryAction = when {
+    e is UnauthorizedException || e is RemoteAGNotFoundException || e is InvalidApiKeyException -> StreamRetryAction.Stop
+    !isNetworkAvailable -> StreamRetryAction.AwaitNetwork
+    else -> StreamRetryAction.Backoff
 }
 
 internal fun nextBackoffSeconds(retries: Int): Long = min(5L * retries, 60L)
@@ -964,7 +977,7 @@ class AnonymousGroupService(
 
     @OptIn(ExperimentalTime::class)
     suspend fun streamLocations(
-        connectionSettingsId: Long, anonymousGroupInternalId: Long
+        connectionSettingsId: Long, anonymousGroupInternalId: Long, onConnected: () -> Unit = {}
     ): Flow<AGLocationUpdate> = withContext(Dispatchers.IO) {
         val connectionSettings = connectionService.getConnectionSettingsById(connectionSettingsId)
         val agEntity = anonymousGroupDao.getAGByInternalId(anonymousGroupInternalId)
@@ -972,64 +985,81 @@ class AnonymousGroupService(
         val anonymousGroup = AnonymousGroupMapper.toDomain(
             entity = agEntity, keyStoreService = keyStoreService
         )
-        callbackFlow {
-            httpClient.sse(
-                "${connectionSettings.url}/api/anonymous-groups/${anonymousGroup.id}/locations",
-                request = {
-                    headers {
-                        connectionSettings.apiKey?.let { ak -> append("X-API-KEY", ak) }
-                        append(
-                            HttpHeaders.Authorization,
-                            "AGMember ${agEntity.memberId} ${Base64.encode(anonymousGroup.memberToken)}"
-                        )
-                        append(HttpHeaders.ContentType, "application/json")
-                    }
-                },
-                deserialize = { typeInfo, s ->
-                    val serializer = Json.serializersModule.serializer(typeInfo.kotlinType!!)
-                    Json.decodeFromString(deserializer = serializer, string = s)
-                }) {
-                incoming.collect { event ->
-                    when (event.event) {
-                        "location" -> {
-                            event.data?.let { data ->
-                                val agLocationUpdate = deserialize<LocationUpdateDto>(data)
+        channelFlow {
+            try {
+                httpClient.sse(
+                    "${connectionSettings.url}/api/anonymous-groups/${anonymousGroup.id}/locations",
+                    request = {
+                        headers {
+                            connectionSettings.apiKey?.let { ak -> append("X-API-KEY", ak) }
+                            append(
+                                HttpHeaders.Authorization,
+                                "AGMember ${agEntity.memberId} ${Base64.encode(anonymousGroup.memberToken)}"
+                            )
+                            append(HttpHeaders.ContentType, "application/json")
+                        }
+                    },
+                    deserialize = { typeInfo, s ->
+                        val serializer = Json.serializersModule.serializer(typeInfo.kotlinType!!)
+                        Json.decodeFromString(deserializer = serializer, string = s)
+                    }) {
+                    onConnected()
+                    incoming.collect { event ->
+                        when (event.event) {
+                            "location" -> {
+                                event.data?.let { data ->
+                                    val agLocationUpdate = deserialize<LocationUpdateDto>(data)
 
-                                if (agLocationUpdate != null) {
-                                    val agLocation = AGLocationUpdateMapper.toDomain(
-                                        locationUpdateDto = agLocationUpdate,
-                                        cryptoService = cryptoService,
-                                        key = anonymousGroup.key
-                                    )
-                                    Log.d(
-                                        "", "Received location $agLocation"
-                                    )
-                                    // a member unknown locally joined after our last fetch: still emit
-                                    // the update so the caller can refetch members
-                                    anonymousGroupDao.getAGMemberByIdAndAGInternalId(
-                                        agInternalId = anonymousGroup.internalId,
-                                        id = agLocation.agMemberId,
-                                    )?.let { agMember ->
-                                        anonymousGroupDao.setAGMemberLastLocation(
-                                            agMemberInternalId = agMember.internalId,
-                                            lastLatitude = agLocation.locationRecord.coordinates.latitude,
-                                            lastLongitude = agLocation.locationRecord.coordinates.longitude,
-                                            lastSeen = agLocation.locationRecord.timestamp.toInstant(
-                                                TimeZone.UTC
-                                            ).toEpochMilliseconds()
+                                    if (agLocationUpdate != null) {
+                                        val agLocation = AGLocationUpdateMapper.toDomain(
+                                            locationUpdateDto = agLocationUpdate,
+                                            cryptoService = cryptoService,
+                                            key = anonymousGroup.key
+                                        )
+                                        Log.d(
+                                            "", "Received location $agLocation"
+                                        )
+                                        // a member unknown locally joined after our last fetch: still emit
+                                        // the update so the caller can refetch members
+                                        anonymousGroupDao.getAGMemberByIdAndAGInternalId(
+                                            agInternalId = anonymousGroup.internalId,
+                                            id = agLocation.agMemberId,
+                                        )?.let { agMember ->
+                                            anonymousGroupDao.setAGMemberLastLocation(
+                                                agMemberInternalId = agMember.internalId,
+                                                lastLatitude = agLocation.locationRecord.coordinates.latitude,
+                                                lastLongitude = agLocation.locationRecord.coordinates.longitude,
+                                                lastSeen = agLocation.locationRecord.timestamp.toInstant(
+                                                    TimeZone.UTC
+                                                ).toEpochMilliseconds()
+                                            )
+                                        }
+                                        send(
+                                            agLocation
                                         )
                                     }
-                                    send(
-                                        agLocation
-                                    )
                                 }
-                            }
 
+                            }
                         }
                     }
                 }
+            } catch (e: SSEClientException) {
+                val response = e.response ?: throw e
+                try {
+                    when (response.status.value) {
+                        401, 403 -> ErrorHandler.handleUnauthorized(response)
+                        404 -> throw RemoteAGNotFoundException()
+                        else -> ErrorHandler.handleGeneric(response)
+                    }
+                } catch (ee: UnauthorizedException) {
+                    setAGIsMemberFalse(anonymousGroup)
+                    throw AGMemberUnauthorizedException()
+                } catch (ee: RemoteAGNotFoundException) {
+                    setAGExistsRemoteFalse(anonymousGroup)
+                    throw ee
+                }
             }
-            awaitClose {}
         }
     }
 

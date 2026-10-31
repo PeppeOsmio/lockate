@@ -10,10 +10,14 @@ import com.peppeosmio.lockate.exceptions.AGMemberNotAdminException
 import com.peppeosmio.lockate.exceptions.LocationDisabledException
 import com.peppeosmio.lockate.exceptions.NoPermissionException
 import com.peppeosmio.lockate.exceptions.UnauthorizedException
+import com.peppeosmio.lockate.platform_service.ConnectivityService
 import com.peppeosmio.lockate.platform_service.DeviceOrientationService
 import com.peppeosmio.lockate.platform_service.LocationService
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupEvent
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
+import com.peppeosmio.lockate.service.anonymous_group.StreamRetryAction
+import com.peppeosmio.lockate.service.anonymous_group.classifyStreamFailure
+import com.peppeosmio.lockate.service.anonymous_group.nextBackoffSeconds
 import com.peppeosmio.lockate.utils.ErrorHandler
 import com.peppeosmio.lockate.utils.ErrorInfo
 import com.peppeosmio.lockate.utils.LoadingState
@@ -27,14 +31,17 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
 
 class AGDetailsViewModel(
     private val anonymousGroupService: AnonymousGroupService,
     private val locationService: LocationService,
+    private val connectivityService: ConnectivityService,
     private val deviceOrientationService: DeviceOrientationService
 ) : ViewModel() {
 
@@ -80,7 +87,8 @@ class AGDetailsViewModel(
                 selectedMemberId = null,
                 isFollowingSelectedMember = false,
                 makeAdminDialogMemberId = null,
-                remoteDataLoadingState = LoadingState.IsLoading
+                remoteDataLoadingState = LoadingState.IsLoading,
+                locationStreamState = LocationStreamState.Connecting
             )
         }
         if (anonymousGroupInternalId == null) {
@@ -130,18 +138,36 @@ class AGDetailsViewModel(
                 _state.update { it.copy(remoteDataLoadingState = LoadingState.IsLoading) }
                 getRemoteMembers(connectionSettingsId)
                 _state.update { it.copy(remoteDataLoadingState = LoadingState.Success) }
+                var retries = 0
                 while (true) {
+                    var failure: Exception? = null
                     try {
-                        streamLocations(connectionSettingsId)
+                        streamLocations(connectionSettingsId, onConnected = {
+                            retries = 0
+                            _state.update { it.copy(locationStreamState = LocationStreamState.Connected) }
+                        })
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
                         e.printStackTrace()
+                        failure = e
+                    }
+                    val action = classifyStreamFailure(failure, connectivityService.isNetworkAvailable())
+                    if (action == StreamRetryAction.Stop) {
+                        _state.update { it.copy(locationStreamState = LocationStreamState.Stopped) }
+                        break
+                    }
+                    _state.update { it.copy(locationStreamState = LocationStreamState.Reconnecting) }
+                    if (action == StreamRetryAction.AwaitNetwork) {
+                        withTimeoutOrNull(60.seconds) { connectivityService.awaitNetworkAvailable() }
+                    } else {
+                        retries += 1
+                        val waitSeconds = nextBackoffSeconds(retries)
                         Log.e(
                             "",
-                            "Streaming location for connectionSettingsId=$connectionSettingsId failed, retrying in 10 s"
+                            "Location stream for connectionSettingsId=$connectionSettingsId ended, retrying in $waitSeconds s"
                         )
-                        delay(10000L)
+                        delay(waitSeconds.seconds)
                     }
                 }
             } catch (e: CancellationException) {
@@ -379,10 +405,11 @@ class AGDetailsViewModel(
     }
 
     @Throws
-    private suspend fun streamLocations(connectionSettingsId: Long) {
+    private suspend fun streamLocations(connectionSettingsId: Long, onConnected: () -> Unit) {
         anonymousGroupService.streamLocations(
             connectionSettingsId = connectionSettingsId,
-            anonymousGroupInternalId = state.value.anonymousGroup!!.internalId
+            anonymousGroupInternalId = state.value.anonymousGroup!!.internalId,
+            onConnected = onConnected
         ).collect { locationUpdate ->
             Log.d("", "Received location: $locationUpdate")
             if (state.value.members == null) {
