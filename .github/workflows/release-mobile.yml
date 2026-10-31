@@ -76,5 +76,10 @@ jobs:
             if [[ "$VERSION" == *-* ]]; then
               prerelease=(--prerelease)
             fi
-            gh release create "$GITHUB_REF_NAME" --title "Mobile $VERSION" --generate-notes "${prerelease[@]}" lockate-*.apk
+            # Without a start tag GitHub picks one itself and can skip the previous mobile release, as the repo also has backend-v* tags
+            notes_start=()
+            if previous=$(git describe --tags --abbrev=0 --match 'mobile-v*' "$GITHUB_REF_NAME^" 2>/dev/null); then
+              notes_start=(--notes-start-tag "$previous")
+            fi
+            gh release create "$GITHUB_REF_NAME" --title "Mobile $VERSION" --generate-notes "${notes_start[@]}" "${prerelease[@]}" lockate-*.apk
           fi
