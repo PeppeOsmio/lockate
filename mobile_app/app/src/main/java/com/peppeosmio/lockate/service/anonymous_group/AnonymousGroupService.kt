@@ -37,6 +37,7 @@ import com.peppeosmio.lockate.platform_service.LocationService
 import com.peppeosmio.lockate.service.ConnectionService
 import com.peppeosmio.lockate.service.crypto.CryptoService
 import com.peppeosmio.lockate.utils.ErrorHandler
+import com.peppeosmio.lockate.utils.SendLoopLog
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.ResponseException
@@ -51,6 +52,7 @@ import io.ktor.client.request.setBody
 import io.ktor.client.request.url
 import io.ktor.http.HttpHeaders
 import io.ktor.websocket.Frame
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -107,7 +109,8 @@ class AnonymousGroupService(
     private val httpClient: HttpClient,
     private val locationService: LocationService,
     private val connectivityService: ConnectivityService,
-    private val keyStoreService: KeyStoreService
+    private val keyStoreService: KeyStoreService,
+    private val sendLoopLog: SendLoopLog
 ) {
     private val _events = MutableSharedFlow<AnonymousGroupEvent>(extraBufferCapacity = 2)
     val events = _events.asSharedFlow()
@@ -632,9 +635,11 @@ class AnonymousGroupService(
         var retries = 0
         var reportedLocationDisabled = false
         var reportedLocationUnavailable = false
+        val tag = "send ${anonymousGroup.id}"
         while (true) {
             var isConnected = false
             try {
+                sendLoopLog.log("$tag connecting")
                 // initiate connection only when location is enabled and we have permissions
                 locationService.checkPermissionsAndLocationEnabled()
                 if (reportedLocationDisabled) {
@@ -664,6 +669,7 @@ class AnonymousGroupService(
                     isConnected = true
                     onConnected()
                     retries = 0
+                    sendLoopLog.log("$tag connected")
                     Log.i(
                         "",
                         "Sending AG location to ${connectionSettings.url} agId: ${anonymousGroup.id} agMemberId: ${anonymousGroup.memberId}"
@@ -740,7 +746,15 @@ class AnonymousGroupService(
                     }
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) {
+                    sendLoopLog.log("$tag cancelled")
+                    if (isConnected) {
+                        onDisconnected()
+                    }
+                    throw e
+                }
                 e.printStackTrace()
+                sendLoopLog.log("$tag failed ${e::class.simpleName} connected=$isConnected")
                 if (isConnected) {
                     onDisconnected()
                 }
@@ -757,11 +771,13 @@ class AnonymousGroupService(
                             ee.printStackTrace()
                             when (ee) {
                                 is UnauthorizedException -> {
+                                    sendLoopLog.log("$tag stopped: unauthorized")
                                     setAGIsMemberFalse(anonymousGroup)
                                     return
                                 }
 
                                 is RemoteAGNotFoundException -> {
+                                    sendLoopLog.log("$tag stopped: group not found")
                                     setAGExistsRemoteFalse(
                                         anonymousGroup
                                     )
@@ -789,7 +805,9 @@ class AnonymousGroupService(
                         e.printStackTrace()
                     }
                 }
-                when (classifyReconnect(e, connectivityService.isNetworkAvailable())) {
+                val reconnectAction = classifyReconnect(e, connectivityService.isNetworkAvailable())
+                sendLoopLog.log("$tag waiting $reconnectAction")
+                when (reconnectAction) {
                     ReconnectAction.AwaitLocationEnabled -> {
                         // reconnect as soon as GPS/permissions come back; the timeout is a safety
                         // net so we re-check even if the signal never arrives.
@@ -813,6 +831,7 @@ class AnonymousGroupService(
                         delay(waitSeconds.seconds)
                     }
                 }
+                sendLoopLog.log("$tag wait over")
             }
         }
     }

@@ -25,7 +25,7 @@ import com.peppeosmio.lockate.ui.screens.settings.SettingsScreen
 import com.peppeosmio.lockate.ui.theme.LockateTheme
 
 @Composable
-fun LockateApp(startLocationService: () -> Unit, stopLocationService: () -> Unit) {
+fun LockateApp(startLocationService: () -> Unit) {
     val appNavController = rememberNavController()
 
     LockateTheme {

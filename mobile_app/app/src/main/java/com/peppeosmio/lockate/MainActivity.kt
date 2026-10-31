@@ -18,10 +18,6 @@ class MainActivity : ComponentActivity() {
                 val intent = Intent(applicationContext, AndroidSendLocationService::class.java)
                 intent.action = AndroidSendLocationService.ACTION_START
                 startForegroundService(intent)
-            }, stopLocationService = {
-                val intent = Intent(applicationContext, AndroidSendLocationService::class.java)
-                intent.action = AndroidSendLocationService.ACTION_STOP
-                startForegroundService(intent)
             })
         }
     }
