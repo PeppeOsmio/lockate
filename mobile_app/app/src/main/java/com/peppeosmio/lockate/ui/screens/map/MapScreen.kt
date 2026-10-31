@@ -68,6 +68,7 @@ import com.peppeosmio.lockate.ui.composables.PermissionsRequester
 import com.peppeosmio.lockate.ui.composables.ServerUnreachableBanner
 import com.peppeosmio.lockate.ui.routes.ConnectionSettingsRoute
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.AGDetailsViewModel
+import com.peppeosmio.lockate.ui.screens.anonymous_group_details.LocationStreamState
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.MapPoint
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.MembersMap
 import com.peppeosmio.lockate.utils.LoadingState
@@ -448,7 +449,8 @@ fun MapScreen(
                                 onDelete = { dismiss(); detailsViewModel.showDeleteAGDialog() })
                         })
                     if (!state.isGroupPickerOpen &&
-                        (state.isServerUnreachable || details.remoteDataLoadingState == LoadingState.Failed)
+                        (state.isServerUnreachable || details.remoteDataLoadingState == LoadingState.Failed ||
+                            details.locationStreamState == LocationStreamState.Reconnecting)
                     ) {
                         ServerUnreachableBanner(
                             modifier = Modifier

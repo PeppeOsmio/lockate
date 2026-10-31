@@ -8,6 +8,8 @@ import com.peppeosmio.lockate.domain.anonymous_group.AnonymousGroup
 import com.peppeosmio.lockate.utils.LoadingState
 
 
+enum class LocationStreamState { Connecting, Connected, Reconnecting, Stopped }
+
 data class AGDetailsState(
     val anonymousGroup: AnonymousGroup? = null,
     val members: Map<String, AGMember>? = null,
@@ -18,6 +20,7 @@ data class AGDetailsState(
     val showLeaveAGDialog: Boolean = false,
     val dialogError: SnackbarErrorMessage? = null,
     val remoteDataLoadingState: LoadingState = LoadingState.IsLoading,
+    val locationStreamState: LocationStreamState = LocationStreamState.Connecting,
     // this is LocationRecord and not Coordinates so that we can understand if the
     // coordinates are newer even if they are equal to the previous ones
     val myLocationRecordFromGPS: LocationRecord? = null,
