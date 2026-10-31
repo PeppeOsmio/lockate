@@ -69,7 +69,9 @@ import com.peppeosmio.lockate.ui.composables.ServerUnreachableBanner
 import com.peppeosmio.lockate.ui.routes.ConnectionSettingsRoute
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.AGDetailsViewModel
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.LocationStreamState
+import com.peppeosmio.lockate.ui.screens.anonymous_group_details.MARKER_MOVE_DURATION_MS
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.MapPoint
+import org.maplibre.compose.camera.CameraAnimation
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.MembersMap
 import com.peppeosmio.lockate.utils.LoadingState
 import com.peppeosmio.lockate.utils.LockatePermissions
@@ -84,6 +86,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
 import org.koin.compose.viewmodel.koinViewModel
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
 
@@ -165,7 +168,8 @@ fun MapScreen(
     LaunchedEffect(true) {
         detailsViewModel.cameraPositionEvents.collect { location ->
             mapState.animateCamera(
-                CameraUpdate(center = location.toMapLibreComposePosition(), zoom = 15.0)
+                CameraUpdate(center = location.toMapLibreComposePosition(), zoom = 15.0),
+                CameraAnimation.Ease { duration = MARKER_MOVE_DURATION_MS.milliseconds }
             )
         }
     }
