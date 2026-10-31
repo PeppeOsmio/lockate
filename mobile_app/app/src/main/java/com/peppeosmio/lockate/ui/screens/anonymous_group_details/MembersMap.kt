@@ -1,6 +1,5 @@
 package com.peppeosmio.lockate.ui.screens.anonymous_group_details
 
-import android.util.Log
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
@@ -36,6 +35,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -273,26 +273,35 @@ fun MembersMap(
             .collect { onMapGesture() }
     }
 
-    val pointsClusters by remember(mapState.cameraPosition, membersPoints) {
-        Log.d("Clusters", mapState.cameraPosition.toString())
+    val animatedMembersPoints = membersPoints?.map { point ->
+        key(point.id) {
+            val coordinates by animateCoordinatesAsState(point.coordinates)
+            point.copy(coordinates = coordinates)
+        }
+    }
+    val animatedMyPoint = myPoint?.let { point ->
+        key(point.id) {
+            val coordinates by animateCoordinatesAsState(point.coordinates)
+            point.copy(coordinates = coordinates)
+        }
+    }
+
+    val pointsClusters by remember(mapState.cameraPosition, animatedMembersPoints) {
         derivedStateOf {
-            Log.d("Clusters", "Computing clusters")
-            val points = membersPoints?.toMutableList() ?: mutableListOf()
+            val points = animatedMembersPoints ?: emptyList()
             // null until the map is laid out
             clusterPoints(points.mapNotNull { point ->
                 val screen =
                     mapState.screenLocationFromPosition(point.coordinates.toMapLibreComposePosition())
                         ?: return@mapNotNull null
-                Log.d("Clusters", point.coordinates.toString())
-                Log.d("Clusters", screen.toString())
                 point to screen
             })
         }
     }
 
-    val myPointProjection by remember(mapState.cameraPosition, myPoint) {
+    val myPointProjection by remember(mapState.cameraPosition, animatedMyPoint) {
         derivedStateOf {
-            myPoint?.let {
+            animatedMyPoint?.let {
                 mapState.screenLocationFromPosition(it.coordinates.toMapLibreComposePosition())
             }
         }
