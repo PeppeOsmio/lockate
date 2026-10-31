@@ -2,6 +2,8 @@ package com.peppeosmio.lockate.di
 
 import android.util.Log
 import androidx.room.Room
+import com.peppeosmio.lockate.utils.SendLoopLog
+import java.io.File
 import com.google.android.gms.location.DeviceOrientation
 import com.google.android.gms.location.LocationServices
 import com.peppeosmio.lockate.AppDatabase
@@ -102,6 +104,10 @@ val appModule = module {
         PermissionsService(context = androidContext())
     }
 
+    single<SendLoopLog> {
+        SendLoopLog(File(androidContext().getExternalFilesDir(null), "send-loop.log"))
+    }
+
     single<ConnectivityService> {
         ConnectivityService(context = androidContext())
     }
@@ -133,7 +139,8 @@ val appModule = module {
             httpClient = get(),
             locationService = get(),
             connectivityService = get(),
-            keyStoreService = get()
+            keyStoreService = get(),
+            sendLoopLog = get()
         )
     }
 
