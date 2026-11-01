@@ -62,7 +62,7 @@ class AGMemberMapperTest {
     var dto = mapper.toDto(entity);
 
     assertThat(dto.encryptedLastLocationRecord()).isPresent();
-    assertThat(dto.encryptedLastLocationRecord().get().encryptedCoordinates().cipherText())
+    assertThat(dto.encryptedLastLocationRecord().get().encryptedPayload().cipherText())
         .isEqualTo(Base64.getEncoder().encodeToString("coord-cipher".getBytes()));
   }
 }

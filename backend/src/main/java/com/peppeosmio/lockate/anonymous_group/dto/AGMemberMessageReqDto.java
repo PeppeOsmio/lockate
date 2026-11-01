@@ -4,4 +4,4 @@ import com.peppeosmio.lockate.common.dto.EncryptedDataDto;
 import org.springframework.aot.hint.annotation.RegisterReflectionForBinding;
 
 @RegisterReflectionForBinding
-public record AGLocationSaveReqDto(EncryptedDataDto encryptedLocation) {}
+public record AGMemberMessageReqDto(EncryptedDataDto encryptedPayload) {}

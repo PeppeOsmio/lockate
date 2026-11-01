@@ -1,0 +1,191 @@
+package com.peppeosmio.lockate.anonymous_group.websocket;
+
+import com.peppeosmio.lockate.anonymous_group.dto.AGFrameDto;
+import com.peppeosmio.lockate.anonymous_group.dto.AGMemberMessageReqDto;
+import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
+import com.peppeosmio.lockate.anonymous_group.security.AGMemberAuthentication;
+import com.peppeosmio.lockate.anonymous_group.service.AnonymousGroupService;
+import com.peppeosmio.lockate.common.exceptions.UnauthorizedException;
+import com.peppeosmio.lockate.redis.RedisService;
+import com.peppeosmio.lockate.utils.TTLMap;
+import java.io.IOException;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.connection.MessageListener;
+import org.springframework.stereotype.Component;
+import org.springframework.web.socket.CloseStatus;
+import org.springframework.web.socket.TextMessage;
+import org.springframework.web.socket.WebSocketSession;
+import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorator;
+import org.springframework.web.socket.handler.TextWebSocketHandler;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
+
+/**
+ * The only realtime channel of a group member: it receives the member's encrypted messages and
+ * sends back the group's state and everything that happens in it.
+ */
+@Slf4j
+@Component
+public class AGWSHandler extends TextWebSocketHandler {
+
+  public static final CloseStatus MEMBER_REMOVED = new CloseStatus(4401, "member_removed");
+  public static final CloseStatus GROUP_DELETED = new CloseStatus(4404, "group_deleted");
+  private static final int SEND_TIME_LIMIT_MS = 10_000;
+  private static final int SEND_BUFFER_LIMIT_BYTES = 512 * 1024;
+
+  private final ObjectMapper objectMapper;
+  private final AnonymousGroupService anonymousGroupService;
+  private final RedisService redisService;
+  private final TTLMap<UUID, LocalDateTime> lastSavedLocationsCache =
+      new TTLMap<>(Duration.ofMinutes(5));
+  private final Map<String, Connection> connections = new ConcurrentHashMap<>();
+
+  public AGWSHandler(
+      ObjectMapper objectMapper,
+      AnonymousGroupService anonymousGroupService,
+      RedisService redisService) {
+    this.objectMapper = objectMapper;
+    this.anonymousGroupService = anonymousGroupService;
+    this.redisService = redisService;
+  }
+
+  /**
+   * Frames from Redis that arrive while the snapshot is being built are held back and sent right
+   * after it, so the client never misses a change nor applies it before the snapshot.
+   */
+  private static class Connection {
+    final String channel;
+    final MessageListener listener;
+    final List<String> pending = new ArrayList<>();
+    boolean snapshotSent = false;
+
+    Connection(String channel, MessageListener listener) {
+      this.channel = channel;
+      this.listener = listener;
+    }
+  }
+
+  @Override
+  public void afterConnectionEstablished(WebSocketSession wsSession) throws Exception {
+    var sessionAttributes = wsSession.getAttributes();
+    var anonymousGroupId = (UUID) sessionAttributes.get("anonymousGroupId");
+    if (!(sessionAttributes.get("authentication")
+        instanceof AGMemberAuthentication authentication)) {
+      throw new UnauthorizedException();
+    }
+    log.info(
+        "[WS] Connected: anonymousGroupId="
+            + anonymousGroupId
+            + " memberId="
+            + authentication.getId());
+    var session =
+        new ConcurrentWebSocketSessionDecorator(
+            wsSession, SEND_TIME_LIMIT_MS, SEND_BUFFER_LIMIT_BYTES);
+    var channel = AnonymousGroupService.getRedisAGChannel(anonymousGroupId);
+    var connection = new Connection[1];
+    var listener =
+        redisService.subscribe(
+            channel,
+            message -> {
+              synchronized (connection[0]) {
+                if (!connection[0].snapshotSent) {
+                  connection[0].pending.add(message);
+                  return;
+                }
+              }
+              forward(session, authentication.getId(), message);
+            });
+    connection[0] = new Connection(channel, listener);
+    connections.put(wsSession.getId(), connection[0]);
+    try {
+      var snapshot = anonymousGroupService.getSnapshot(anonymousGroupId);
+      session.sendMessage(new TextMessage(objectMapper.writeValueAsString(snapshot)));
+    } catch (AGNotFoundException e) {
+      session.close(GROUP_DELETED);
+      return;
+    }
+    List<String> pending;
+    synchronized (connection[0]) {
+      pending = List.copyOf(connection[0].pending);
+      connection[0].pending.clear();
+      connection[0].snapshotSent = true;
+    }
+    pending.forEach(message -> forward(session, authentication.getId(), message));
+  }
+
+  private void forward(WebSocketSession session, UUID ownMemberId, String message) {
+    try {
+      var frame = objectMapper.readValue(message, AGFrameDto.class);
+      switch (frame.type()) {
+        case AGFrameDto.GROUP_DELETED -> session.close(GROUP_DELETED);
+        case AGFrameDto.MEMBER_LEFT -> {
+          if (ownMemberId.equals(frame.memberId())) {
+            session.close(MEMBER_REMOVED);
+          } else {
+            session.sendMessage(new TextMessage(message));
+          }
+        }
+        case AGFrameDto.MEMBER_MESSAGE -> {
+          if (!ownMemberId.equals(frame.memberId())) {
+            session.sendMessage(new TextMessage(message));
+          }
+        }
+        default -> session.sendMessage(new TextMessage(message));
+      }
+    } catch (JacksonException | IOException e) {
+      log.warn("[WS] Can't forward frame: " + e.getMessage());
+    }
+  }
+
+  @Override
+  public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
+    var sessionAttributes = session.getAttributes();
+    var anonymousGroupId = (UUID) sessionAttributes.get("anonymousGroupId");
+    var authentication = (AGMemberAuthentication) sessionAttributes.get("authentication");
+    var connection = connections.remove(session.getId());
+    if (connection != null) {
+      redisService.unsubscribe(connection.channel, connection.listener);
+    }
+    log.info(
+        "[WS] Disconnected: anonymousGroupId="
+            + anonymousGroupId
+            + " memberId="
+            + authentication.getId()
+            + " status="
+            + status);
+  }
+
+  @Override
+  public void handleTextMessage(WebSocketSession session, TextMessage message) throws IOException {
+    try {
+      var sessionAttributes = session.getAttributes();
+      var anonymousGroupId = (UUID) sessionAttributes.get("anonymousGroupId");
+      if (!(sessionAttributes.get("authentication")
+          instanceof AGMemberAuthentication agMemberAuthentication)) {
+        throw new UnauthorizedException();
+      }
+      var dto = objectMapper.readValue(message.getPayload(), AGMemberMessageReqDto.class);
+      var lastSavedLocationTimestamp =
+          lastSavedLocationsCache.get(agMemberAuthentication.getId()).orElse(null);
+      var timestampSaved =
+          anonymousGroupService
+              .relayMemberMessage(
+                  anonymousGroupId, agMemberAuthentication, dto, lastSavedLocationTimestamp)
+              .orElse(null);
+      if (timestampSaved != null) {
+        lastSavedLocationsCache.put(agMemberAuthentication.getId(), timestampSaved);
+      }
+    } catch (AGNotFoundException | UnauthorizedException | JacksonException e) {
+      session.close(CloseStatus.BAD_DATA);
+    } catch (Exception e) {
+      session.close(CloseStatus.SERVER_ERROR);
+    }
+  }
+}

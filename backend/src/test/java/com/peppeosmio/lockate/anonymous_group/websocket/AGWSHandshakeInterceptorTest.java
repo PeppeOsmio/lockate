@@ -24,19 +24,19 @@ import org.springframework.web.socket.WebSocketHandler;
 import tools.jackson.databind.ObjectMapper;
 
 @ExtendWith(MockitoExtension.class)
-class AGSendLocationHandshakeInterceptorTest {
+class AGWSHandshakeInterceptorTest {
 
   @Mock private AGMemberAuthenticator agMemberAuthenticator;
   @Mock private ServerHttpRequest request;
   @Mock private ServerHttpResponse response;
   @Mock private WebSocketHandler wsHandler;
 
-  private AGSendLocationHandshakeInterceptor interceptor;
+  private AGWSHandshakeInterceptor interceptor;
   private Map<String, Object> attributes;
 
   @BeforeEach
   void setUp() {
-    interceptor = new AGSendLocationHandshakeInterceptor(agMemberAuthenticator, new ObjectMapper());
+    interceptor = new AGWSHandshakeInterceptor(agMemberAuthenticator, new ObjectMapper());
     attributes = new HashMap<>();
   }
 
@@ -56,7 +56,7 @@ class AGSendLocationHandshakeInterceptorTest {
     var authentication =
         new com.peppeosmio.lockate.anonymous_group.security.AGMemberAuthentication(memberId);
     withPath(
-        "/api/ws/anonymous-groups/" + groupId + "/send-location",
+        "/api/ws/anonymous-groups/" + groupId + "",
         "AGMember " + memberId + " token");
     when(agMemberAuthenticator.authenticate(groupId, "AGMember " + memberId + " token"))
         .thenReturn(authentication);
@@ -70,7 +70,7 @@ class AGSendLocationHandshakeInterceptorTest {
 
   @Test
   void beforeHandshake_malformedGroupIdSegment_returns400() throws Exception {
-    withPath("/api/ws/anonymous-groups/not-a-uuid/send-location", "AGMember token");
+    withPath("/api/ws/anonymous-groups/not-a-uuid", "AGMember token");
 
     var result = interceptor.beforeHandshake(request, response, wsHandler, attributes);
 
@@ -91,7 +91,7 @@ class AGSendLocationHandshakeInterceptorTest {
   @Test
   void beforeHandshake_agNotFoundException_returns404() throws Exception {
     var groupId = UUID.randomUUID();
-    withPath("/api/ws/anonymous-groups/" + groupId + "/send-location", "AGMember token");
+    withPath("/api/ws/anonymous-groups/" + groupId + "", "AGMember token");
     when(agMemberAuthenticator.authenticate(any(), any()))
         .thenThrow(new AGNotFoundException(groupId));
 
@@ -104,7 +104,7 @@ class AGSendLocationHandshakeInterceptorTest {
   @Test
   void beforeHandshake_unauthorizedException_returns401() throws Exception {
     var groupId = UUID.randomUUID();
-    withPath("/api/ws/anonymous-groups/" + groupId + "/send-location", "AGMember token");
+    withPath("/api/ws/anonymous-groups/" + groupId + "", "AGMember token");
     when(agMemberAuthenticator.authenticate(any(), any())).thenThrow(new UnauthorizedException());
 
     var result = interceptor.beforeHandshake(request, response, wsHandler, attributes);
@@ -116,7 +116,7 @@ class AGSendLocationHandshakeInterceptorTest {
   @Test
   void beforeHandshake_unexpectedException_returns500() throws Exception {
     var groupId = UUID.randomUUID();
-    withPath("/api/ws/anonymous-groups/" + groupId + "/send-location", "AGMember token");
+    withPath("/api/ws/anonymous-groups/" + groupId + "", "AGMember token");
     when(agMemberAuthenticator.authenticate(any(), any())).thenThrow(new RuntimeException("boom"));
 
     var result = interceptor.beforeHandshake(request, response, wsHandler, attributes);

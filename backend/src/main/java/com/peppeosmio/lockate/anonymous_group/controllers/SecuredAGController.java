@@ -2,7 +2,9 @@ package com.peppeosmio.lockate.anonymous_group.controllers;
 
 import com.peppeosmio.lockate.anonymous_group.dto.AGGetMembersCountDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGGetMembersResDto;
-import com.peppeosmio.lockate.anonymous_group.dto.AGLocationSaveReqDto;
+import com.peppeosmio.lockate.anonymous_group.dto.CircleUpsertReqDto;
+import com.peppeosmio.lockate.anonymous_group.exceptions.AGCircleConflictException;
+import com.peppeosmio.lockate.anonymous_group.exceptions.AGCircleNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotAdminException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
@@ -10,14 +12,11 @@ import com.peppeosmio.lockate.anonymous_group.security.AGMemberAuthentication;
 import com.peppeosmio.lockate.anonymous_group.service.AnonymousGroupService;
 import com.peppeosmio.lockate.common.exceptions.UnauthorizedException;
 import java.util.UUID;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @SecuredAGMember
 @Slf4j
@@ -71,17 +70,6 @@ public class SecuredAGController {
         anonymousGroupId, (AGMemberAuthentication) authentication);
   }
 
-  @PostMapping("/{anonymousGroupId}/locations")
-  @ResponseStatus(HttpStatus.CREATED)
-  void saveAnonymousLocation(
-      @PathVariable UUID anonymousGroupId,
-      @RequestBody AGLocationSaveReqDto dto,
-      AGMemberAuthentication authentication)
-      throws UnauthorizedException, AGNotFoundException {
-    anonymousGroupService.saveLocation(
-        anonymousGroupId, (AGMemberAuthentication) authentication, dto, null);
-  }
-
   @DeleteMapping("/{anonymousGroupId}")
   @ResponseStatus(HttpStatus.OK)
   public void deleteAnonymousGroup(
@@ -91,39 +79,24 @@ public class SecuredAGController {
         anonymousGroupId, (AGMemberAuthentication) authentication);
   }
 
-  @GetMapping("/{anonymousGroupId}/locations")
+  @PutMapping("/{anonymousGroupId}/circles/{circleId}")
   @ResponseStatus(HttpStatus.OK)
-  public SseEmitter streamLocations(
-      @PathVariable UUID anonymousGroupId, AGMemberAuthentication authentication) {
-    try {
-      SseEmitter emitter = new SseEmitter(0L);
-      ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-      scheduler.scheduleAtFixedRate(
-          () -> {
-            try {
-              emitter.send(SseEmitter.event().comment("heartbeat"));
-            } catch (Exception e) {
-              scheduler.shutdown();
-            }
-          },
-          15,
-          15,
-          TimeUnit.SECONDS);
-      var unsubscribe =
-          anonymousGroupService.streamLocations(
-              anonymousGroupId,
-              (location) -> {
-                try {
-                  emitter.send(SseEmitter.event().name("location").data(location));
-                } catch (Exception ignored) {
-                }
-              },
-              authentication);
-      emitter.onCompletion(unsubscribe);
-      return emitter;
-    } catch (Exception e) {
-      e.printStackTrace();
-      throw e;
-    }
+  public void upsertCircle(
+      @PathVariable UUID anonymousGroupId,
+      @PathVariable UUID circleId,
+      @Valid @RequestBody CircleUpsertReqDto dto,
+      AGMemberAuthentication authentication)
+      throws AGNotFoundException, AGCircleConflictException {
+    anonymousGroupService.upsertCircle(anonymousGroupId, circleId, dto.encryptedData());
+  }
+
+  @DeleteMapping("/{anonymousGroupId}/circles/{circleId}")
+  @ResponseStatus(HttpStatus.OK)
+  public void deleteCircle(
+      @PathVariable UUID anonymousGroupId,
+      @PathVariable UUID circleId,
+      AGMemberAuthentication authentication)
+      throws AGCircleNotFoundException {
+    anonymousGroupService.deleteCircle(anonymousGroupId, circleId);
   }
 }

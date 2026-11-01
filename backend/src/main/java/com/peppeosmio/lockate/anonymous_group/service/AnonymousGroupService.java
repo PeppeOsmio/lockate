@@ -2,12 +2,14 @@ package com.peppeosmio.lockate.anonymous_group.service;
 
 import com.peppeosmio.lockate.anonymous_group.configuration_properties.AGLocationConfigurationProperties;
 import com.peppeosmio.lockate.anonymous_group.dto.*;
+import com.peppeosmio.lockate.anonymous_group.entity.AGCircleEntity;
 import com.peppeosmio.lockate.anonymous_group.entity.AGMemberEntity;
 import com.peppeosmio.lockate.anonymous_group.entity.AGMemberLocationEntity;
 import com.peppeosmio.lockate.anonymous_group.entity.AnonymousGroupEntity;
 import com.peppeosmio.lockate.anonymous_group.exceptions.*;
 import com.peppeosmio.lockate.anonymous_group.mapper.AGMemberMapper;
 import com.peppeosmio.lockate.anonymous_group.mapper.AnonymousGroupMapper;
+import com.peppeosmio.lockate.anonymous_group.repository.AGCircleRepository;
 import com.peppeosmio.lockate.anonymous_group.repository.AGGroupSummaryProjection;
 import com.peppeosmio.lockate.anonymous_group.repository.AGLocationRepository;
 import com.peppeosmio.lockate.anonymous_group.repository.AGMemberRepository;
@@ -27,14 +29,14 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.*;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.bcrypt.BCrypt;
 import org.springframework.stereotype.Service;
-import tools.jackson.core.JacksonException;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import tools.jackson.databind.ObjectMapper;
 
 @Slf4j
@@ -44,6 +46,7 @@ public class AnonymousGroupService {
   private final AnonymousGroupRepository anonymousGroupRepository;
   private final AGMemberRepository agMemberRepository;
   private final AGLocationRepository agLocationRepository;
+  private final AGCircleRepository agCircleRepository;
   private final RedisService redisService;
   private final InviteService inviteService;
   private final ObjectMapper objectMapper;
@@ -55,6 +58,7 @@ public class AnonymousGroupService {
       AnonymousGroupRepository anonymousGroupRepository,
       AGMemberRepository agMemberRepository,
       AGLocationRepository agLocationRepository,
+      AGCircleRepository agCircleRepository,
       RedisService redisService,
       InviteService inviteService,
       ObjectMapper objectMapper,
@@ -64,6 +68,7 @@ public class AnonymousGroupService {
     this.agMemberRepository = agMemberRepository;
     this.anonymousGroupRepository = anonymousGroupRepository;
     this.agLocationRepository = agLocationRepository;
+    this.agCircleRepository = agCircleRepository;
     this.redisService = redisService;
     this.inviteService = inviteService;
     this.objectMapper = objectMapper;
@@ -71,8 +76,82 @@ public class AnonymousGroupService {
     this.agMemberMapper = agMemberMapper;
   }
 
-  private static String getRedisAGLocationChannel(UUID anonymousGroupId) {
+  public static final int MAX_CIRCLES_PER_GROUP = 50;
+
+  public static String getRedisAGChannel(UUID anonymousGroupId) {
     return "ag-" + anonymousGroupId.toString();
+  }
+
+  /** Frames announce state changes, so they go out only once the change is committed. */
+  private void publishFrame(UUID anonymousGroupId, AGFrameDto frame) {
+    var channel = getRedisAGChannel(anonymousGroupId);
+    var json = objectMapper.writeValueAsString(frame);
+    if (TransactionSynchronizationManager.isSynchronizationActive()) {
+      TransactionSynchronizationManager.registerSynchronization(
+          new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+              redisService.publish(channel, json);
+            }
+          });
+    } else {
+      redisService.publish(channel, json);
+    }
+  }
+
+  private CircleDto toCircleDto(AGCircleEntity entity) {
+    return new CircleDto(
+        entity.getId(),
+        EncryptedDataDto.fromEncryptedString(entity.getEncryptedData()),
+        entity.getUpdatedAt());
+  }
+
+  @Transactional
+  public AGFrameDto getSnapshot(UUID anonymousGroupId) throws AGNotFoundException {
+    var agEntity =
+        anonymousGroupRepository
+            .findById(anonymousGroupId)
+            .orElseThrow(() -> new AGNotFoundException(anonymousGroupId));
+    var circles =
+        agCircleRepository.findByAnonymousGroupIdOrderByCreatedAtAscIdAsc(anonymousGroupId).stream()
+            .map(this::toCircleDto)
+            .toList();
+    return AGFrameDto.snapshot(listMembers(agEntity), circles);
+  }
+
+  @Transactional
+  public void upsertCircle(UUID anonymousGroupId, UUID circleId, EncryptedDataDto encryptedData)
+      throws AGNotFoundException, AGCircleConflictException {
+    var agEntity =
+        anonymousGroupRepository
+            .findById(anonymousGroupId)
+            .orElseThrow(() -> new AGNotFoundException(anonymousGroupId));
+    var now = LocalDateTime.now(ZoneOffset.UTC);
+    var encrypted = encryptedData.toEncryptedString();
+    var existing = agCircleRepository.findById(circleId).orElse(null);
+    AGCircleEntity circle;
+    if (existing == null) {
+      if (agCircleRepository.countByAnonymousGroupId(anonymousGroupId) >= MAX_CIRCLES_PER_GROUP) {
+        throw new AGCircleConflictException("circle_limit_reached");
+      }
+      circle = agCircleRepository.save(new AGCircleEntity(circleId, encrypted, agEntity, now));
+    } else if (!existing.getAnonymousGroupId().equals(anonymousGroupId)) {
+      throw new AGCircleConflictException("circle_id_taken");
+    } else {
+      existing.setEncryptedData(encrypted, now);
+      circle = existing;
+    }
+    publishFrame(anonymousGroupId, AGFrameDto.circleUpserted(toCircleDto(circle)));
+  }
+
+  @Transactional
+  public void deleteCircle(UUID anonymousGroupId, UUID circleId) throws AGCircleNotFoundException {
+    var circle =
+        agCircleRepository
+            .findByIdAndAnonymousGroupId(circleId, anonymousGroupId)
+            .orElseThrow(() -> new AGCircleNotFoundException(circleId));
+    agCircleRepository.delete(circle);
+    publishFrame(anonymousGroupId, AGFrameDto.circleDeleted(circleId));
   }
 
   @Transactional
@@ -170,6 +249,7 @@ public class AnonymousGroupService {
     inviteService.consumeJoinToken(anonymousGroupId, dto.joinToken());
     var agMemberWithTokenDto = createMember(dto.encryptedMemberName(), false, agEntity);
     var agMembers = listMembers(agEntity);
+    publishFrame(anonymousGroupId, AGFrameDto.memberJoined(agMemberWithTokenDto.member()));
     return new AGJoinResDto(anonymousGroupMapper.toDto(agEntity), agMemberWithTokenDto, agMembers);
   }
 
@@ -187,6 +267,7 @@ public class AnonymousGroupService {
       throw new UnauthorizedException();
     }
     agMemberRepository.deleteById(agMemberAuthentication.getId());
+    publishFrame(anonymousGroupId, AGFrameDto.memberLeft(agMemberAuthentication.getId()));
   }
 
   /**
@@ -199,10 +280,10 @@ public class AnonymousGroupService {
    * @throws UnauthorizedException
    */
   @Transactional
-  public Optional<LocalDateTime> saveLocation(
+  public Optional<LocalDateTime> relayMemberMessage(
       UUID anonymousGroupId,
       AGMemberAuthentication authentication,
-      AGLocationSaveReqDto dto,
+      AGMemberMessageReqDto dto,
       @Nullable LocalDateTime lastSavedLocationTimeStamp)
       throws AGNotFoundException, UnauthorizedException {
     if (!(authentication instanceof AGMemberAuthentication agMemberAuthentication)) {
@@ -219,12 +300,10 @@ public class AnonymousGroupService {
             .findById(agMemberAuthentication.getId())
             .orElseThrow(UnauthorizedException::new);
     var timestamp = LocalDateTime.now(ZoneOffset.UTC);
-    var locationUpdate =
-        new LocationUpdateDto(
-            new LocationRecordDto(dto.encryptedLocation(), timestamp),
-            agMemberAuthentication.getId());
-    var messageJson = objectMapper.writeValueAsString(locationUpdate);
-    redisService.publish(getRedisAGLocationChannel(anonymousGroupId), messageJson);
+    publishFrame(
+        anonymousGroupId,
+        AGFrameDto.memberMessage(
+            agMemberAuthentication.getId(), new LocationRecordDto(dto.encryptedPayload(), timestamp)));
     if (lastSavedLocationTimeStamp == null) {
       var lastSavedLocation =
           agLocationRepository
@@ -246,45 +325,12 @@ public class AnonymousGroupService {
       var lastLocation =
           agLocationRepository.save(
               AGMemberLocationEntity.fromBase64Fields(
-                  dto.encryptedLocation(), agMemberEntity, timestamp));
+                  dto.encryptedPayload(), agMemberEntity, timestamp));
       agMemberEntity.setLastLocation(lastLocation);
       agMemberRepository.save(agMemberEntity);
       return Optional.of(timestamp);
     }
     return Optional.empty();
-  }
-
-  public Runnable streamLocations(
-      UUID anonymousGroupId,
-      Consumer<LocationUpdateDto> onLocation,
-      AGMemberAuthentication authentication) {
-    log.info(
-        "[SSE] Streaming locations: anonymousGroupId="
-            + anonymousGroupId
-            + " memberId="
-            + authentication.getId());
-    var channel = getRedisAGLocationChannel(anonymousGroupId);
-    var messageListener =
-        redisService.subscribe(
-            channel,
-            (message) -> {
-              try {
-                var agLocationUpdate = objectMapper.readValue(message, LocationUpdateDto.class);
-                if (!agLocationUpdate.memberId().equals(authentication.getId())) {
-                  onLocation.accept(agLocationUpdate);
-                }
-              } catch (JacksonException e) {
-                e.printStackTrace();
-              }
-            });
-    return () -> {
-      redisService.unsubscribe(channel, messageListener);
-      log.info(
-          "[SSE] Stopped streaming locations: anoymousGroupId="
-              + anonymousGroupId
-              + " memberId="
-              + authentication.getId());
-    };
   }
 
   @Transactional
@@ -347,6 +393,7 @@ public class AnonymousGroupService {
       throw new AGMemberNotAdminException();
     }
     anonymousGroupRepository.deleteAnonymousGroup(anonymousGroupId);
+    publishFrame(anonymousGroupId, AGFrameDto.groupDeleted());
   }
 
   @Transactional
@@ -363,6 +410,7 @@ public class AnonymousGroupService {
             .findByIdAndAnonymousGroupId(agMemberId, anonymousGroupId)
             .orElseThrow(() -> new AGMemberNotFoundException(agMemberId));
     target.setAGAdmin(true);
+    publishFrame(anonymousGroupId, AGFrameDto.memberUpdated(agMemberId, true));
   }
 
   @Transactional
@@ -371,6 +419,7 @@ public class AnonymousGroupService {
       throw new AGNotFoundException(anonymousGroupId);
     }
     anonymousGroupRepository.deleteAnonymousGroup(anonymousGroupId);
+    publishFrame(anonymousGroupId, AGFrameDto.groupDeleted());
   }
 
   @Transactional
@@ -381,6 +430,7 @@ public class AnonymousGroupService {
             .findByIdAndAnonymousGroupId(agMemberId, anonymousGroupId)
             .orElseThrow(() -> new AGMemberNotFoundException(agMemberId));
     agMemberRepository.deleteById(agMemberEntity.getId());
+    publishFrame(anonymousGroupId, AGFrameDto.memberLeft(agMemberId));
   }
 
   @Transactional
@@ -391,5 +441,6 @@ public class AnonymousGroupService {
             .findByIdAndAnonymousGroupId(agMemberId, anonymousGroupId)
             .orElseThrow(() -> new AGMemberNotFoundException(agMemberId));
     agMemberEntity.setAGAdmin(isAGAdmin);
+    publishFrame(anonymousGroupId, AGFrameDto.memberUpdated(agMemberId, isAGAdmin));
   }
 }

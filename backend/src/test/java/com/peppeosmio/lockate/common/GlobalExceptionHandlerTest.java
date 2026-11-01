@@ -48,18 +48,6 @@ class GlobalExceptionHandlerTest {
   }
 
   @Test
-  void handleException_sseAcceptHeader_returnsEmptyBody() {
-    var request = new MockHttpServletRequest();
-    request.addHeader("Accept", "text/event-stream");
-    var webRequest = new ServletWebRequest(request);
-
-    var response = handler.handleException(new RuntimeException("boom"), webRequest);
-
-    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
-    assertThat(response.getBody()).isNull();
-  }
-
-  @Test
   void handleException_jsonAcceptHeader_returnsJsonBody() {
     var request = new MockHttpServletRequest();
     request.addHeader("Accept", "application/json");

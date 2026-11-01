@@ -9,3 +9,5 @@ databaseChangeLog:
       file: classpath:db/changelog/api-key-id-secret.sql
   - include:
       file: classpath:db/changelog/passwordless-groups.sql
+  - include:
+      file: classpath:db/changelog/circles.sql

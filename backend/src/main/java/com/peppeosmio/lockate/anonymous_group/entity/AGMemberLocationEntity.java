@@ -28,11 +28,11 @@ public class AGMemberLocationEntity {
   @Column(name = "id")
   private UUID id;
 
-  @Column(name = "coordinates_cipher", nullable = false)
-  private byte[] coordinatesCipher;
+  @Column(name = "payload_cipher", nullable = false)
+  private byte[] payloadCipher;
 
-  @Column(name = "coordinates_iv", nullable = false)
-  private byte[] coordinatesIv;
+  @Column(name = "payload_iv", nullable = false)
+  private byte[] payloadIv;
 
   @Column(name = "timestamp", nullable = false)
   private LocalDateTime timestamp;
@@ -47,21 +47,21 @@ public class AGMemberLocationEntity {
   private AGMemberEntity agMemberEntity;
 
   public AGMemberLocationEntity(
-      EncryptedString encryptedCoordinates,
+      EncryptedString encryptedPayload,
       AGMemberEntity agMemberEntity,
       LocalDateTime timestamp) {
-    this.coordinatesCipher = encryptedCoordinates.cipherText();
-    this.coordinatesIv = encryptedCoordinates.iv();
+    this.payloadCipher = encryptedPayload.cipherText();
+    this.payloadIv = encryptedPayload.iv();
     this.agMemberEntity = agMemberEntity;
     this.agMemberId = agMemberEntity.getId();
     this.timestamp = timestamp;
   }
 
   public static AGMemberLocationEntity fromBase64Fields(
-      EncryptedDataDto encryptedCoordinatesDto,
+      EncryptedDataDto encryptedPayloadDto,
       AGMemberEntity agMemberEntity,
       LocalDateTime timestamp) {
-    var encryptedCoordinates = encryptedCoordinatesDto.toEncryptedString();
-    return new AGMemberLocationEntity(encryptedCoordinates, agMemberEntity, timestamp);
+    var encryptedPayload = encryptedPayloadDto.toEncryptedString();
+    return new AGMemberLocationEntity(encryptedPayload, agMemberEntity, timestamp);
   }
 }

@@ -5,11 +5,11 @@ import com.peppeosmio.lockate.common.classes.EncryptedString;
 import com.peppeosmio.lockate.common.dto.EncryptedDataDto;
 import java.time.LocalDateTime;
 
-public record LocationRecordDto(EncryptedDataDto encryptedCoordinates, LocalDateTime timestamp) {
+public record LocationRecordDto(EncryptedDataDto encryptedPayload, LocalDateTime timestamp) {
   public static LocationRecordDto fromEntity(AGMemberLocationEntity entity) {
     return new LocationRecordDto(
         EncryptedDataDto.fromEncryptedString(
-            new EncryptedString(entity.getCoordinatesCipher(), entity.getCoordinatesIv())),
+            new EncryptedString(entity.getPayloadCipher(), entity.getPayloadIv())),
         entity.getTimestamp());
   }
 }

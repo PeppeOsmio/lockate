@@ -17,11 +17,11 @@ import tools.jackson.databind.ObjectMapper;
 
 @Component
 @Slf4j
-public class AGSendLocationHandshakeInterceptor implements HandshakeInterceptor {
+public class AGWSHandshakeInterceptor implements HandshakeInterceptor {
   private final AGMemberAuthenticator agMemberAuthenticator;
   private final ObjectMapper objectMapper;
 
-  public AGSendLocationHandshakeInterceptor(
+  public AGWSHandshakeInterceptor(
       AGMemberAuthenticator agMemberAuthenticator, ObjectMapper objectMapper) {
     this.agMemberAuthenticator = agMemberAuthenticator;
     this.objectMapper = objectMapper;

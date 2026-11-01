@@ -1,5 +1,7 @@
 package com.peppeosmio.lockate.anonymous_group;
 
+import com.peppeosmio.lockate.anonymous_group.exceptions.AGCircleConflictException;
+import com.peppeosmio.lockate.anonymous_group.exceptions.AGCircleNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotAdminException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
@@ -35,5 +37,16 @@ public class AGExceptionHandler {
   public ResponseEntity<ErrorResponseDto> handleAGMemberNotAdmin(AGMemberNotAdminException e) {
     return ResponseEntity.status(HttpStatus.FORBIDDEN)
         .body(new ErrorResponseDto("ag_member_not_admin"));
+  }
+
+  @ExceptionHandler(AGCircleNotFoundException.class)
+  public ResponseEntity<ErrorResponseDto> handleAGCircleNotFound(AGCircleNotFoundException e) {
+    return ResponseEntity.status(HttpStatus.NOT_FOUND)
+        .body(new ErrorResponseDto("ag_circle_not_found"));
+  }
+
+  @ExceptionHandler(AGCircleConflictException.class)
+  public ResponseEntity<ErrorResponseDto> handleAGCircleConflict(AGCircleConflictException e) {
+    return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponseDto(e.getMessage()));
   }
 }

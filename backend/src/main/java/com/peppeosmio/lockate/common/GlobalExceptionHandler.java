@@ -38,11 +38,6 @@ public class GlobalExceptionHandler {
 
   @ExceptionHandler(Exception.class)
   public ResponseEntity<ErrorResponseDto> handleException(Exception e, WebRequest request) {
-    String contentType = request.getHeader("Accept");
-    if (contentType != null && contentType.contains("text/event-stream")) {
-      // Log it and ignore — SSE stream cannot return JSON
-      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-    }
     e.printStackTrace();
     return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
         .body(new ErrorResponseDto(e.getMessage()));

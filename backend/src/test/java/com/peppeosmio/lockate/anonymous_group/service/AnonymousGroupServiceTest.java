@@ -14,13 +14,17 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.peppeosmio.lockate.anonymous_group.configuration_properties.AGLocationConfigurationProperties;
 import com.peppeosmio.lockate.anonymous_group.dto.*;
+import com.peppeosmio.lockate.anonymous_group.entity.AGCircleEntity;
 import com.peppeosmio.lockate.anonymous_group.entity.AGMemberEntity;
 import com.peppeosmio.lockate.anonymous_group.entity.AnonymousGroupEntity;
+import com.peppeosmio.lockate.anonymous_group.exceptions.AGCircleConflictException;
+import com.peppeosmio.lockate.anonymous_group.exceptions.AGCircleNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotAdminException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.mapper.AGMemberMapper;
 import com.peppeosmio.lockate.anonymous_group.mapper.AnonymousGroupMapper;
+import com.peppeosmio.lockate.anonymous_group.repository.AGCircleRepository;
 import com.peppeosmio.lockate.anonymous_group.repository.AGLocationRepository;
 import com.peppeosmio.lockate.anonymous_group.repository.AGMemberRepository;
 import com.peppeosmio.lockate.anonymous_group.repository.AnonymousGroupRepository;
@@ -39,7 +43,6 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -50,7 +53,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import org.springframework.data.redis.connection.MessageListener;
 import org.springframework.security.crypto.bcrypt.BCrypt;
 import tools.jackson.databind.ObjectMapper;
 
@@ -61,6 +63,7 @@ class AnonymousGroupServiceTest {
   @Mock private AnonymousGroupRepository anonymousGroupRepository;
   @Mock private AGMemberRepository agMemberRepository;
   @Mock private AGLocationRepository agLocationRepository;
+  @Mock private AGCircleRepository agCircleRepository;
   @Mock private RedisService redisService;
   @Mock private InviteService inviteService;
   @Mock private ObjectMapper objectMapper;
@@ -80,6 +83,7 @@ class AnonymousGroupServiceTest {
             anonymousGroupRepository,
             agMemberRepository,
             agLocationRepository,
+            agCircleRepository,
             redisService,
             inviteService,
             objectMapper,
@@ -324,10 +328,10 @@ class AnonymousGroupServiceTest {
     assertThat(result.membersCount()).isEqualTo(5);
   }
 
-  // ---------- saveLocation ----------
+  // ---------- relayMemberMessage ----------
 
   @Test
-  void saveLocation_underThrottleInterval_doesNotSaveButAlwaysPublishes() throws Exception {
+  void relayMemberMessage_underThrottleInterval_doesNotSaveButAlwaysPublishes() throws Exception {
     var memberId = UUID.randomUUID();
     var member = newMember(memberId, "token".getBytes(), false, groupEntity);
     when(anonymousGroupRepository.findById(groupId)).thenReturn(Optional.of(groupEntity));
@@ -336,13 +340,13 @@ class AnonymousGroupServiceTest {
     when(objectMapper.writeValueAsString(any())).thenReturn("{}");
     var authentication = new AGMemberAuthentication(memberId);
     var dto =
-        new AGLocationSaveReqDto(
+        new AGMemberMessageReqDto(
             new EncryptedDataDto(
                 Base64.getEncoder().encodeToString("coord".getBytes()),
                 Base64.getEncoder().encodeToString("iv".getBytes())));
     var lastSaved = LocalDateTime.now(ZoneOffset.UTC).minus(Duration.ofSeconds(30));
 
-    var result = service.saveLocation(groupId, authentication, dto, lastSaved);
+    var result = service.relayMemberMessage(groupId, authentication, dto, lastSaved);
 
     assertThat(result).isEmpty();
     verify(agLocationRepository, never()).save(any());
@@ -350,7 +354,7 @@ class AnonymousGroupServiceTest {
   }
 
   @Test
-  void saveLocation_atThrottleBoundary_saves() throws Exception {
+  void relayMemberMessage_atThrottleBoundary_saves() throws Exception {
     var memberId = UUID.randomUUID();
     var member = newMember(memberId, "token".getBytes(), false, groupEntity);
     when(anonymousGroupRepository.findById(groupId)).thenReturn(Optional.of(groupEntity));
@@ -360,20 +364,20 @@ class AnonymousGroupServiceTest {
     when(agLocationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
     var authentication = new AGMemberAuthentication(memberId);
     var dto =
-        new AGLocationSaveReqDto(
+        new AGMemberMessageReqDto(
             new EncryptedDataDto(
                 Base64.getEncoder().encodeToString("coord".getBytes()),
                 Base64.getEncoder().encodeToString("iv".getBytes())));
     var lastSaved = LocalDateTime.now(ZoneOffset.UTC).minus(Duration.ofMinutes(2));
 
-    var result = service.saveLocation(groupId, authentication, dto, lastSaved);
+    var result = service.relayMemberMessage(groupId, authentication, dto, lastSaved);
 
     assertThat(result).isPresent();
     verify(agLocationRepository).save(any());
   }
 
   @Test
-  void saveLocation_overThrottleInterval_saves() throws Exception {
+  void relayMemberMessage_overThrottleInterval_saves() throws Exception {
     var memberId = UUID.randomUUID();
     var member = newMember(memberId, "token".getBytes(), false, groupEntity);
     when(anonymousGroupRepository.findById(groupId)).thenReturn(Optional.of(groupEntity));
@@ -383,20 +387,20 @@ class AnonymousGroupServiceTest {
     when(agLocationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
     var authentication = new AGMemberAuthentication(memberId);
     var dto =
-        new AGLocationSaveReqDto(
+        new AGMemberMessageReqDto(
             new EncryptedDataDto(
                 Base64.getEncoder().encodeToString("coord".getBytes()),
                 Base64.getEncoder().encodeToString("iv".getBytes())));
     var lastSaved = LocalDateTime.now(ZoneOffset.UTC).minus(Duration.ofMinutes(5));
 
-    var result = service.saveLocation(groupId, authentication, dto, lastSaved);
+    var result = service.relayMemberMessage(groupId, authentication, dto, lastSaved);
 
     assertThat(result).isPresent();
     verify(agLocationRepository).save(any());
   }
 
   @Test
-  void saveLocation_noTimestampProvided_fallsBackToDbLookup() throws Exception {
+  void relayMemberMessage_noTimestampProvided_fallsBackToDbLookup() throws Exception {
     var memberId = UUID.randomUUID();
     var member = newMember(memberId, "token".getBytes(), false, groupEntity);
     when(anonymousGroupRepository.findById(groupId)).thenReturn(Optional.of(groupEntity));
@@ -407,45 +411,214 @@ class AnonymousGroupServiceTest {
     when(agLocationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
     var authentication = new AGMemberAuthentication(memberId);
     var dto =
-        new AGLocationSaveReqDto(
+        new AGMemberMessageReqDto(
             new EncryptedDataDto(
                 Base64.getEncoder().encodeToString("coord".getBytes()),
                 Base64.getEncoder().encodeToString("iv".getBytes())));
 
-    var result = service.saveLocation(groupId, authentication, dto, null);
+    var result = service.relayMemberMessage(groupId, authentication, dto, null);
 
     assertThat(result).isPresent();
     verify(agLocationRepository).findFirstByAgMemberEntityOrderByTimestampDescIdDesc(member);
     verify(agLocationRepository).save(any());
   }
 
-  // ---------- streamLocations ----------
+  // ---------- circles ----------
+
+  private EncryptedDataDto encryptedData() {
+    return new EncryptedDataDto(
+        Base64.getEncoder().encodeToString("circle".getBytes()),
+        Base64.getEncoder().encodeToString("iv".getBytes()));
+  }
+
+  private AGFrameDto publishedFrame() {
+    var captor = ArgumentCaptor.forClass(AGFrameDto.class);
+    verify(objectMapper).writeValueAsString(captor.capture());
+    verify(redisService).publish(eq("ag-" + groupId), any());
+    return captor.getValue();
+  }
 
   @Test
-  void streamLocations_filtersOutAuthorsOwnUpdatesAndUnsubscribeWorks() throws Exception {
+  void upsertCircle_newCircle_savesAndPublishesIt() throws Exception {
+    var circleId = UUID.randomUUID();
+    when(anonymousGroupRepository.findById(groupId)).thenReturn(Optional.of(groupEntity));
+    when(agCircleRepository.findById(circleId)).thenReturn(Optional.empty());
+    when(agCircleRepository.countByAnonymousGroupId(groupId)).thenReturn(0);
+    when(agCircleRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+    service.upsertCircle(groupId, circleId, encryptedData());
+
+    var frame = publishedFrame();
+    assertThat(frame.type()).isEqualTo(AGFrameDto.CIRCLE_UPSERTED);
+    assertThat(frame.circle().id()).isEqualTo(circleId);
+    assertThat(frame.circle().encryptedData()).isEqualTo(encryptedData());
+  }
+
+  @Test
+  void upsertCircle_existingCircleOfTheGroup_updatesIt() throws Exception {
+    var circleId = UUID.randomUUID();
+    var existing =
+        new AGCircleEntity(
+            circleId,
+            new EncryptedString("old".getBytes(), "old-iv".getBytes()),
+            groupEntity,
+            LocalDateTime.now(ZoneOffset.UTC).minusDays(1));
+    when(anonymousGroupRepository.findById(groupId)).thenReturn(Optional.of(groupEntity));
+    when(agCircleRepository.findById(circleId)).thenReturn(Optional.of(existing));
+
+    service.upsertCircle(groupId, circleId, encryptedData());
+
+    assertThat(existing.getDataCipher()).isEqualTo("circle".getBytes());
+    assertThat(publishedFrame().type()).isEqualTo(AGFrameDto.CIRCLE_UPSERTED);
+    verify(agCircleRepository, never()).save(any());
+  }
+
+  @Test
+  void upsertCircle_idOfAnotherGroup_throwsConflictAndPublishesNothing() {
+    var circleId = UUID.randomUUID();
+    var otherGroup =
+        new AnonymousGroupEntity(new EncryptedString("other".getBytes(), "other-iv".getBytes()));
+    otherGroup.setId(UUID.randomUUID());
+    var existing =
+        new AGCircleEntity(
+            circleId,
+            new EncryptedString("old".getBytes(), "old-iv".getBytes()),
+            otherGroup,
+            LocalDateTime.now(ZoneOffset.UTC));
+    when(anonymousGroupRepository.findById(groupId)).thenReturn(Optional.of(groupEntity));
+    when(agCircleRepository.findById(circleId)).thenReturn(Optional.of(existing));
+
+    assertThatThrownBy(() -> service.upsertCircle(groupId, circleId, encryptedData()))
+        .isInstanceOf(AGCircleConflictException.class)
+        .hasMessage("circle_id_taken");
+    verify(redisService, never()).publish(any(), any());
+  }
+
+  @Test
+  void upsertCircle_groupAtTheLimit_throwsConflict() {
+    var circleId = UUID.randomUUID();
+    when(anonymousGroupRepository.findById(groupId)).thenReturn(Optional.of(groupEntity));
+    when(agCircleRepository.findById(circleId)).thenReturn(Optional.empty());
+    when(agCircleRepository.countByAnonymousGroupId(groupId))
+        .thenReturn(AnonymousGroupService.MAX_CIRCLES_PER_GROUP);
+
+    assertThatThrownBy(() -> service.upsertCircle(groupId, circleId, encryptedData()))
+        .isInstanceOf(AGCircleConflictException.class)
+        .hasMessage("circle_limit_reached");
+    verify(agCircleRepository, never()).save(any());
+  }
+
+  @Test
+  void upsertCircle_missingGroup_throwsAGNotFound() {
+    when(anonymousGroupRepository.findById(groupId)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.upsertCircle(groupId, UUID.randomUUID(), encryptedData()))
+        .isInstanceOf(AGNotFoundException.class);
+  }
+
+  @Test
+  void deleteCircle_existingCircle_deletesAndPublishes() throws Exception {
+    var circleId = UUID.randomUUID();
+    var circle =
+        new AGCircleEntity(
+            circleId,
+            new EncryptedString("c".getBytes(), "iv".getBytes()),
+            groupEntity,
+            LocalDateTime.now(ZoneOffset.UTC));
+    when(agCircleRepository.findByIdAndAnonymousGroupId(circleId, groupId))
+        .thenReturn(Optional.of(circle));
+
+    service.deleteCircle(groupId, circleId);
+
+    verify(agCircleRepository).delete(circle);
+    var frame = publishedFrame();
+    assertThat(frame.type()).isEqualTo(AGFrameDto.CIRCLE_DELETED);
+    assertThat(frame.circleId()).isEqualTo(circleId);
+  }
+
+  @Test
+  void deleteCircle_circleOfAnotherGroup_throwsNotFound() {
+    var circleId = UUID.randomUUID();
+    when(agCircleRepository.findByIdAndAnonymousGroupId(circleId, groupId))
+        .thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.deleteCircle(groupId, circleId))
+        .isInstanceOf(AGCircleNotFoundException.class);
+    verify(redisService, never()).publish(any(), any());
+  }
+
+  @Test
+  void getSnapshot_returnsMembersAndCircles() throws Exception {
+    var circle =
+        new AGCircleEntity(
+            UUID.randomUUID(),
+            new EncryptedString("c".getBytes(), "iv".getBytes()),
+            groupEntity,
+            LocalDateTime.now(ZoneOffset.UTC));
+    var memberDto =
+        new AGMemberDto(UUID.randomUUID(), encryptedData(), null, false, Optional.empty());
+    var member = newMember(memberDto.id(), "t".getBytes(), false, groupEntity);
+    when(anonymousGroupRepository.findById(groupId)).thenReturn(Optional.of(groupEntity));
+    when(agMemberRepository.findMembersWithLastLocation(groupId)).thenReturn(List.of(member));
+    when(agMemberMapper.toDto(member)).thenReturn(memberDto);
+    when(agCircleRepository.findByAnonymousGroupIdOrderByCreatedAtAscIdAsc(groupId))
+        .thenReturn(List.of(circle));
+
+    var snapshot = service.getSnapshot(groupId);
+
+    assertThat(snapshot.type()).isEqualTo(AGFrameDto.SNAPSHOT);
+    assertThat(snapshot.members()).containsExactly(memberDto);
+    assertThat(snapshot.circles()).extracting(CircleDto::id).containsExactly(circle.getId());
+  }
+
+  @Test
+  void getSnapshot_missingGroup_throwsAGNotFound() {
+    when(anonymousGroupRepository.findById(groupId)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.getSnapshot(groupId))
+        .isInstanceOf(AGNotFoundException.class);
+  }
+
+  // ---------- group frames ----------
+
+  @Test
+  void deleteMember_publishesMemberLeft() throws Exception {
     var memberId = UUID.randomUUID();
-    var otherMemberId = UUID.randomUUID();
-    var authentication = new AGMemberAuthentication(memberId);
-    var listener = org.mockito.Mockito.mock(MessageListener.class);
-    var channel = "ag-" + groupId;
-    var consumerCaptor = ArgumentCaptor.forClass(Consumer.class);
-    when(redisService.subscribe(eq(channel), consumerCaptor.capture())).thenReturn(listener);
-    var ownUpdate = new LocationUpdateDto(null, memberId);
-    var otherUpdate = new LocationUpdateDto(null, otherMemberId);
-    when(objectMapper.readValue("own-message", LocationUpdateDto.class)).thenReturn(ownUpdate);
-    when(objectMapper.readValue("other-message", LocationUpdateDto.class)).thenReturn(otherUpdate);
-    java.util.List<LocationUpdateDto> received = new java.util.ArrayList<>();
+    var member = newMember(memberId, "token".getBytes(), false, groupEntity);
+    when(agMemberRepository.findById(memberId)).thenReturn(Optional.of(member));
 
-    var unsubscribe = service.streamLocations(groupId, received::add, authentication);
-    @SuppressWarnings("unchecked")
-    Consumer<String> capturedConsumer = consumerCaptor.getValue();
-    capturedConsumer.accept("own-message");
-    capturedConsumer.accept("other-message");
+    service.deleteMember(groupId, new AGMemberAuthentication(memberId));
 
-    assertThat(received).containsExactly(otherUpdate);
+    var frame = publishedFrame();
+    assertThat(frame.type()).isEqualTo(AGFrameDto.MEMBER_LEFT);
+    assertThat(frame.memberId()).isEqualTo(memberId);
+  }
 
-    unsubscribe.run();
-    verify(redisService).unsubscribe(channel, listener);
+  @Test
+  void promoteMember_publishesMemberUpdated() throws Exception {
+    var callerId = UUID.randomUUID();
+    var targetId = UUID.randomUUID();
+    var caller = newMember(callerId, "t".getBytes(), true, groupEntity);
+    var target = newMember(targetId, "t".getBytes(), false, groupEntity);
+    when(agMemberRepository.findById(callerId)).thenReturn(Optional.of(caller));
+    when(agMemberRepository.findByIdAndAnonymousGroupId(targetId, groupId))
+        .thenReturn(Optional.of(target));
+
+    service.promoteMember(groupId, new AGMemberAuthentication(callerId), targetId);
+
+    var frame = publishedFrame();
+    assertThat(frame.type()).isEqualTo(AGFrameDto.MEMBER_UPDATED);
+    assertThat(frame.memberId()).isEqualTo(targetId);
+    assertThat(frame.isAGAdmin()).isTrue();
+  }
+
+  @Test
+  void deleteAnonymousGroupForAdmin_publishesGroupDeleted() throws Exception {
+    when(anonymousGroupRepository.existsById(groupId)).thenReturn(true);
+
+    service.deleteAnonymousGroupForAdmin(groupId);
+
+    assertThat(publishedFrame().type()).isEqualTo(AGFrameDto.GROUP_DELETED);
   }
 
   // ---------- listGroupsForAdmin ----------
