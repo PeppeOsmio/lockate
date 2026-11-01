@@ -123,12 +123,16 @@ interface AnonymousGroupDao {
         """
         UPDATE ag_member
         SET lastLatitude = :lastLatitude, lastLongitude = :lastLongitude,
-        lastSeen = :lastSeen
+        lastSeen = :lastSeen, lastActivity = :lastActivity
         WHERE internalId = :agMemberInternalId
         """
     )
     suspend fun setAGMemberLastLocation(
-        agMemberInternalId: Long, lastLatitude: Double, lastLongitude: Double, lastSeen: Long
+        agMemberInternalId: Long,
+        lastLatitude: Double,
+        lastLongitude: Double,
+        lastSeen: Long,
+        lastActivity: String
     ): Int
 
     @Query("DELETE FROM anonymous_group WHERE connectionId = :connectionSettingsId")

@@ -30,6 +30,7 @@ class AGMemberMapperTest {
             lastLatitude = 40.8517746,
             lastLongitude = 14.2681244,
             lastSeen = createdAt.toInstant(TimeZone.UTC).toEpochMilliseconds(),
+            lastActivity = "InVehicle",
             isAGAdmin = true,
             anonymousGroupInternalId = 2L
         )
@@ -50,6 +51,7 @@ class AGMemberMapperTest {
             lastLatitude = null,
             lastLongitude = null,
             lastSeen = null,
+            lastActivity = "Unknown",
             isAGAdmin = false,
             anonymousGroupInternalId = 2L
         )

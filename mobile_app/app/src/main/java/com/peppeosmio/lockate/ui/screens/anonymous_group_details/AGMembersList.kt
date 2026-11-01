@@ -89,7 +89,13 @@ fun MemberRow(
                     )
                 }
             }
-            LastSeenText(lastSeen = member.lastLocationRecord?.timestamp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                LastSeenText(lastSeen = member.lastLocationRecord?.timestamp)
+                member.lastLocationRecord?.let {
+                    Spacer(Modifier.size(6.dp))
+                    ActivityIndicator(it.activity)
+                }
+            }
         }
         member.lastLocationRecord?.let { circles.nearestContaining(it.coordinates) }?.let {
             PlaceIndicator(it.name)

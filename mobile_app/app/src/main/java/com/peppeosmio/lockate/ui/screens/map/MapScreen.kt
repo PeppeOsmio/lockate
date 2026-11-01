@@ -57,6 +57,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.compose.ui.window.Dialog
 import androidx.core.net.toUri
 import com.peppeosmio.lockate.R
@@ -240,6 +241,11 @@ fun MapScreen(
                 isMyLocationOld = true
             }
         }
+    }
+
+    LifecycleStartEffect(detailsViewModel) {
+        detailsViewModel.resumeMyLocation()
+        onStopOrDispose { detailsViewModel.pauseMyLocation() }
     }
 
     val multiplePermissionsLauncher = rememberLauncherForActivityResult(

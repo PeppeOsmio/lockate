@@ -15,7 +15,7 @@ import com.peppeosmio.lockate.data.anonymous_group.database.AnonymousGroupEntity
 import com.peppeosmio.lockate.data.anonymous_group.database.ConnectionEntity
 
 @Database(
-    version = 4,
+    version = 5,
     entities = [
         ConnectionEntity::class,
         AnonymousGroupEntity::class,
@@ -24,7 +24,9 @@ import com.peppeosmio.lockate.data.anonymous_group.database.ConnectionEntity
         MutedTargetEntity::class
     ],
     exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 3, to = 4)]
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 3, to = 4),
+        AutoMigration(from = 4, to = 5)
+    ]
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun anonymousGroupDao(): AnonymousGroupDao

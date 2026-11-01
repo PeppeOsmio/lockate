@@ -72,6 +72,10 @@ fun MemberDetailsHeader(
                     Spacer(Modifier.size(12.dp))
                 }
                 LastSeenText(lastSeen = member.lastLocationRecord?.timestamp)
+                member.lastLocationRecord?.let {
+                    Spacer(Modifier.size(6.dp))
+                    ActivityIndicator(it.activity)
+                }
             }
         }
         if (member.lastLocationRecord != null && !isMe) {

@@ -19,7 +19,9 @@ object LocationRecordMapper {
             memberId = memberId
         )
         return LocationRecord(
-            coordinates = message.coordinates, timestamp = encryptedLocationRecordDto.timestamp
+            coordinates = message.coordinates,
+            timestamp = encryptedLocationRecordDto.timestamp,
+            activity = message.activity
         )
     }
 }

@@ -4,5 +4,6 @@ import kotlinx.datetime.LocalDateTime
 
 data class LocationRecord(
     val coordinates: Coordinates,
-    val timestamp: LocalDateTime
+    val timestamp: LocalDateTime,
+    val activity: UserActivity
 )

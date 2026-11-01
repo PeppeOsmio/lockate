@@ -1,6 +1,7 @@
 package com.peppeosmio.lockate.service.anonymous_group
 
 import com.peppeosmio.lockate.domain.Coordinates
+import com.peppeosmio.lockate.domain.UserActivity
 import com.peppeosmio.lockate.domain.anonymous_group.Circle
 import com.peppeosmio.lockate.domain.anonymous_group.CircleTransition
 import com.peppeosmio.lockate.domain.anonymous_group.MemberMessage
@@ -23,8 +24,12 @@ class PayloadCodecTest {
     private fun transition(kind: TransitionKind) =
         CircleTransition(UUID.randomUUID().toString(), kind)
 
-    private fun message(transitions: List<CircleTransition> = emptyList()) =
-        MemberMessage(coordinates, sentAtMillis = 1_780_000_000_123, transitions = transitions)
+    private fun message(
+        transitions: List<CircleTransition> = emptyList(),
+        activity: UserActivity = UserActivity.Unknown
+    ) = MemberMessage(
+        coordinates, sentAtMillis = 1_780_000_000_123, transitions = transitions, activity = activity
+    )
 
     @Test
     fun `a member message round trips`() = runTest {
@@ -37,10 +42,31 @@ class PayloadCodecTest {
     }
 
     @Test
+    fun `the activity round trips`() = runTest {
+        UserActivity.entries.forEach { activity ->
+            val encrypted = codec.encryptMemberMessage(message(activity = activity), key, "group", "member")
+
+            assertEquals(activity, codec.decryptMemberMessage(encrypted, key, "group", "member").activity)
+        }
+    }
+
+    @Test
+    fun `messages with and without activity have the same size`() = runTest {
+        val sizes = UserActivity.entries.map {
+            codec.encryptMemberMessage(message(activity = it), key, "group", "member").cipherText.size
+        }
+
+        assertEquals(1, sizes.distinct().size)
+    }
+
+    @Test
     fun `messages with and without transitions have the same size`() = runTest {
         val plain = codec.encryptMemberMessage(message(), key, "group", "member")
         val full = codec.encryptMemberMessage(
-            message(List(PayloadCodec.MAX_TRANSITIONS_PER_MESSAGE) { transition(TransitionKind.Enter) }),
+            message(
+                List(PayloadCodec.MAX_TRANSITIONS_PER_MESSAGE) { transition(TransitionKind.Enter) },
+                UserActivity.InVehicle
+            ),
             key, "group", "member"
         )
 

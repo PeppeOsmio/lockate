@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.peppeosmio.lockate.domain.Coordinates
 import com.peppeosmio.lockate.domain.LocationRecord
+import com.peppeosmio.lockate.domain.UserActivity
 import com.peppeosmio.lockate.domain.anonymous_group.AGChannelFrame
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.domain.anonymous_group.ChannelState
@@ -78,6 +79,22 @@ class AGDetailsViewModel(
         viewModelScope.launch {
             runCatching { getAndMoveToMyLocation(moveCamera) }
         }
+    }
+
+    private var isMyLocationPaused = false
+
+    /** Releases the GPS and the compass while the map isn't visible */
+    fun pauseMyLocation() {
+        if (listenForUserLocationJob?.isActive != true) return
+        listenForUserLocationJob?.cancel()
+        listenForDeviceOrientationJob?.cancel()
+        isMyLocationPaused = true
+    }
+
+    fun resumeMyLocation() {
+        if (!isMyLocationPaused) return
+        isMyLocationPaused = false
+        listenForUserLocation()
     }
 
     /**
@@ -290,7 +307,8 @@ class AGDetailsViewModel(
         listenForUserLocationJob = viewModelScope.launch {
             try {
                 Log.d("", "Streaming my position")
-                locationService.getLocationUpdates().collect { coordinates ->
+                locationService.getLocationUpdates().collect { fix ->
+                    val coordinates = fix.coordinates
                     if (state.value.myLocationRecordFromGPS == null) {
                         _cameraPositionEvents.trySend(CameraTarget(coordinates))
                     }
@@ -300,7 +318,8 @@ class AGDetailsViewModel(
                                 coordinates = coordinates,
                                 timestamp = Clock.System.now().toLocalDateTime(
                                     TimeZone.UTC
-                                )
+                                ),
+                                activity = UserActivity.Unknown
                             )
                         )
                     }
@@ -328,7 +347,8 @@ class AGDetailsViewModel(
                             coordinates = coordinates,
                             timestamp = Clock.System.now().toLocalDateTime(
                                 timeZone = TimeZone.UTC
-                            )
+                            ),
+                            activity = UserActivity.Unknown
                         )
                     )
                 }

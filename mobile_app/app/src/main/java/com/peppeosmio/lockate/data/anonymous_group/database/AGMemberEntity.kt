@@ -1,5 +1,6 @@
 package com.peppeosmio.lockate.data.anonymous_group.database
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -25,6 +26,7 @@ data class AGMemberEntity(
     val lastLatitude: Double?,
     val lastLongitude: Double?,
     val lastSeen: Long?,
+    @ColumnInfo(defaultValue = "Unknown") val lastActivity: String,
     val isAGAdmin: Boolean,
     val anonymousGroupInternalId: Long,
 ) {}

@@ -22,6 +22,14 @@ object LockatePermissions {
             dialogText = "Lockate requires permission to get your position while in the background to share it with others.",
             dialogGrantButton = "Grant",
             dialogDenyButton = "Deny"
+        ), PermissionsRequest(
+            permissions = listOf(
+                Manifest.permission.ACTIVITY_RECOGNITION
+            ),
+            dialogTitle = "Physical activity permission",
+            dialogText = "Lockate uses your physical activity to turn off the GPS while you're still, saving battery, and to show the group whether you're walking or in a vehicle.",
+            dialogGrantButton = "Grant",
+            dialogDenyButton = "Deny"
         )
     ).apply {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

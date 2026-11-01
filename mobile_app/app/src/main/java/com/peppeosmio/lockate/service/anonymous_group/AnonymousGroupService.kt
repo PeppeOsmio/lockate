@@ -46,6 +46,7 @@ import com.peppeosmio.lockate.data.anonymous_group.remote.AGJoinReqDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGJoinResDto
 import com.peppeosmio.lockate.domain.Connection
 import com.peppeosmio.lockate.domain.LocationRecord
+import com.peppeosmio.lockate.domain.UserActivity
 import com.peppeosmio.lockate.domain.anonymous_group.AGLocationUpdate
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.domain.anonymous_group.AnonymousGroup
@@ -66,6 +67,7 @@ import com.peppeosmio.lockate.platform_service.ConnectivityService
 import com.peppeosmio.lockate.platform_service.KeyStoreService
 import com.peppeosmio.lockate.platform_service.LocationService
 import com.peppeosmio.lockate.service.ConnectionService
+import com.peppeosmio.lockate.service.location.PositionProvider
 import com.peppeosmio.lockate.service.crypto.CryptoService
 import com.peppeosmio.lockate.utils.ErrorHandler
 import com.peppeosmio.lockate.utils.SendLoopLog
@@ -130,6 +132,7 @@ class AnonymousGroupService(
     private val connectionService: ConnectionService,
     private val httpClient: HttpClient,
     private val locationService: LocationService,
+    private val positionProvider: PositionProvider,
     private val connectivityService: ConnectivityService,
     private val keyStoreService: KeyStoreService,
     private val payloadCodec: PayloadCodec,
@@ -826,6 +829,7 @@ class AnonymousGroupService(
         }
 
         var lastSent: Instant? = null
+        var lastMode: Pair<UserActivity, Boolean>? = null
         val pendingTransitions = ArrayDeque<CircleTransition>()
 
         var timeoutJob = launch {
@@ -838,11 +842,18 @@ class AnonymousGroupService(
             locationService.awaitLocationDisabled()
             throw LocationDisabledException()
         }
-        locationService.getLocationUpdates().collect { coordinates ->
+        positionProvider.positions().collect { position ->
             val now = Clock.System.now()
+            val coordinates = position.fix.coordinates
+            val mode = position.activity to position.isFresh
+            if (mode != lastMode) {
+                lastMode = mode
+                sendLoopLog.log("channel ${anonymousGroup.id} activity=${mode.first} fresh=${mode.second}")
+            }
 
-            // before the snapshot the circles may be outdated
-            if (snapshotReceived.value) {
+            // before the snapshot the circles may be outdated; the repeated fix of a still user
+            // can't change them
+            if (position.isFresh && snapshotReceived.value) {
                 val result = tracker.update(coordinates)
                 pendingTransitions += result.transitions
                 result.changedStates.forEach { (circleId, isInside) ->
@@ -874,7 +885,8 @@ class AnonymousGroupService(
                 message = MemberMessage(
                     coordinates = coordinates,
                     sentAtMillis = now.toEpochMilliseconds(),
-                    transitions = transitions
+                    transitions = transitions,
+                    activity = position.activity
                 ),
                 key = anonymousGroup.key,
                 groupId = anonymousGroup.id,
@@ -897,7 +909,8 @@ class AnonymousGroupService(
                     connectionId = anonymousGroup.connectionId,
                     locationRecord = LocationRecord(
                         coordinates = coordinates,
-                        timestamp = Clock.System.now().toLocalDateTime(TimeZone.UTC)
+                        timestamp = Clock.System.now().toLocalDateTime(TimeZone.UTC),
+                        activity = position.activity
                     )
                 )
             )
@@ -983,7 +996,7 @@ class AnonymousGroupService(
                         return
                     }
                     lastMessageTimestamps[memberId] = message.sentAtMillis
-                    val locationRecord = LocationRecord(message.coordinates, record.timestamp)
+                    val locationRecord = LocationRecord(message.coordinates, record.timestamp, message.activity)
                     // a member unknown locally joined after our last snapshot: its joined frame
                     // brings it in
                     anonymousGroupDao.getAGMemberByIdAndAGInternalId(memberId, internalId)
@@ -993,7 +1006,8 @@ class AnonymousGroupService(
                                 lastLatitude = locationRecord.coordinates.latitude,
                                 lastLongitude = locationRecord.coordinates.longitude,
                                 lastSeen = locationRecord.timestamp.toInstant(TimeZone.UTC)
-                                    .toEpochMilliseconds()
+                                    .toEpochMilliseconds(),
+                                lastActivity = locationRecord.activity.name
                             )
                         }
                     AGChannelFrame.LiveLocation(

@@ -20,6 +20,8 @@ import com.peppeosmio.lockate.service.PermissionsService
 import com.peppeosmio.lockate.service.crypto.CryptoService
 import com.peppeosmio.lockate.service.invite.InviteService
 import com.peppeosmio.lockate.platform_service.LocationService
+import com.peppeosmio.lockate.platform_service.ActivityService
+import com.peppeosmio.lockate.service.location.PositionProvider
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -124,6 +126,20 @@ val appModule = module {
         )
     }
 
+    single<ActivityService> {
+        ActivityService(context = androidContext(), permissionsService = get())
+    }
+
+    single<PositionProvider> {
+        val locationService = get<LocationService>()
+        val activityService = get<ActivityService>()
+        PositionProvider(
+            gpsFixes = locationService::getLocationUpdates,
+            passiveFixes = locationService::getPassiveLocationUpdates,
+            activities = activityService::getActivityUpdates
+        )
+    }
+
     single<DeviceOrientationService> {
         DeviceOrientationService(
             context = androidContext(),
@@ -140,6 +156,7 @@ val appModule = module {
             connectionService = get(),
             httpClient = get(),
             locationService = get(),
+            positionProvider = get(),
             connectivityService = get(),
             keyStoreService = get(),
             payloadCodec = get(),

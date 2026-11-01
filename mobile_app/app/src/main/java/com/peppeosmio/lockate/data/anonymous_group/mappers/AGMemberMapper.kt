@@ -4,6 +4,7 @@ import com.peppeosmio.lockate.data.anonymous_group.database.AGMemberEntity
 import com.peppeosmio.lockate.data.anonymous_group.remote.EncryptedAGMemberDto
 import com.peppeosmio.lockate.domain.Coordinates
 import com.peppeosmio.lockate.domain.LocationRecord
+import com.peppeosmio.lockate.domain.UserActivity
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.service.anonymous_group.PayloadCodec
 import com.peppeosmio.lockate.service.crypto.CryptoService
@@ -32,7 +33,8 @@ object AGMemberMapper {
 
                     ),
                     timestamp = Instant.fromEpochMilliseconds(entity.lastSeen!!)
-                        .toLocalDateTime(TimeZone.UTC)
+                        .toLocalDateTime(TimeZone.UTC),
+                    activity = UserActivity.valueOf(entity.lastActivity)
                 )
             },
             isAGAdmin = entity.isAGAdmin)
@@ -52,6 +54,7 @@ object AGMemberMapper {
             lastLongitude = agMember.lastLocationRecord?.coordinates?.longitude,
             lastSeen = agMember.lastLocationRecord?.timestamp?.toInstant(TimeZone.UTC)
                 ?.toEpochMilliseconds(),
+            lastActivity = (agMember.lastLocationRecord?.activity ?: UserActivity.Unknown).name,
             anonymousGroupInternalId = anonymousGroupInternalId,
             isAGAdmin = agMember.isAGAdmin
         )

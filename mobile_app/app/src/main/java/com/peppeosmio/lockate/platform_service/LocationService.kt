@@ -25,6 +25,7 @@ import com.google.android.gms.location.Priority
 import com.google.android.gms.location.SettingsClient
 import com.google.android.gms.tasks.Task
 import com.peppeosmio.lockate.domain.Coordinates
+import com.peppeosmio.lockate.domain.LocationFix
 import com.peppeosmio.lockate.exceptions.LocationDisabledException
 import com.peppeosmio.lockate.exceptions.NoPermissionException
 import com.peppeosmio.lockate.service.ConfigSettings
@@ -59,7 +60,7 @@ class LocationService(
     private val permissionsService: PermissionsService,
 ) {
 
-    private val _coordinatesUpdates = MutableSharedFlow<Coordinates>(extraBufferCapacity = 1)
+    private val _locationFixes = MutableSharedFlow<LocationFix>(extraBufferCapacity = 1)
 
     @OptIn(ExperimentalAtomicApi::class)
     private val activeCollectors = AtomicInt(0)
@@ -136,14 +137,17 @@ class LocationService(
     }
 
     @Throws
-    fun getLocationUpdates(): Flow<Coordinates> = flow {
+    fun getLocationUpdates(): Flow<LocationFix> = flow {
         onCollectorAdded()
         try {
-            emitAll(_coordinatesUpdates)
+            emitAll(_locationFixes)
         } finally {
             onCollectorRemoved()
         }
     }
+
+    /** The fixes requested by the other collectors, without turning the GPS on */
+    fun getPassiveLocationUpdates(): Flow<LocationFix> = _locationFixes
 
     @OptIn(ExperimentalAtomicApi::class)
     private fun onCollectorAdded() {
@@ -169,8 +173,13 @@ class LocationService(
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 result.lastLocation?.let { loc ->
-                    val coordinates = Coordinates(loc.latitude, loc.longitude)
-                    val emitted = _coordinatesUpdates.tryEmit(coordinates)
+                    _locationFixes.tryEmit(
+                        LocationFix(
+                            coordinates = Coordinates(loc.latitude, loc.longitude),
+                            accuracyMeters = loc.accuracy,
+                            atMillis = loc.time
+                        )
+                    )
                 }
             }
         }

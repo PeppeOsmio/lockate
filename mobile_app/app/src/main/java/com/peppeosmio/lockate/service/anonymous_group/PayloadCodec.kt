@@ -3,6 +3,7 @@ package com.peppeosmio.lockate.service.anonymous_group
 import com.peppeosmio.lockate.domain.Coordinates
 import com.peppeosmio.lockate.domain.anonymous_group.Circle
 import com.peppeosmio.lockate.domain.anonymous_group.CircleTransition
+import com.peppeosmio.lockate.domain.UserActivity
 import com.peppeosmio.lockate.domain.anonymous_group.MemberMessage
 import com.peppeosmio.lockate.domain.anonymous_group.TransitionKind
 import com.peppeosmio.lockate.domain.crypto.EncryptedData
@@ -31,7 +32,8 @@ class PayloadCodec(private val cryptoService: CryptoService) {
         val lat: Double,
         val lon: Double,
         val ts: Long,
-        val transitions: List<TransitionPayload> = emptyList()
+        val transitions: List<TransitionPayload> = emptyList(),
+        val act: String? = null
     )
 
     @Serializable
@@ -59,7 +61,9 @@ class PayloadCodec(private val cryptoService: CryptoService) {
             ts = message.sentAtMillis,
             transitions = message.transitions.map {
                 TransitionPayload(it.circleId, it.kind.name.lowercase())
-            })
+            },
+            act = ACTIVITY_NAMES[message.activity]
+        )
         val padded = Padding.pad(
             json.encodeToString(MemberMessagePayload.serializer(), payload).toByteArray(),
             MEMBER_MESSAGE_SIZE
@@ -83,7 +87,10 @@ class PayloadCodec(private val cryptoService: CryptoService) {
                         kind = TransitionKind.entries.first { kind ->
                             kind.name.equals(it.kind, ignoreCase = true)
                         })
-                })
+                },
+                activity = ACTIVITY_NAMES.entries.firstOrNull { it.value == payload.act }?.key
+                    ?: UserActivity.Unknown
+            )
         } catch (e: Exception) {
             throw CryptoException()
         }
@@ -124,6 +131,12 @@ class PayloadCodec(private val cryptoService: CryptoService) {
 
     companion object {
         const val MEMBER_MESSAGE_SIZE = 512
+        private val ACTIVITY_NAMES = mapOf(
+            UserActivity.Still to "still",
+            UserActivity.OnFoot to "foot",
+            UserActivity.OnBicycle to "bike",
+            UserActivity.InVehicle to "vehicle"
+        )
         const val CIRCLE_SIZE = 384
         const val MAX_TRANSITIONS_PER_MESSAGE = 4
         const val MAX_CIRCLE_NAME_CHARS = 40
