@@ -18,6 +18,7 @@ import com.peppeosmio.lockate.anonymous_group.security.AGMemberAuthentication;
 import com.peppeosmio.lockate.common.dto.EncryptedDataDto;
 import com.peppeosmio.lockate.common.dto.PageQueryDto;
 import com.peppeosmio.lockate.common.dto.PageResponseDto;
+import com.peppeosmio.lockate.common.exceptions.InvalidEncryptedDataException;
 import com.peppeosmio.lockate.common.exceptions.UnauthorizedException;
 import com.peppeosmio.lockate.invite.InviteService;
 import com.peppeosmio.lockate.invite.exceptions.InvalidJoinTokenException;
@@ -77,6 +78,8 @@ public class AnonymousGroupService {
   }
 
   public static final int MAX_CIRCLES_PER_GROUP = 50;
+  // The clients pad circles to 384 bytes and member messages to 512, plus the 16-byte GCM tag
+  public static final int MAX_ENCRYPTED_BLOB_BYTES = 1024;
 
   public static String getRedisAGChannel(UUID anonymousGroupId) {
     return "ag-" + anonymousGroupId.toString();
@@ -121,13 +124,14 @@ public class AnonymousGroupService {
 
   @Transactional
   public void upsertCircle(UUID anonymousGroupId, UUID circleId, EncryptedDataDto encryptedData)
-      throws AGNotFoundException, AGCircleConflictException {
+      throws AGNotFoundException, AGCircleConflictException, InvalidEncryptedDataException {
+    var encrypted = encryptedData.toEncryptedString(MAX_ENCRYPTED_BLOB_BYTES);
+    // locked, or two creations at once could both see room for one more circle
     var agEntity =
         anonymousGroupRepository
-            .findById(anonymousGroupId)
+            .findByIdForUpdate(anonymousGroupId)
             .orElseThrow(() -> new AGNotFoundException(anonymousGroupId));
     var now = LocalDateTime.now(ZoneOffset.UTC);
-    var encrypted = encryptedData.toEncryptedString();
     var existing = agCircleRepository.findById(circleId).orElse(null);
     AGCircleEntity circle;
     if (existing == null) {
@@ -285,10 +289,11 @@ public class AnonymousGroupService {
       AGMemberAuthentication authentication,
       AGMemberMessageReqDto dto,
       @Nullable LocalDateTime lastSavedLocationTimeStamp)
-      throws AGNotFoundException, UnauthorizedException {
+      throws AGNotFoundException, UnauthorizedException, InvalidEncryptedDataException {
     if (!(authentication instanceof AGMemberAuthentication agMemberAuthentication)) {
       throw new UnauthorizedException();
     }
+    var encryptedPayload = dto.encryptedPayload().toEncryptedString(MAX_ENCRYPTED_BLOB_BYTES);
     // should never throw
     var anonymousGroupEntity =
         anonymousGroupRepository
@@ -324,8 +329,7 @@ public class AnonymousGroupService {
     if (shouldSave) {
       var lastLocation =
           agLocationRepository.save(
-              AGMemberLocationEntity.fromBase64Fields(
-                  dto.encryptedPayload(), agMemberEntity, timestamp));
+              new AGMemberLocationEntity(encryptedPayload, agMemberEntity, timestamp));
       agMemberEntity.setLastLocation(lastLocation);
       agMemberRepository.save(agMemberEntity);
       return Optional.of(timestamp);

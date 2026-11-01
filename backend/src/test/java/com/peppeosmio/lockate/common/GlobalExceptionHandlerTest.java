@@ -2,6 +2,7 @@ package com.peppeosmio.lockate.common;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.peppeosmio.lockate.common.exceptions.InvalidEncryptedDataException;
 import com.peppeosmio.lockate.common.exceptions.NotFoundException;
 import com.peppeosmio.lockate.common.exceptions.UnauthorizedException;
 import org.junit.jupiter.api.Test;
@@ -45,6 +46,14 @@ class GlobalExceptionHandlerTest {
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     assertThat(response.getBody().error()).isEqualTo("unauthorized");
+  }
+
+  @Test
+  void handleInvalidEncryptedData_returns400() {
+    var response = handler.handleInvalidEncryptedData(new InvalidEncryptedDataException());
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(response.getBody().error()).isEqualTo("invalid_encrypted_data");
   }
 
   @Test

@@ -11,6 +11,8 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.data.redis.listener.RedisMessageListenerContainer;
+import org.springframework.core.task.SimpleAsyncTaskExecutor;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -28,8 +30,21 @@ public class RedisService {
     // Configure Listener Container
     this.container = new RedisMessageListenerContainer();
     this.container.setConnectionFactory(connectionFactory);
+    // By default every message runs on a new thread, so frames could reach a socket out of order
+    this.container.setTaskExecutor(newListenerExecutor());
+    // It defaults to the task executor, and the subscription would hold its only thread
+    this.container.setSubscriptionExecutor(new SimpleAsyncTaskExecutor("redis-subscription-"));
     this.container.afterPropertiesSet();
     this.container.start();
+  }
+
+  static ThreadPoolTaskExecutor newListenerExecutor() {
+    var executor = new ThreadPoolTaskExecutor();
+    executor.setCorePoolSize(1);
+    executor.setMaxPoolSize(1);
+    executor.setThreadNamePrefix("redis-listener-");
+    executor.initialize();
+    return executor;
   }
 
   public void saveValue(String key, String value, Duration ttl) {

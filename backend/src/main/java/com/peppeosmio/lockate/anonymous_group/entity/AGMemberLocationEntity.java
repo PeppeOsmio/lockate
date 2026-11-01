@@ -1,7 +1,6 @@
 package com.peppeosmio.lockate.anonymous_group.entity;
 
 import com.peppeosmio.lockate.common.classes.EncryptedString;
-import com.peppeosmio.lockate.common.dto.EncryptedDataDto;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -55,13 +54,5 @@ public class AGMemberLocationEntity {
     this.agMemberEntity = agMemberEntity;
     this.agMemberId = agMemberEntity.getId();
     this.timestamp = timestamp;
-  }
-
-  public static AGMemberLocationEntity fromBase64Fields(
-      EncryptedDataDto encryptedPayloadDto,
-      AGMemberEntity agMemberEntity,
-      LocalDateTime timestamp) {
-    var encryptedPayload = encryptedPayloadDto.toEncryptedString();
-    return new AGMemberLocationEntity(encryptedPayload, agMemberEntity, timestamp);
   }
 }

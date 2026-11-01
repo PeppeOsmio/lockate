@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -17,6 +18,7 @@ import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.security.AGMemberAuthentication;
 import com.peppeosmio.lockate.anonymous_group.service.AnonymousGroupService;
 import com.peppeosmio.lockate.common.dto.EncryptedDataDto;
+import com.peppeosmio.lockate.common.exceptions.InvalidEncryptedDataException;
 import com.peppeosmio.lockate.common.exceptions.UnauthorizedException;
 import com.peppeosmio.lockate.redis.RedisService;
 import java.time.LocalDateTime;
@@ -138,6 +140,73 @@ class AGWSHandlerTest {
   }
 
   @Test
+  void afterConnectionEstablished_frameArrivingWhileSubscribing_isSentAfterTheSnapshot()
+      throws Exception {
+    var other = UUID.randomUUID();
+    when(redisService.subscribe(eq("ag-" + groupId), any()))
+        .thenAnswer(
+            i -> {
+              i.<Consumer<String>>getArgument(1).accept(json(messageFrom(other)));
+              return redisListener;
+            });
+    when(anonymousGroupService.getSnapshot(groupId))
+        .thenReturn(AGFrameDto.snapshot(java.util.List.of(), java.util.List.of()));
+
+    handler.afterConnectionEstablished(session);
+
+    var sent = sentPayloads();
+    assertThat(sent).hasSize(2);
+    assertThat(objectMapper.readValue(sent.get(0), AGFrameDto.class).type())
+        .isEqualTo(AGFrameDto.SNAPSHOT);
+    assertThat(objectMapper.readValue(sent.get(1), AGFrameDto.class).type())
+        .isEqualTo(AGFrameDto.MEMBER_MESSAGE);
+  }
+
+  @Test
+  void afterConnectionEstablished_frameArrivingWhileHeldOnesAreSent_isSentAfterThem()
+      throws Exception {
+    var consumerCaptor = ArgumentCaptor.forClass(Consumer.class);
+    when(redisService.subscribe(eq("ag-" + groupId), consumerCaptor.capture()))
+        .thenReturn(redisListener);
+    var first = json(messageFrom(UUID.randomUUID()));
+    var second = json(messageFrom(UUID.randomUUID()));
+    var third = json(messageFrom(UUID.randomUUID()));
+    when(anonymousGroupService.getSnapshot(groupId))
+        .thenAnswer(
+            i -> {
+              @SuppressWarnings("unchecked")
+              Consumer<String> consumer = consumerCaptor.getValue();
+              consumer.accept(first);
+              consumer.accept(second);
+              return AGFrameDto.snapshot(java.util.List.of(), java.util.List.of());
+            });
+    var late = new Thread[1];
+    doAnswer(
+            i -> {
+              if (i.<TextMessage>getArgument(0).getPayload().equals(first)) {
+                @SuppressWarnings("unchecked")
+                Consumer<String> consumer = consumerCaptor.getValue();
+                late[0] = new Thread(() -> consumer.accept(third));
+                late[0].start();
+                var deadline = System.nanoTime() + 2_000_000_000L;
+                while (late[0].getState() != Thread.State.BLOCKED
+                    && late[0].getState() != Thread.State.TERMINATED
+                    && System.nanoTime() < deadline) {
+                  Thread.sleep(5);
+                }
+              }
+              return null;
+            })
+        .when(session)
+        .sendMessage(any(TextMessage.class));
+
+    handler.afterConnectionEstablished(session);
+    late[0].join(2000);
+
+    assertThat(sentPayloads().subList(1, 4)).containsExactly(first, second, third);
+  }
+
+  @Test
   void afterConnectionEstablished_missingGroup_closesAsGroupDeleted() throws Exception {
     when(redisService.subscribe(any(), any())).thenReturn(redisListener);
     when(anonymousGroupService.getSnapshot(groupId)).thenThrow(new AGNotFoundException(groupId));
@@ -255,6 +324,16 @@ class AGWSHandlerTest {
   void handleTextMessage_unauthorizedException_closesWithBadData() throws Exception {
     when(anonymousGroupService.relayMemberMessage(any(), any(), any(), any()))
         .thenThrow(new UnauthorizedException());
+
+    handler.handleTextMessage(session, locationMessage());
+
+    verify(session).close(CloseStatus.BAD_DATA);
+  }
+
+  @Test
+  void handleTextMessage_invalidEncryptedData_closesWithBadData() throws Exception {
+    when(anonymousGroupService.relayMemberMessage(any(), any(), any(), any()))
+        .thenThrow(new InvalidEncryptedDataException());
 
     handler.handleTextMessage(session, locationMessage());
 

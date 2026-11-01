@@ -10,6 +10,7 @@ import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotFoundExcepti
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.security.AGMemberAuthentication;
 import com.peppeosmio.lockate.anonymous_group.service.AnonymousGroupService;
+import com.peppeosmio.lockate.common.exceptions.InvalidEncryptedDataException;
 import com.peppeosmio.lockate.common.exceptions.UnauthorizedException;
 import java.util.UUID;
 import jakarta.validation.Valid;
@@ -86,7 +87,7 @@ public class SecuredAGController {
       @PathVariable UUID circleId,
       @Valid @RequestBody CircleUpsertReqDto dto,
       AGMemberAuthentication authentication)
-      throws AGNotFoundException, AGCircleConflictException {
+      throws AGNotFoundException, AGCircleConflictException, InvalidEncryptedDataException {
     anonymousGroupService.upsertCircle(anonymousGroupId, circleId, dto.encryptedData());
   }
 

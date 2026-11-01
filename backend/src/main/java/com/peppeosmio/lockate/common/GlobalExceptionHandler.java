@@ -1,6 +1,7 @@
 package com.peppeosmio.lockate.common;
 
 import com.peppeosmio.lockate.common.dto.ErrorResponseDto;
+import com.peppeosmio.lockate.common.exceptions.InvalidEncryptedDataException;
 import com.peppeosmio.lockate.common.exceptions.NotFoundException;
 import com.peppeosmio.lockate.common.exceptions.UnauthorizedException;
 import org.springframework.http.HttpStatus;
@@ -28,6 +29,13 @@ public class GlobalExceptionHandler {
   public ResponseEntity<ErrorResponseDto> handleBind(BindException e) {
     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
         .body(new ErrorResponseDto("invalid_request"));
+  }
+
+  @ExceptionHandler(InvalidEncryptedDataException.class)
+  public ResponseEntity<ErrorResponseDto> handleInvalidEncryptedData(
+      InvalidEncryptedDataException e) {
+    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        .body(new ErrorResponseDto("invalid_encrypted_data"));
   }
 
   @ExceptionHandler(UnauthorizedException.class)

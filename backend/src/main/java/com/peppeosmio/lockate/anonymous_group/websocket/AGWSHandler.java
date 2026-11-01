@@ -5,6 +5,7 @@ import com.peppeosmio.lockate.anonymous_group.dto.AGMemberMessageReqDto;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.security.AGMemberAuthentication;
 import com.peppeosmio.lockate.anonymous_group.service.AnonymousGroupService;
+import com.peppeosmio.lockate.common.exceptions.InvalidEncryptedDataException;
 import com.peppeosmio.lockate.common.exceptions.UnauthorizedException;
 import com.peppeosmio.lockate.redis.RedisService;
 import com.peppeosmio.lockate.utils.TTLMap;
@@ -60,15 +61,33 @@ public class AGWSHandler extends TextWebSocketHandler {
    * Frames from Redis that arrive while the snapshot is being built are held back and sent right
    * after it, so the client never misses a change nor applies it before the snapshot.
    */
-  private static class Connection {
+  private class Connection {
+    final WebSocketSession session;
+    final UUID ownMemberId;
     final String channel;
-    final MessageListener listener;
     final List<String> pending = new ArrayList<>();
     boolean snapshotSent = false;
+    MessageListener listener;
 
-    Connection(String channel, MessageListener listener) {
+    Connection(WebSocketSession session, UUID ownMemberId, String channel) {
+      this.session = session;
+      this.ownMemberId = ownMemberId;
       this.channel = channel;
-      this.listener = listener;
+    }
+
+    synchronized void onRedisMessage(String message) {
+      if (snapshotSent) {
+        forward(session, ownMemberId, message);
+      } else {
+        pending.add(message);
+      }
+    }
+
+    // Forwarding under the lock keeps the held frames ahead of the ones that arrive meanwhile
+    synchronized void onSnapshotSent() {
+      snapshotSent = true;
+      pending.forEach(message -> forward(session, ownMemberId, message));
+      pending.clear();
     }
   }
 
@@ -89,21 +108,9 @@ public class AGWSHandler extends TextWebSocketHandler {
         new ConcurrentWebSocketSessionDecorator(
             wsSession, SEND_TIME_LIMIT_MS, SEND_BUFFER_LIMIT_BYTES);
     var channel = AnonymousGroupService.getRedisAGChannel(anonymousGroupId);
-    var connection = new Connection[1];
-    var listener =
-        redisService.subscribe(
-            channel,
-            message -> {
-              synchronized (connection[0]) {
-                if (!connection[0].snapshotSent) {
-                  connection[0].pending.add(message);
-                  return;
-                }
-              }
-              forward(session, authentication.getId(), message);
-            });
-    connection[0] = new Connection(channel, listener);
-    connections.put(wsSession.getId(), connection[0]);
+    var connection = new Connection(session, authentication.getId(), channel);
+    connection.listener = redisService.subscribe(channel, connection::onRedisMessage);
+    connections.put(wsSession.getId(), connection);
     try {
       var snapshot = anonymousGroupService.getSnapshot(anonymousGroupId);
       session.sendMessage(new TextMessage(objectMapper.writeValueAsString(snapshot)));
@@ -111,13 +118,7 @@ public class AGWSHandler extends TextWebSocketHandler {
       session.close(GROUP_DELETED);
       return;
     }
-    List<String> pending;
-    synchronized (connection[0]) {
-      pending = List.copyOf(connection[0].pending);
-      connection[0].pending.clear();
-      connection[0].snapshotSent = true;
-    }
-    pending.forEach(message -> forward(session, authentication.getId(), message));
+    connection.onSnapshotSent();
   }
 
   private void forward(WebSocketSession session, UUID ownMemberId, String message) {
@@ -182,7 +183,10 @@ public class AGWSHandler extends TextWebSocketHandler {
       if (timestampSaved != null) {
         lastSavedLocationsCache.put(agMemberAuthentication.getId(), timestampSaved);
       }
-    } catch (AGNotFoundException | UnauthorizedException | JacksonException e) {
+    } catch (AGNotFoundException
+        | UnauthorizedException
+        | InvalidEncryptedDataException
+        | JacksonException e) {
       session.close(CloseStatus.BAD_DATA);
     } catch (Exception e) {
       session.close(CloseStatus.SERVER_ERROR);
