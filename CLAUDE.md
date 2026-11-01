@@ -27,7 +27,9 @@ Three core domain entities:
 
 **Auth**: members authenticate with a 32-byte random token, BCrypt-hashed on server, sent as `Authorization: AGMember {memberId} {token}`.
 
-**Real-time**: Location is sent over WebSocket (`/api/ws/anonymous-groups/{id}/send-location`) and received via SSE (`/api/anonymous-groups/{id}/locations`). The server relays via Redis pub/sub on channel `ag-{groupId}` without decrypting.
+**Real-time**: one bidirectional WebSocket per member and group (`/api/ws/anonymous-groups/{id}`), held by `AGWSHandler`. The client sends `{encryptedPayload}` messages; the server sends JSON frames with a `type` (`AGFrameDto`): a `snapshot` first (members, circles), then `member.message` (opaque relay of another member's message), `member.joined|left|updated`, `circle.upserted|deleted`. The server closes with 4401 when the member is removed and 4404 when the group is deleted. State changes are published on the Redis channel `ag-{groupId}` after the transaction commits, and every socket subscribes to it, so it works across backend instances. Member messages are relayed without decrypting.
+
+**Circles**: places of a group (home, school...), created, edited and deleted by any member through `PUT|DELETE /api/anonymous-groups/{id}/circles/{circleId}` (the client generates the id). Name, centre and radius are one encrypted blob (AES-GCM, AAD `lockate-circle-v1|groupId|circleId`, padded to 384 bytes). Geofencing runs on the sender's phone (`GeofenceTracker`), and the arrivals and departures go in the `transitions` of its next scheduled member message, never in an extra message: a member message is always a position (JSON `lat`, `lon`, `ts`, `transitions`), padded to 512 bytes, AAD `lockate-member-msg-v1|groupId|memberId`, so the server can't tell the ones with transitions. Notifications come only from live frames, never from stored records, and only while the foreground service runs; muted circles and members are kept only in Room.
 
 **Redis** (Valkey, referred to as Redis throughout the codebase): used for the invite mailbox (`invite:{id}`, `invite-nameplate:{n}`, `invite-claim:{id}`, `invite-join:{groupId}:{tokenHash}`, 10-min TTL), rate-limit counters (`rate:*`) and pub/sub location relay.
 
@@ -87,7 +89,7 @@ The `@SecuredAGMember` annotation marks endpoints that require a valid member to
 
 The `AnonymousGroupService` is the main orchestration point.
 
-Location saves are throttled server-side via a `TTLMap` - a member cannot write a new location record more often than `lockate.retention.anonymous-group.location.save-interval` (default `PT2M`).
+Member messages are always relayed, but saved only if the member's last saved record is older than the interval: the server throttles saves via a `TTLMap` - a member cannot write a new location record more often than `lockate.retention.anonymous-group.location.save-interval` (default `PT2M`).
 
 ## Mobile
 
@@ -115,7 +117,7 @@ The first clone needs `git submodule update --init --recursive` (Mbed TLS), and 
 
 `com.peppeosmio.lockate` splits into: `ui/screens/` (6 screens), `service/` (AnonymousGroupService, InviteService, CryptoService, ConnectionService, LocationService), `data/` (Room entities, remote DTOs, mappers), `domain/`, `dao/`, `di/` (Koin modules), `android_service/` (background location foreground service).
 
-`AnonymousGroupService` owns all networking. It holds a `_events: MutableSharedFlow<AnonymousGroupEvent>` that ViewModels collect for state changes. WebSocket reconnection uses exponential backoff (max 50s).
+`AnonymousGroupService` owns all networking. It holds a `_events: MutableSharedFlow<AnonymousGroupEvent>` that ViewModels collect for state changes. `holdChannel` keeps a group's WebSocket open while the caller is suspended, shared by the foreground service (`holdAllChannels`, every group we are in) and the open map; frames are applied to Room by the channel and then exposed on `groupFrames`. `PayloadCodec` encrypts and decrypts member messages and circles. Reconnection uses a backoff (max 60s).
 
 `CryptoService` uses the `whyoleg/cryptography` Kotlin library for AES-GCM and group key generation. `InviteExchange` is Lockate's invite protocol on the generic `:jpake` module and `InviteService` drives it over HTTP (`:jpake` is Kotlin Multiplatform; the native part is `:jpake-native`, and an iOS client would call the same C code through cinterop). Both are singletons via Koin.
 

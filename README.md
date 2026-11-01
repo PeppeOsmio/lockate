@@ -76,7 +76,7 @@ Yes. Lockate is open source under the MIT license.
 - Group names, member names and coordinates are encrypted client-side with AES-256-GCM, with a random group key that never leaves the members' devices.
 - Invites use EC-JPAKE ([RFC 8236](https://www.rfc-editor.org/rfc/rfc8236)) keyed by the words of the invite code, from [Mbed TLS](https://github.com/Mbed-TLS/mbedtls) (Apache-2.0), called from Kotlin through `mobile_app/jpake`, a generic Kotlin Multiplatform J-PAKE module with RFC 8236 key confirmation. The server relays the messages through a short-lived Redis mailbox. Both phones confirm they derived the same key before the inviter sends the group key and a single-use join token, encrypted with a key derived from the shared secret.
 - Members authenticate with a random 32-byte token that the server stores BCrypt-hashed.
-- Locations are sent over WebSocket and received over SSE. The server relays them through Redis pub/sub without decrypting.
+- Each member keeps one WebSocket per group, which carries their encrypted location and everything that happens in the group: the other members' locations, joins and leaves, and the circles (places like home or school, with encrypted name, position and radius). Arrivals and departures are computed on the phone and travel inside the padded, encrypted location messages, so the server can't tell them from any other location. The server relays all of it through Redis pub/sub without decrypting.
 
 ## Self-hosting
 
