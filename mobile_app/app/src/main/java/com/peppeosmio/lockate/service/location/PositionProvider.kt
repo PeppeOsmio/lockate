@@ -17,6 +17,7 @@ internal const val GOOD_ACCURACY_METERS = 30f
 internal const val STALE_FIX_MILLIS = 60_000L
 internal const val STILL_TICK_MILLIS = 2_000L
 internal const val WARM_UP_MILLIS = 20_000L
+internal const val STILL_ACQUIRE_MILLIS = 20_000L
 
 private val LocationFix.isAccurate get() = accuracyMeters <= GOOD_ACCURACY_METERS
 
@@ -34,7 +35,9 @@ data class Position(val fix: LocationFix, val isFresh: Boolean, val activity: Us
 
 /**
  * The positions to send. While the user is still the GPS is released and the last good fix is
- * repeated every [STILL_TICK_MILLIS], so the server can't tell stillness from the messages. When
+ * repeated every [STILL_TICK_MILLIS], so the server can't tell stillness from the messages; without
+ * a recent accurate fix the GPS stays on until one arrives, or for at most [STILL_ACQUIRE_MILLIS]
+ * if any fix came, since indoors an accurate one may never come. When
  * the user moves again the GPS is back, and the last good fix is held until an accurate one
  * arrives (at most [WARM_UP_MILLIS]). Until the GPS answers after a change of activity, the last
  * good fix is repeated too.
@@ -71,10 +74,11 @@ class PositionProvider(
 
     private fun stillPositions(): Flow<Position> = flow {
         if (!hasRecentAccurateFix()) {
+            val giveUpAt = now() + STILL_ACQUIRE_MILLIS
             emitAll(gpsFixes().transformWhile { fix ->
                 remember(fix)
                 emit(Position(fix, isFresh = true, UserActivity.Still))
-                !fix.isAccurate
+                !fix.isAccurate && now() < giveUpAt
             })
         }
         emitAll(channelFlow {

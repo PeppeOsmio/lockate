@@ -12,9 +12,11 @@ import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -121,6 +123,32 @@ class PositionProviderTest {
         assertEquals(0, fakes.gpsCollectors)
         assertEquals(listOf(1.0, 2.0, 2.0), positions.map { it.fix.coordinates.latitude })
     }
+
+    @Test
+    fun `still without an accurate fix releases the GPS after a while and repeats the best one`() =
+        runTest {
+            val fakes = Fakes()
+            fakes.activity.value = UserActivity.Still
+            val positions = collect(fakes.provider(this).positions())
+
+            fakes.gps.emit(fix(1.0, 60f, currentTime))
+            runCurrent()
+            advanceTimeBy(STILL_ACQUIRE_MILLIS / 2)
+            fakes.gps.emit(fix(2.0, 90f, currentTime))
+            runCurrent()
+            assertEquals(1, fakes.gpsCollectors)
+
+            advanceTimeBy(STILL_ACQUIRE_MILLIS)
+            fakes.gps.emit(fix(3.0, 70f, currentTime))
+            runCurrent()
+            advanceTimeBy(STILL_TICK_MILLIS)
+            runCurrent()
+
+            assertEquals(0, fakes.gpsCollectors)
+            val repeated = positions.last()
+            assertFalse(repeated.isFresh)
+            assertEquals(1.0, repeated.fix.coordinates.latitude, 0.0)
+        }
 
     @Test
     fun `still with an old accurate fix keeps the GPS on`() = runTest {
