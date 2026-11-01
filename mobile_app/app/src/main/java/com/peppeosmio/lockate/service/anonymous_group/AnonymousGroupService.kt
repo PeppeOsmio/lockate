@@ -647,6 +647,9 @@ class AnonymousGroupService(
         tracker.replaceCircles(localCircles.map { CircleMapper.entityToDomain(it) })
         tracker.restoreStates(localCircles.mapNotNull { c -> c.selfInside?.let { c.id to it } }
             .toMap())
+        // outlives the connections: the tracker already counts these transitions as done, so
+        // dropping them with a socket would lose them for good
+        val pendingTransitions = ArrayDeque<CircleTransition>()
         val lastMessageTimestamps = mutableMapOf<String, Long>()
         val maxRetries = 10
         var retries = 0
@@ -679,7 +682,7 @@ class AnonymousGroupService(
                                     if (sending) {
                                         sendLocationWhileEnabled(
                                             anonymousGroup, channel, this@webSocket, tracker,
-                                            snapshotReceived
+                                            pendingTransitions, snapshotReceived
                                         )
                                     }
                                 }
@@ -776,6 +779,7 @@ class AnonymousGroupService(
         channel: GroupChannel,
         session: DefaultClientWebSocketSession,
         tracker: GeofenceTracker,
+        pendingTransitions: ArrayDeque<CircleTransition>,
         snapshotReceived: StateFlow<Boolean>
     ) {
         try {
@@ -783,7 +787,10 @@ class AnonymousGroupService(
                 try {
                     locationService.checkPermissionsAndLocationEnabled()
                     channel.status.update { it.copy(isLocationDisabled = false) }
-                    sendLocation(anonymousGroup, channel, session, tracker, snapshotReceived)
+                    sendLocation(
+                        anonymousGroup, channel, session, tracker, pendingTransitions,
+                        snapshotReceived
+                    )
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -816,6 +823,7 @@ class AnonymousGroupService(
         channel: GroupChannel,
         session: DefaultClientWebSocketSession,
         tracker: GeofenceTracker,
+        pendingTransitions: ArrayDeque<CircleTransition>,
         snapshotReceived: StateFlow<Boolean>
     ) = coroutineScope {
         Log.i(
@@ -830,7 +838,6 @@ class AnonymousGroupService(
 
         var lastSent: Instant? = null
         var lastMode: Pair<UserActivity, Boolean>? = null
-        val pendingTransitions = ArrayDeque<CircleTransition>()
 
         var timeoutJob = launch {
             getTimeoutJob()
@@ -938,8 +945,12 @@ class AnonymousGroupService(
         val frame: AGChannelFrame = try {
             when (dto.type) {
                 AGFrameDto.SNAPSHOT -> {
-                    val members = dto.members!!.map { decryptMember(anonymousGroup, it) }
-                    val circles = dto.circles!!.map {
+                    val members = dto.members!!.mapDecryptable(onUndecryptable = {
+                        Log.e("", "Skipped member ${it.id} of ${anonymousGroup.id}: can't decrypt it")
+                    }) { decryptMember(anonymousGroup, it) }
+                    val circles = dto.circles!!.mapDecryptable(onUndecryptable = {
+                        Log.e("", "Skipped circle ${it.id} of ${anonymousGroup.id}: can't decrypt it")
+                    }) {
                         CircleMapper.dtoToDomain(it, payloadCodec, anonymousGroup.key, anonymousGroup.id)
                     }
                     members.firstOrNull { it.id == anonymousGroup.memberId }?.let { me ->

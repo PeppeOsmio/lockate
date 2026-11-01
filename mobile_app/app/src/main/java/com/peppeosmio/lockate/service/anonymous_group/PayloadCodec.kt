@@ -81,12 +81,11 @@ class PayloadCodec(private val cryptoService: CryptoService) {
             return MemberMessage(
                 coordinates = Coordinates(payload.lat, payload.lon),
                 sentAtMillis = payload.ts,
-                transitions = payload.transitions.map {
-                    CircleTransition(
-                        circleId = it.circleId,
-                        kind = TransitionKind.entries.first { kind ->
-                            kind.name.equals(it.kind, ignoreCase = true)
-                        })
+                // a kind added by a newer version is skipped, so its position still counts
+                transitions = payload.transitions.mapNotNull {
+                    TransitionKind.entries.firstOrNull { kind ->
+                        kind.name.equals(it.kind, ignoreCase = true)
+                    }?.let { kind -> CircleTransition(circleId = it.circleId, kind = kind) }
                 },
                 activity = ACTIVITY_NAMES.entries.firstOrNull { it.value == payload.act }?.key
                     ?: UserActivity.Unknown

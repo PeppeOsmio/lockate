@@ -8,6 +8,7 @@ import com.peppeosmio.lockate.domain.anonymous_group.MemberMessage
 import com.peppeosmio.lockate.domain.anonymous_group.TransitionKind
 import com.peppeosmio.lockate.service.crypto.CryptoException
 import com.peppeosmio.lockate.service.crypto.CryptoService
+import com.peppeosmio.lockate.service.crypto.Padding
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -75,6 +76,22 @@ class PayloadCodecTest {
             PayloadCodec.MEMBER_MESSAGE_SIZE + CryptoService.AES_GCM_TAG_BYTES,
             plain.cipherText.size
         )
+    }
+
+    @Test
+    fun `a transition of an unknown kind is skipped and the position is kept`() = runTest {
+        val payload = """{"lat":1.5,"lon":2.5,"ts":7,"transitions":[""" +
+            """{"circleId":"c1","kind":"dwell"},{"circleId":"c2","kind":"enter"}]}"""
+        val encrypted = cryptoService.encrypt(
+            Padding.pad(payload.toByteArray(), PayloadCodec.MEMBER_MESSAGE_SIZE),
+            key,
+            "lockate-member-msg-v1|group|member".toByteArray()
+        )
+
+        val received = codec.decryptMemberMessage(encrypted, key, "group", "member")
+
+        assertEquals(Coordinates(1.5, 2.5), received.coordinates)
+        assertEquals(listOf(CircleTransition("c2", TransitionKind.Enter)), received.transitions)
     }
 
     @Test
