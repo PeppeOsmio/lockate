@@ -1,6 +1,16 @@
 package com.peppeosmio.lockate.ui.screens.anonymous_group_details
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.width
@@ -25,8 +35,8 @@ import kotlin.math.abs
 import kotlin.math.cos
 
 enum class CircleStyle {
-    // the circles of the group, with their name
-    Normal,
+    // only the edge, for the circle picked on the map
+    Outline,
 
     // the other circles while one is being edited
     Faint,
@@ -58,21 +68,21 @@ private fun projectCircle(mapState: MapState, circle: Circle): CircleProjection?
 
 /** Draws [circle] over the map, following the camera and the size of the circle as they change. */
 @Composable
-fun CircleOverlay(mapState: MapState, circle: Circle, style: CircleStyle = CircleStyle.Normal) {
+fun CircleOverlay(mapState: MapState, circle: Circle, style: CircleStyle = CircleStyle.Outline) {
     val projection by remember(mapState.cameraPosition, circle) {
         derivedStateOf { projectCircle(mapState, circle) }
     }
     val (center, radius) = projection ?: return
-    val color = if (style == CircleStyle.Editing) {
-        MaterialTheme.colorScheme.primary
-    } else MaterialTheme.colorScheme.tertiary
+    val color = if (style == CircleStyle.Faint) {
+        MaterialTheme.colorScheme.tertiary
+    } else MaterialTheme.colorScheme.primary
     val fillAlpha = when (style) {
-        CircleStyle.Normal -> 0.18f
+        CircleStyle.Outline -> 0.06f
         CircleStyle.Faint -> 0.08f
         CircleStyle.Editing -> 0.25f
     }
     val borderWidth = when (style) {
-        CircleStyle.Normal -> 2.dp
+        CircleStyle.Outline -> 2.dp
         CircleStyle.Faint -> 1.dp
         CircleStyle.Editing -> 3.dp
     }
@@ -88,11 +98,11 @@ fun CircleOverlay(mapState: MapState, circle: Circle, style: CircleStyle = Circl
             drawCircle(color, 6.dp.toPx(), centerPx)
         }
     }
-    if (style == CircleStyle.Editing) return
+    if (style != CircleStyle.Faint) return
     Text(
         text = circle.name,
         style = MaterialTheme.typography.labelMedium,
-        color = if (style == CircleStyle.Faint) color.copy(alpha = 0.6f) else color,
+        color = color.copy(alpha = 0.6f),
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier
@@ -100,4 +110,66 @@ fun CircleOverlay(mapState: MapState, circle: Circle, style: CircleStyle = Circl
             .width(120.dp),
         textAlign = TextAlign.Center
     )
+}
+
+/** A pin on the centre of [circle], with its name; the circle itself is only drawn when picked. */
+@Composable
+fun CirclePin(mapState: MapState, circle: Circle, isSelected: Boolean, onClick: () -> Unit) {
+    val projection by remember(mapState.cameraPosition, circle) {
+        derivedStateOf {
+            mapState.screenLocationFromPosition(circle.center.toMapLibreComposePosition())
+                ?.let { DpOffset(it.x, it.y) }
+        }
+    }
+    val tip = projection ?: return
+    val color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary
+    val pinSize = if (isSelected) 36.dp else 30.dp
+    val haloSize = pinSize + 6.dp
+    // the tip of the drop sits a little above the bottom of its icon
+    val tipInset = 0.08f
+    Icon(
+        Icons.Filled.Place,
+        contentDescription = null,
+        tint = MaterialTheme.colorScheme.surface,
+        modifier = Modifier
+            .offset(tip.x - haloSize / 2, tip.y - haloSize * (1 - tipInset))
+            .size(haloSize)
+    )
+    Icon(
+        Icons.Filled.Place,
+        contentDescription = circle.name,
+        tint = color,
+        modifier = Modifier
+            .offset(tip.x - pinSize / 2, tip.y - pinSize * (1 - tipInset))
+            .size(pinSize)
+    )
+    val touchSize = 48.dp
+    Box(
+        modifier = Modifier
+            .offset(tip.x - touchSize / 2, tip.y - pinSize / 2 - touchSize / 2)
+            .size(touchSize)
+            .clickable(interactionSource = null, indication = null, onClick = onClick)
+    )
+    val labelWidth = 120.dp
+    Box(
+        modifier = Modifier
+            .offset(tip.x - labelWidth / 2, tip.y + 2.dp)
+            .width(labelWidth)
+            .clickable(interactionSource = null, indication = null, onClick = onClick),
+        contentAlignment = Alignment.TopCenter
+    ) {
+        Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.9f)
+        ) {
+            Text(
+                text = circle.name,
+                style = MaterialTheme.typography.labelSmall,
+                color = color,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+            )
+        }
+    }
 }

@@ -260,6 +260,8 @@ fun MembersMap(
     mapState: MapState,
     membersPoints: List<MapPoint>?,
     circles: List<Circle>,
+    selectedCircleId: String?,
+    onTapCircle: (circleId: String) -> Unit,
     myPoint: MapPoint?,
     myDeviceOrientation: Float?,
     compassTopPadding: Dp,
@@ -333,7 +335,12 @@ fun MembersMap(
 
         // TODO consider returning to rendering via maplibre native layers
 
-        circles.forEach { circle -> key(circle.id) { CircleOverlay(mapState, circle) } }
+        circles.firstOrNull { it.id == selectedCircleId }?.let { CircleOverlay(mapState, it) }
+        circles.forEach { circle ->
+            key(circle.id) {
+                CirclePin(mapState, circle, circle.id == selectedCircleId) { onTapCircle(circle.id) }
+            }
+        }
 
         pointsClusters.forEach { cluster ->
             val containsMe = cluster.members.any {

@@ -16,6 +16,8 @@ data class AGDetailsState(
     val members: Map<String, AGMember>? = null,
     val membersCoordinates: Map<String, Coordinates>? = null,
     val circles: List<Circle> = emptyList(),
+    // the circle whose edge is drawn on the map
+    val selectedCircleId: String? = null,
     val showLoadingOverlay: Boolean = false,
     val adminPasswordText: String = "",
     val showDeleteAGDialog: Boolean = false,

@@ -23,14 +23,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.Icons
 import androidx.compose.ui.unit.dp
 import com.peppeosmio.lockate.R
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
+import com.peppeosmio.lockate.domain.anonymous_group.Circle
+import com.peppeosmio.lockate.domain.anonymous_group.nearestContaining
 
 @Composable
 fun AGMembersList(
     authenticatedMemberId: String,
     members: List<AGMember>,
+    circles: List<Circle>,
     modifier: Modifier = Modifier,
     onTapMember: (memberId: String) -> Unit
 ) {
@@ -40,6 +45,7 @@ fun AGMembersList(
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 MemberRow(
                     member = member,
+                    circles = circles,
                     isMe = authenticatedMemberId == member.id,
                     onTap = { onTapMember(member.id) })
             }
@@ -49,7 +55,11 @@ fun AGMembersList(
 
 @Composable
 fun MemberRow(
-    modifier: Modifier = Modifier, member: AGMember, isMe: Boolean, onTap: () -> Unit
+    modifier: Modifier = Modifier,
+    member: AGMember,
+    circles: List<Circle>,
+    isMe: Boolean,
+    onTap: () -> Unit
 ) {
     Row(
         modifier = modifier
@@ -79,10 +89,29 @@ fun MemberRow(
                 }
             }
             LastSeenText(lastSeen = member.lastLocationRecord?.timestamp)
+            member.lastLocationRecord?.let { circles.nearestContaining(it.coordinates) }?.let {
+                PlaceIndicator(it.name)
+            }
         }
         if (member.isAGAdmin) {
             AdminIndicator()
         }
+    }
+}
+
+@Composable
+private fun PlaceIndicator(name: String) {
+    val color = MaterialTheme.colorScheme.tertiary
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Filled.Place, contentDescription = null, tint = color, modifier = Modifier.size(14.dp))
+        Spacer(Modifier.size(4.dp))
+        Text(
+            text = "At $name",
+            style = MaterialTheme.typography.bodySmall,
+            color = color,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 

@@ -93,6 +93,7 @@ class AGDetailsViewModel(
                 anonymousGroup = null,
                 members = null,
                 circles = emptyList(),
+                selectedCircleId = null,
                 selectedMemberId = null,
                 isFollowingSelectedMember = false,
                 makeAdminDialogMemberId = null,
@@ -123,7 +124,9 @@ class AGDetailsViewModel(
                     if (event.anonymousGroupId != state.value.anonymousGroup?.id) {
                         return@collect
                     }
-                    _state.update { it.copy(isFollowingSelectedMember = false) }
+                    _state.update {
+                        it.copy(isFollowingSelectedMember = false, selectedCircleId = event.circle.id)
+                    }
                     skipNextMoveToMyLocation = true
                     _cameraPositionEvents.trySend(
                         CameraTarget(event.circle.center, fitRadiusMeters = event.circle.radiusMeters)
@@ -260,7 +263,10 @@ class AGDetailsViewModel(
             }
 
             is AGChannelFrame.CircleDeleted -> _state.update {
-                it.copy(circles = it.circles.filter { c -> c.id != frame.circleId })
+                it.copy(
+                    circles = it.circles.filter { c -> c.id != frame.circleId },
+                    selectedCircleId = it.selectedCircleId.takeIf { id -> id != frame.circleId }
+                )
             }
         }
     }
@@ -616,6 +622,12 @@ class AGDetailsViewModel(
 
     fun onMapGesture() {
         _state.update { it.copy(isFollowingSelectedMember = false) }
+    }
+
+    fun toggleCircle(circleId: String) {
+        _state.update {
+            it.copy(selectedCircleId = if (it.selectedCircleId == circleId) null else circleId)
+        }
     }
 
     fun clearSelectedMember() {

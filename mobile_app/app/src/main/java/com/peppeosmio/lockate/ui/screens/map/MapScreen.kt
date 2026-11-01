@@ -414,6 +414,8 @@ fun MapScreen(
                     mapState = mapState,
                     membersPoints = membersPoints,
                     circles = details.circles,
+                    selectedCircleId = details.selectedCircleId,
+                    onTapCircle = detailsViewModel::toggleCircle,
                     myPoint = myPoint,
                     myDeviceOrientation = details.myDeviceOrientation,
                     compassTopPadding = statusBarTop + 72.dp,

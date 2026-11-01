@@ -125,6 +125,7 @@ fun MembersSheetBody(
             AGMembersList(
                 modifier = Modifier.padding(bottom = SHEET_BODY_BOTTOM_PADDING),
                 authenticatedMemberId = group.memberId,
+                circles = details.circles,
                 members = details.members!!.values.sortedWith(
                     compareByDescending<AGMember> { it.id == group.memberId }.thenBy { it.name.lowercase() }
                 ),
