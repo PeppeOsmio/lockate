@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -89,12 +90,9 @@ fun MemberRow(
                 }
             }
             LastSeenText(lastSeen = member.lastLocationRecord?.timestamp)
-            member.lastLocationRecord?.let { circles.nearestContaining(it.coordinates) }?.let {
-                PlaceIndicator(it.name)
-            }
         }
-        if (member.isAGAdmin) {
-            AdminIndicator()
+        member.lastLocationRecord?.let { circles.nearestContaining(it.coordinates) }?.let {
+            PlaceIndicator(it.name)
         }
     }
 }
@@ -102,12 +100,13 @@ fun MemberRow(
 @Composable
 private fun PlaceIndicator(name: String) {
     val color = MaterialTheme.colorScheme.tertiary
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.Filled.Place, contentDescription = null, tint = color, modifier = Modifier.size(14.dp))
+    Row(modifier = Modifier.widthIn(max = 120.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Filled.Place, contentDescription = null, tint = color, modifier = Modifier.size(16.dp))
         Spacer(Modifier.size(4.dp))
         Text(
-            text = "At $name",
-            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.weight(1f, fill = false),
+            text = name,
+            style = MaterialTheme.typography.bodyMedium,
             color = color,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
