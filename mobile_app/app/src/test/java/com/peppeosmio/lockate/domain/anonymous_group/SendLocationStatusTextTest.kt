@@ -8,11 +8,13 @@ class SendLocationStatusTextTest {
     private fun status(
         totalAGCount: Int = 1,
         activeAGCount: Int = 0,
+        receivingAGCount: Int = 0,
         isLocationDisabled: Boolean = false,
         isLocationUnavailable: Boolean = false,
     ) = SendLocationStatus(
         totalAGCount = totalAGCount,
         activeAGCount = activeAGCount,
+        receivingAGCount = receivingAGCount,
         isLocationDisabled = isLocationDisabled,
         isLocationUnavailable = isLocationUnavailable,
     )
@@ -57,6 +59,22 @@ class SendLocationStatusTextTest {
         assertEquals(
             "${SendLocationStatus.TEXT_SHARING_MANY_PREFIX}3${SendLocationStatus.TEXT_SHARING_MANY_SUFFIX}",
             status(totalAGCount = 3, activeAGCount = 3).notificationText()
+        )
+    }
+
+    @Test
+    fun `only watching one group is shown when nothing is shared`() {
+        assertEquals(
+            SendLocationStatus.TEXT_RECEIVING_ONE,
+            status(totalAGCount = 0, receivingAGCount = 1).notificationText()
+        )
+    }
+
+    @Test
+    fun `only watching many groups is shown when nothing is shared`() {
+        assertEquals(
+            "Watching the circles of 3 groups",
+            status(totalAGCount = 0, receivingAGCount = 3).notificationText()
         )
     }
 }

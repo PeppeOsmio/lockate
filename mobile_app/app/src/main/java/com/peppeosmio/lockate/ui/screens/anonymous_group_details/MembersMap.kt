@@ -52,6 +52,7 @@ import org.maplibre.compose.material3.AttributionLinks
 import org.maplibre.compose.material3.DisappearingCompassButton
 import org.maplibre.compose.material3.ExpandingAttributionButton
 import kotlin.math.sqrt
+import com.peppeosmio.lockate.domain.anonymous_group.Circle
 
 data class MembersCluster(
     val center: DpOffset, val members: List<MapPoint>
@@ -258,6 +259,7 @@ fun MembersMap(
     modifier: Modifier = Modifier,
     mapState: MapState,
     membersPoints: List<MapPoint>?,
+    circles: List<Circle>,
     myPoint: MapPoint?,
     myDeviceOrientation: Float?,
     compassTopPadding: Dp,
@@ -330,6 +332,8 @@ fun MembersMap(
         }
 
         // TODO consider returning to rendering via maplibre native layers
+
+        circles.forEach { circle -> key(circle.id) { CircleOverlay(mapState, circle) } }
 
         pointsClusters.forEach { cluster ->
             val containsMe = cluster.members.any {

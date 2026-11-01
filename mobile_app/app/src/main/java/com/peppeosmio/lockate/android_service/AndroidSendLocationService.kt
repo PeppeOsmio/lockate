@@ -11,6 +11,7 @@ import android.os.IBinder
 import android.os.Looper
 import androidx.annotation.RequiresPermission
 import androidx.core.app.NotificationCompat
+import com.peppeosmio.lockate.MainActivity
 import com.peppeosmio.lockate.R
 import com.peppeosmio.lockate.domain.anonymous_group.notificationText
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
@@ -35,6 +36,8 @@ class AndroidSendLocationService : Service() {
     // notification updates), so a status update arriving after stop() can't repost the notification
     private var isRunning = false
     private var sendJob: Job? = null
+    private var notifyJob: Job? = null
+    private var nextCircleNotificationId = FIRST_CIRCLE_NOTIFICATION_ID
     private var restartJob: Job? = null
     private var notificationBuilder: NotificationCompat.Builder? = null
 
@@ -74,9 +77,20 @@ class AndroidSendLocationService : Service() {
         if (sendJob?.isActive == true) return
 
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        notifyJob?.cancel()
+        notifyJob = serviceScope.launch {
+            // only the live frames notify, never the ones read back from the server
+            anonymousGroupService.groupFrames.collect { groupFrame ->
+                val (groupName, texts) =
+                    anonymousGroupService.describeCircleEvents(groupFrame) ?: return@collect
+                mainHandler.post {
+                    if (isRunning) texts.forEach { showCircleNotification(groupName, it) }
+                }
+            }
+        }
         sendJob = serviceScope.launch {
             try {
-                anonymousGroupService.sendLocation { status ->
+                anonymousGroupService.holdAllChannels { status ->
                     // when the coroutines are canceled the status callback is still invoked
                     // to notify that they're not sending location anymore by decrementing AG count
                     // so update the notification only while running, otherwise a "ghost" notification
@@ -93,6 +107,23 @@ class AndroidSendLocationService : Service() {
                 e.printStackTrace()
             }
         }
+    }
+
+    private fun showCircleNotification(groupName: String, text: String) {
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
+        val openIntent = PendingIntent.getActivity(
+            this,
+            2,
+            Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val notification = NotificationCompat.Builder(this, CIRCLE_NOTIFICATION_CHANNEL_ID)
+            .setContentTitle(groupName).setContentText(text)
+            .setSmallIcon(R.drawable.ic_launcher_background).setContentIntent(openIntent)
+            .setAutoCancel(true).build()
+        (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).notify(
+            nextCircleNotificationId++, notification
+        )
     }
 
     private fun createNotificationBuilder(): NotificationCompat.Builder {
@@ -140,6 +171,8 @@ class AndroidSendLocationService : Service() {
         restartJob?.cancel()
         sendJob?.cancel()
         sendJob = null
+        notifyJob?.cancel()
+        notifyJob = null
         stopForeground(STOP_FOREGROUND_REMOVE)
         (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).cancel(1)
         stopSelf()
@@ -150,6 +183,8 @@ class AndroidSendLocationService : Service() {
         restartJob?.cancel()
         val oldJob = sendJob
         sendJob = null
+        notifyJob?.cancel()
+        notifyJob = null
         restartJob = serviceScope.launch(Dispatchers.Main) {
             oldJob?.cancelAndJoin()
             start()
@@ -168,5 +203,7 @@ class AndroidSendLocationService : Service() {
         const val ACTION_STOP = "ACTION_STOP"
         const val ACTION_RESTART = "ACTION_RESTART"
         const val NOTIFICATION_CHANNEL_ID = "lockateLocation"
+        const val CIRCLE_NOTIFICATION_CHANNEL_ID = "lockateCircles"
+        private const val FIRST_CIRCLE_NOTIFICATION_ID = 100
     }
 }

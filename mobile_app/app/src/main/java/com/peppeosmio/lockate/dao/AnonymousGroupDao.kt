@@ -5,8 +5,12 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
+import com.peppeosmio.lockate.data.anonymous_group.database.AGCircleEntity
 import com.peppeosmio.lockate.data.anonymous_group.database.AGMemberEntity
 import com.peppeosmio.lockate.data.anonymous_group.database.AnonymousGroupEntity
+import com.peppeosmio.lockate.data.anonymous_group.database.MutedTargetEntity
+import com.peppeosmio.lockate.data.anonymous_group.mappers.CircleMapper
+import com.peppeosmio.lockate.domain.anonymous_group.Circle
 
 @Dao
 interface AnonymousGroupDao {
@@ -94,12 +98,12 @@ interface AnonymousGroupDao {
 
     @Query(
         """
-        SELECT * FROM anonymous_group 
-        WHERE sendLocation = 1 AND isMember = 1 AND existsRemote = 1
+        SELECT * FROM anonymous_group
+        WHERE isMember = 1 AND existsRemote = 1
         ORDER BY internalId DESC
         """
     )
-    suspend fun listAGsToSendLocation(): List<AnonymousGroupEntity>
+    suspend fun listAGsToHold(): List<AnonymousGroupEntity>
 
     @Query(
         """
@@ -129,4 +133,87 @@ interface AnonymousGroupDao {
 
     @Query("DELETE FROM anonymous_group WHERE connectionId = :connectionSettingsId")
     suspend fun deleteAllAGsOfConnection(connectionSettingsId: Long)
+
+    @Query("DELETE FROM ag_member WHERE id = :id AND anonymousGroupInternalId = :agInternalId")
+    suspend fun deleteAGMemberById(id: String, agInternalId: Long)
+
+    @Insert
+    suspend fun insertAGMember(agMember: AGMemberEntity): Long
+
+    @Query("SELECT * FROM ag_circle WHERE anonymousGroupInternalId = :anonymousGroupInternalId ORDER BY internalId")
+    suspend fun listCircles(anonymousGroupInternalId: Long): List<AGCircleEntity>
+
+    @Insert
+    suspend fun insertCircle(circle: AGCircleEntity)
+
+    @Query(
+        """
+        UPDATE ag_circle
+        SET name = :name, latitude = :latitude, longitude = :longitude,
+        radiusMeters = :radiusMeters, selfInside = :selfInside
+        WHERE id = :id AND anonymousGroupInternalId = :agInternalId
+        """
+    )
+    suspend fun updateCircle(
+        id: String,
+        agInternalId: Long,
+        name: String,
+        latitude: Double,
+        longitude: Double,
+        radiusMeters: Double,
+        selfInside: Boolean?
+    )
+
+    @Query("DELETE FROM ag_circle WHERE id = :id AND anonymousGroupInternalId = :agInternalId")
+    suspend fun deleteCircle(id: String, agInternalId: Long)
+
+    @Query("UPDATE ag_circle SET selfInside = :selfInside WHERE id = :id AND anonymousGroupInternalId = :agInternalId")
+    suspend fun setCircleSelfInside(id: String, agInternalId: Long, selfInside: Boolean)
+
+    /** Keeps what this device knows about circles that didn't change, and drops the others. */
+    @Transaction
+    suspend fun syncCircles(agInternalId: Long, circles: List<Circle>) {
+        val existing = listCircles(agInternalId).associateBy { it.id }
+        existing.keys.filter { id -> circles.none { it.id == id } }
+            .forEach { deleteCircle(it, agInternalId) }
+        circles.forEach { upsertCircle(agInternalId, it) }
+    }
+
+    @Query("SELECT * FROM ag_circle WHERE id = :id AND anonymousGroupInternalId = :agInternalId")
+    suspend fun getCircle(id: String, agInternalId: Long): AGCircleEntity?
+
+    /**
+     * The circle can arrive twice at about the same time, from the server's answer to whoever saved
+     * it and from the group's channel, so what is already there is read inside the transaction.
+     */
+    @Transaction
+    suspend fun upsertCircle(agInternalId: Long, circle: Circle) {
+        val existing = getCircle(circle.id, agInternalId)
+        if (existing == null) {
+            insertCircle(CircleMapper.domainToEntity(circle, agInternalId, selfInside = null))
+            return
+        }
+        val unchanged = existing.name == circle.name &&
+                existing.latitude == circle.center.latitude &&
+                existing.longitude == circle.center.longitude &&
+                existing.radiusMeters == circle.radiusMeters
+        updateCircle(
+            id = circle.id,
+            agInternalId = agInternalId,
+            name = circle.name,
+            latitude = circle.center.latitude,
+            longitude = circle.center.longitude,
+            radiusMeters = circle.radiusMeters,
+            selfInside = if (unchanged) existing.selfInside else null
+        )
+    }
+
+    @Query("SELECT targetId FROM muted_target WHERE anonymousGroupInternalId = :agInternalId")
+    suspend fun listMutedTargets(agInternalId: Long): List<String>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertMutedTarget(mutedTarget: MutedTargetEntity)
+
+    @Query("DELETE FROM muted_target WHERE anonymousGroupInternalId = :agInternalId AND targetId = :targetId")
+    suspend fun deleteMutedTarget(agInternalId: Long, targetId: String)
 }

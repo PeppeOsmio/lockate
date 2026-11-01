@@ -28,3 +28,12 @@ data class JoinAnonymousGroupRoute(val connectionSettingsId: Long) : Route
 
 @Serializable
 data class InviteRoute(val anonymousGroupInternalId: Long) : Route
+
+@Serializable
+data class CirclesRoute(val anonymousGroupInternalId: Long) : Route
+
+@Serializable
+data class CircleEditorRoute(
+    val anonymousGroupInternalId: Long,
+    val circleId: String? = null,
+) : Route

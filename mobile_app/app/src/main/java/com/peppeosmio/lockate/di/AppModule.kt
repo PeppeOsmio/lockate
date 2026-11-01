@@ -13,6 +13,7 @@ import com.peppeosmio.lockate.platform_service.ConnectivityService
 import com.peppeosmio.lockate.platform_service.DeviceOrientationService
 import com.peppeosmio.lockate.platform_service.KeyStoreService
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
+import com.peppeosmio.lockate.service.anonymous_group.PayloadCodec
 import com.peppeosmio.lockate.service.ConnectionService
 import com.peppeosmio.lockate.service.MapStyleService
 import com.peppeosmio.lockate.service.PermissionsService
@@ -24,7 +25,6 @@ import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.logging.Logger
 import io.ktor.client.plugins.logging.Logging
-import io.ktor.client.plugins.sse.SSE
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.serialization.kotlinx.json.json
 import org.koin.android.ext.koin.androidContext
@@ -57,12 +57,10 @@ val appModule = module {
                 // WebSockets-plugin pingIntervalMillis is ignored by the OkHttp engine.
                 config {
                     pingInterval(15, java.util.concurrent.TimeUnit.SECONDS)
-                    // must exceed the backend's 15s SSE heartbeat, otherwise the location stream
-                    // times out whenever no member sends for 10s (OkHttp's default)
+                    // OkHttp's default 10s would time the channel out whenever nobody sends
                     readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
                 }
             }
-            install(SSE)
             install(WebSockets)
 
             install(ContentNegotiation) {
@@ -98,6 +96,10 @@ val appModule = module {
 
     single<CryptoService> {
         CryptoService()
+    }
+
+    single<PayloadCodec> {
+        PayloadCodec(cryptoService = get())
     }
 
     single<PermissionsService> {
@@ -140,6 +142,7 @@ val appModule = module {
             locationService = get(),
             connectivityService = get(),
             keyStoreService = get(),
+            payloadCodec = get(),
             sendLoopLog = get()
         )
     }

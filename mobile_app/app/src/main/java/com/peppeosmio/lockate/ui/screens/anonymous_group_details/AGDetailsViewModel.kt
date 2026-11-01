@@ -5,7 +5,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.peppeosmio.lockate.domain.Coordinates
 import com.peppeosmio.lockate.domain.LocationRecord
+import com.peppeosmio.lockate.domain.anonymous_group.AGChannelFrame
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
+import com.peppeosmio.lockate.domain.anonymous_group.ChannelState
+import com.peppeosmio.lockate.domain.anonymous_group.Circle
 import com.peppeosmio.lockate.exceptions.AGMemberNotAdminException
 import com.peppeosmio.lockate.exceptions.LocationDisabledException
 import com.peppeosmio.lockate.exceptions.NoPermissionException
@@ -15,28 +18,27 @@ import com.peppeosmio.lockate.platform_service.DeviceOrientationService
 import com.peppeosmio.lockate.platform_service.LocationService
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupEvent
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
-import com.peppeosmio.lockate.service.anonymous_group.StreamRetryAction
-import com.peppeosmio.lockate.service.anonymous_group.classifyStreamFailure
-import com.peppeosmio.lockate.service.anonymous_group.nextBackoffSeconds
 import com.peppeosmio.lockate.utils.ErrorHandler
 import com.peppeosmio.lockate.utils.ErrorInfo
 import com.peppeosmio.lockate.utils.LoadingState
 import com.peppeosmio.lockate.utils.SnackbarErrorMessage
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
-import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
+
+/** Where the map should go: [fitRadiusMeters] zooms to show a whole circle, otherwise the zoom is fixed. */
+data class CameraTarget(val coordinates: Coordinates, val fitRadiusMeters: Double? = null)
 
 class AGDetailsViewModel(
     private val anonymousGroupService: AnonymousGroupService,
@@ -51,7 +53,7 @@ class AGDetailsViewModel(
     val snackbarEvents = _snackbarEvents.receiveAsFlow()
 
     // conflated so that a camera move requested before the map starts collecting isn't lost
-    private val _cameraPositionEvents = Channel<Coordinates>(Channel.CONFLATED)
+    private val _cameraPositionEvents = Channel<CameraTarget>(Channel.CONFLATED)
     val cameraPositionEvents = _cameraPositionEvents.receiveAsFlow()
     private var listenForUserLocationJob: Job? = null
     private var listenForDeviceOrientationJob: Job? = null
@@ -66,9 +68,15 @@ class AGDetailsViewModel(
         startMyLocation()
     }
 
+    // Going back to the map from the circles page starts the location again, and moving the camera
+    // to the phone would undo showing a circle
+    private var skipNextMoveToMyLocation = false
+
     fun startMyLocation() {
+        val moveCamera = !skipNextMoveToMyLocation
+        skipNextMoveToMyLocation = false
         viewModelScope.launch {
-            runCatching { getAndMoveToMyLocation() }
+            runCatching { getAndMoveToMyLocation(moveCamera) }
         }
     }
 
@@ -84,6 +92,7 @@ class AGDetailsViewModel(
             it.copy(
                 anonymousGroup = null,
                 members = null,
+                circles = emptyList(),
                 selectedMemberId = null,
                 isFollowingSelectedMember = false,
                 makeAdminDialogMemberId = null,
@@ -98,6 +107,7 @@ class AGDetailsViewModel(
             try {
                 getLocalAG(anonymousGroupInternalId)
                 getLocalMembers()
+                getLocalCircles()
                 remoteOperations()
             } catch (e: CancellationException) {
                 throw e
@@ -109,6 +119,17 @@ class AGDetailsViewModel(
     private suspend fun collectAGEvents() {
         anonymousGroupService.events.collect { event ->
             when (event) {
+                is AnonymousGroupEvent.ShowCircleOnMapEvent -> {
+                    if (event.anonymousGroupId != state.value.anonymousGroup?.id) {
+                        return@collect
+                    }
+                    _state.update { it.copy(isFollowingSelectedMember = false) }
+                    skipNextMoveToMyLocation = true
+                    _cameraPositionEvents.trySend(
+                        CameraTarget(event.circle.center, fitRadiusMeters = event.circle.radiusMeters)
+                    )
+                }
+
                 is AnonymousGroupEvent.AGLocationSentEvent -> {
                     if (state.value.members == null || state.value.anonymousGroup == null) {
                         return@collect
@@ -131,50 +152,115 @@ class AGDetailsViewModel(
     }
 
     fun remoteOperations() {
-        val connectionSettingsId = connectionId ?: return
+        val anonymousGroup = state.value.anonymousGroup ?: return
         remoteJob?.cancel()
         remoteJob = viewModelScope.launch {
-            try {
-                _state.update { it.copy(remoteDataLoadingState = LoadingState.IsLoading) }
-                getRemoteMembers(connectionSettingsId)
-                _state.update { it.copy(remoteDataLoadingState = LoadingState.Success) }
-                var retries = 0
-                while (true) {
-                    var failure: Exception? = null
-                    try {
-                        streamLocations(connectionSettingsId, onConnected = {
-                            retries = 0
-                            _state.update { it.copy(locationStreamState = LocationStreamState.Connected) }
-                        })
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                        failure = e
-                    }
-                    val action = classifyStreamFailure(failure, connectivityService.isNetworkAvailable())
-                    if (action == StreamRetryAction.Stop) {
-                        _state.update { it.copy(locationStreamState = LocationStreamState.Stopped) }
-                        break
-                    }
-                    _state.update { it.copy(locationStreamState = LocationStreamState.Reconnecting) }
-                    if (action == StreamRetryAction.AwaitNetwork) {
-                        withTimeoutOrNull(60.seconds) { connectivityService.awaitNetworkAvailable() }
-                    } else {
-                        retries += 1
-                        val waitSeconds = nextBackoffSeconds(retries)
-                        Log.e(
-                            "",
-                            "Location stream for connectionSettingsId=$connectionSettingsId ended, retrying in $waitSeconds s"
-                        )
-                        delay(waitSeconds.seconds)
+            _state.update {
+                it.copy(
+                    remoteDataLoadingState = LoadingState.IsLoading,
+                    locationStreamState = LocationStreamState.Connecting
+                )
+            }
+            // subscribed before the channel is held, so the snapshot of a new connection isn't missed
+            launch(start = CoroutineStart.UNDISPATCHED) {
+                anonymousGroupService.groupFrames
+                    .filter { it.anonymousGroupInternalId == anonymousGroup.internalId }
+                    .collect { applyFrame(it.frame) }
+            }
+            anonymousGroupService.holdChannel(anonymousGroup, send = false) { status ->
+                _state.update {
+                    it.copy(
+                        remoteDataLoadingState = when (status.state) {
+                            ChannelState.Connecting -> it.remoteDataLoadingState
+                            ChannelState.Connected -> LoadingState.Success
+                            ChannelState.Reconnecting -> if (it.remoteDataLoadingState == LoadingState.IsLoading) LoadingState.Failed else it.remoteDataLoadingState
+                            ChannelState.Stopped -> LoadingState.Failed
+                        }, locationStreamState = when (status.state) {
+                            ChannelState.Connecting -> LocationStreamState.Connecting
+                            ChannelState.Connected -> LocationStreamState.Connected
+                            ChannelState.Reconnecting -> LocationStreamState.Reconnecting
+                            ChannelState.Stopped -> LocationStreamState.Stopped
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    private fun applyFrame(frame: AGChannelFrame) {
+        when (frame) {
+            is AGChannelFrame.Snapshot -> {
+                val members = handleMembersWithSameName(frame.members).associateBy { it.id }
+                    .toMutableMap()
+                for (memberId in members.keys) {
+                    val oldRecord = state.value.members?.get(memberId)?.lastLocationRecord ?: continue
+                    val newRecord = members[memberId]!!.lastLocationRecord
+                    if (newRecord == null || oldRecord.timestamp >= newRecord.timestamp) {
+                        members[memberId] = members[memberId]!!.copy(lastLocationRecord = oldRecord)
                     }
                 }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                e.printStackTrace()
-                _state.update { it.copy(remoteDataLoadingState = LoadingState.Failed) }
+                _state.update {
+                    it.copy(
+                        members = members,
+                        circles = frame.circles,
+                        anonymousGroup = it.anonymousGroup?.let { group ->
+                            members[group.memberId]?.let { me ->
+                                group.copy(memberIsAGAdmin = me.isAGAdmin)
+                            } ?: group
+                        })
+                }
+            }
+
+            is AGChannelFrame.LiveLocation -> {
+                val update = frame.update
+                val member = state.value.members?.get(update.agMemberId) ?: return
+                _state.update {
+                    it.copy(
+                        members = it.members!! + (member.id to member.copy(lastLocationRecord = update.locationRecord))
+                    )
+                }
+                if (state.value.isFollowingSelectedMember && update.agMemberId == state.value.selectedMemberId) {
+                    _cameraPositionEvents.trySend(CameraTarget(update.locationRecord.coordinates))
+                }
+            }
+
+            is AGChannelFrame.MemberJoined -> _state.update {
+                val members = it.members ?: return@update it
+                it.copy(
+                    members = handleMembersWithSameName(members.values.toList() + frame.member)
+                        .associateBy { member -> member.id })
+            }
+
+            is AGChannelFrame.MemberLeft -> _state.update {
+                it.copy(
+                    members = it.members?.minus(frame.memberId),
+                    selectedMemberId = it.selectedMemberId.takeIf { id -> id != frame.memberId },
+                    isFollowingSelectedMember = it.isFollowingSelectedMember && it.selectedMemberId != frame.memberId
+                )
+            }
+
+            is AGChannelFrame.MemberUpdated -> _state.update {
+                it.copy(
+                    members = it.members?.let { members ->
+                        members[frame.memberId]?.let { member ->
+                            members + (member.id to member.copy(isAGAdmin = frame.isAGAdmin))
+                        } ?: members
+                    },
+                    anonymousGroup = it.anonymousGroup?.let { group ->
+                        if (group.memberId == frame.memberId) group.copy(memberIsAGAdmin = frame.isAGAdmin) else group
+                    })
+            }
+
+            is AGChannelFrame.CircleUpserted -> _state.update {
+                it.copy(
+                    circles = if (it.circles.any { c -> c.id == frame.circle.id }) it.circles.map { c ->
+                        if (c.id == frame.circle.id) frame.circle else c
+                    } else it.circles + frame.circle
+                )
+            }
+
+            is AGChannelFrame.CircleDeleted -> _state.update {
+                it.copy(circles = it.circles.filter { c -> c.id != frame.circleId })
             }
         }
     }
@@ -200,7 +286,7 @@ class AGDetailsViewModel(
                 Log.d("", "Streaming my position")
                 locationService.getLocationUpdates().collect { coordinates ->
                     if (state.value.myLocationRecordFromGPS == null) {
-                        _cameraPositionEvents.trySend(coordinates)
+                        _cameraPositionEvents.trySend(CameraTarget(coordinates))
                     }
                     _state.update {
                         it.copy(
@@ -225,7 +311,7 @@ class AGDetailsViewModel(
      */
     @OptIn(ExperimentalTime::class)
     @Throws
-    private suspend fun getAndMoveToMyLocation() {
+    private suspend fun getAndMoveToMyLocation(moveCamera: Boolean = true) {
         Log.d("", "Getting my location")
         try {
             val coordinates = locationService.getCurrentLocation()
@@ -240,13 +326,13 @@ class AGDetailsViewModel(
                         )
                     )
                 }
-                _cameraPositionEvents.trySend(coordinates)
-            } else if (state.value.myLocationRecordFromGPS != null) {
-                _cameraPositionEvents.trySend(state.value.myLocationRecordFromGPS!!.coordinates)
+                if (moveCamera) _cameraPositionEvents.trySend(CameraTarget(coordinates))
+            } else if (moveCamera && state.value.myLocationRecordFromGPS != null) {
+                _cameraPositionEvents.trySend(CameraTarget(state.value.myLocationRecordFromGPS!!.coordinates))
             }
         } catch (e: Exception) {
-            if (state.value.myLocationRecordFromGPS != null) {
-                _cameraPositionEvents.trySend(state.value.myLocationRecordFromGPS!!.coordinates)
+            if (moveCamera && state.value.myLocationRecordFromGPS != null) {
+                _cameraPositionEvents.trySend(CameraTarget(state.value.myLocationRecordFromGPS!!.coordinates))
             }
             throw e
         }
@@ -342,51 +428,6 @@ class AGDetailsViewModel(
         }
     }
 
-    /**
-     * Updates state.members with the remote members
-     */
-    @Throws
-    private suspend fun getRemoteMembers(connectionSettingsId: Long) {
-        try {
-            val members = handleMembersWithSameName(
-                anonymousGroupService.getRemoteAGMembers(
-                    anonymousGroupInternalId = state.value.anonymousGroup!!.internalId,
-                    connectionSettingsId = connectionSettingsId
-                )
-            )
-            Log.d("", "Remote members: ${members.map { it.id }}")
-            val membersMap = members.associateBy { it.id }.toMutableMap()
-            for (memberId in membersMap.keys) {
-                val oldLocationRecord =
-                    state.value.members!![memberId]?.lastLocationRecord ?: continue
-                val newLocationRecord = membersMap[memberId]!!.lastLocationRecord!!
-                if (oldLocationRecord.timestamp >= newLocationRecord.timestamp) {
-                    membersMap[memberId] =
-                        membersMap[memberId]!!.copy(lastLocationRecord = oldLocationRecord)
-                }
-            }
-            _state.update {
-                it.copy(
-                    members = membersMap,
-                    anonymousGroup = it.anonymousGroup?.let { group ->
-                        membersMap[group.memberId]?.let { me ->
-                            group.copy(memberIsAGAdmin = me.isAGAdmin)
-                        } ?: group
-                    })
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            val errorInfo = ErrorInfo.fromException(e)
-            if (!errorInfo.isConnectionError) {
-                _snackbarEvents.trySend(
-                    SnackbarErrorMessage(text = "Connection error", errorInfo = errorInfo)
-                )
-            }
-            throw e
-        }
-    }
-
     private fun handleMembersWithSameName(members: List<AGMember>): List<AGMember> {
         val counts = mutableMapOf<String, Int>()
         return members.map { member ->
@@ -403,38 +444,6 @@ class AGDetailsViewModel(
     fun setAdminPasswordText(text: String) {
         _state.update { it.copy(adminPasswordText = text) }
     }
-
-    @Throws
-    private suspend fun streamLocations(connectionSettingsId: Long, onConnected: () -> Unit) {
-        anonymousGroupService.streamLocations(
-            connectionSettingsId = connectionSettingsId,
-            anonymousGroupInternalId = state.value.anonymousGroup!!.internalId,
-            onConnected = onConnected
-        ).collect { locationUpdate ->
-            Log.d("", "Received location: $locationUpdate")
-            if (state.value.members == null) {
-                return@collect
-            }
-            if (locationUpdate.agMemberId !in state.value.members!!.keys) {
-                Log.d(
-                    "", "Refetching members (new member ${locationUpdate.agMemberId})"
-                )
-                getRemoteMembers(connectionSettingsId)
-            }
-            val member = state.value.members!![locationUpdate.agMemberId]
-            if (member != null) {
-                _state.update {
-                    it.copy(
-                        members = it.members!! + (member.id to member.copy(lastLocationRecord = locationUpdate.locationRecord))
-                    )
-                }
-                if (state.value.isFollowingSelectedMember && locationUpdate.agMemberId == state.value.selectedMemberId) {
-                    _cameraPositionEvents.trySend(locationUpdate.locationRecord.coordinates)
-                }
-            }
-        }
-    }
-
 
     fun showDeleteAGDialog() {
         _state.update { it.copy(showDeleteAGDialog = true) }
@@ -592,7 +601,7 @@ class AGDetailsViewModel(
         _state.update {
             it.copy(selectedMemberId = agMemberId, isFollowingSelectedMember = coordinates != null)
         }
-        coordinates?.let { _cameraPositionEvents.trySend(it) }
+        coordinates?.let { _cameraPositionEvents.trySend(CameraTarget(it)) }
     }
 
     fun setFollowSelectedMember(follow: Boolean) {
@@ -600,7 +609,7 @@ class AGDetailsViewModel(
         if (follow) {
             val selectedMemberId = state.value.selectedMemberId ?: return
             state.value.members?.get(selectedMemberId)?.lastLocationRecord?.let {
-                _cameraPositionEvents.trySend(it.coordinates)
+                _cameraPositionEvents.trySend(CameraTarget(it.coordinates))
             }
         }
     }
@@ -611,5 +620,10 @@ class AGDetailsViewModel(
 
     fun clearSelectedMember() {
         _state.update { it.copy(selectedMemberId = null, isFollowingSelectedMember = false) }
+    }
+
+    private suspend fun getLocalCircles() {
+        val internalId = state.value.anonymousGroup?.internalId ?: return
+        _state.update { it.copy(circles = anonymousGroupService.listCircles(internalId)) }
     }
 }

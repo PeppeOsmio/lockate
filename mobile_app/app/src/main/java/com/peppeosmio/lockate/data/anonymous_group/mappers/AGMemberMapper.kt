@@ -5,6 +5,7 @@ import com.peppeosmio.lockate.data.anonymous_group.remote.EncryptedAGMemberDto
 import com.peppeosmio.lockate.domain.Coordinates
 import com.peppeosmio.lockate.domain.LocationRecord
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
+import com.peppeosmio.lockate.service.anonymous_group.PayloadCodec
 import com.peppeosmio.lockate.service.crypto.CryptoService
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
@@ -57,7 +58,11 @@ object AGMemberMapper {
     }
 
     suspend fun dtoToDomain(
-        encryptedAGMemberDto: EncryptedAGMemberDto, cryptoService: CryptoService, key: ByteArray
+        encryptedAGMemberDto: EncryptedAGMemberDto,
+        cryptoService: CryptoService,
+        payloadCodec: PayloadCodec,
+        key: ByteArray,
+        groupId: String
     ): AGMember {
         val name = cryptoService.decrypt(
             encryptedData = EncryptedDataMapper.toDomain(encryptedAGMemberDto.encryptedName),
@@ -65,8 +70,11 @@ object AGMemberMapper {
         ).toString(Charsets.UTF_8)
         val lastLocation = encryptedAGMemberDto.encryptedLastLocationRecord?.let {
             LocationRecordMapper.toDomain(
-                encryptedLocationRecordDto = it, cryptoService = cryptoService,
+                encryptedLocationRecordDto = it,
+                payloadCodec = payloadCodec,
                 key = key,
+                groupId = groupId,
+                memberId = encryptedAGMemberDto.id
             )
         }
         return AGMember(

@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
@@ -98,6 +99,7 @@ fun MapScreen(
     navigateToCreateAG: (connectionSettingsId: Long) -> Unit,
     navigateToJoinAG: (connectionSettingsId: Long) -> Unit,
     navigateToInvite: (anonymousGroupInternalId: Long) -> Unit,
+    navigateToCircles: (anonymousGroupInternalId: Long) -> Unit,
     navigateToManageConnections: () -> Unit,
     navigateToSettings: () -> Unit,
     startLocationService: () -> Unit,
@@ -165,10 +167,18 @@ fun MapScreen(
             center = Coordinates.NAPOLI.toMapLibreComposePosition(), zoom = 15.0
         )
     )
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp.toDouble()
     LaunchedEffect(true) {
-        detailsViewModel.cameraPositionEvents.collect { location ->
+        detailsViewModel.cameraPositionEvents.collect { target ->
+            val zoom = target.fitRadiusMeters?.let {
+                zoomToFitCircle(
+                    latitude = target.coordinates.latitude,
+                    radiusMeters = it,
+                    viewportWidthDp = screenWidthDp
+                )
+            } ?: 15.0
             mapState.animateCamera(
-                CameraUpdate(center = location.toMapLibreComposePosition(), zoom = 15.0),
+                CameraUpdate(center = target.coordinates.toMapLibreComposePosition(), zoom = zoom),
                 CameraAnimation.Ease { duration = MARKER_MOVE_DURATION_MS.milliseconds }
             )
         }
@@ -403,6 +413,7 @@ fun MapScreen(
                     modifier = Modifier.fillMaxSize(),
                     mapState = mapState,
                     membersPoints = membersPoints,
+                    circles = details.circles,
                     myPoint = myPoint,
                     myDeviceOrientation = details.myDeviceOrientation,
                     compassTopPadding = statusBarTop + 72.dp,
@@ -447,6 +458,7 @@ fun MapScreen(
                                 canToggleSharing = details.anonymousGroup != null,
                                 isAdmin = details.anonymousGroup?.memberIsAGAdmin == true,
                                 onToggleSharing = { dismiss(); detailsViewModel.toggleAGShareLocation() },
+                                onCircles = { dismiss(); selectedGroup?.let { navigateToCircles(it.internalId) } },
                                 onInvite = { dismiss(); selectedGroup?.let { navigateToInvite(it.internalId) } },
                                 onLeave = { dismiss(); detailsViewModel.showLeaveAGDialog() },
                                 onRemove = { dismiss(); viewModel.removeLocalGroup() },
@@ -493,6 +505,7 @@ private fun GroupMenuItems(
     canToggleSharing: Boolean,
     isAdmin: Boolean,
     onToggleSharing: () -> Unit,
+    onCircles: () -> Unit,
     onInvite: () -> Unit,
     onLeave: () -> Unit,
     onRemove: () -> Unit,
@@ -509,6 +522,11 @@ private fun GroupMenuItems(
         )
     }
     if (isActive) {
+        DropdownMenuItem(
+            leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) },
+            text = { Text("Circles") },
+            onClick = onCircles
+        )
         DropdownMenuItem(
             leadingIcon = { Icon(Icons.Default.Add, contentDescription = null) },
             text = { Text("Invite") },

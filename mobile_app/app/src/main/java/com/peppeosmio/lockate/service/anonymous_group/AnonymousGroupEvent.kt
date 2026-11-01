@@ -1,6 +1,7 @@
 package com.peppeosmio.lockate.service.anonymous_group
 
 import com.peppeosmio.lockate.domain.LocationRecord
+import com.peppeosmio.lockate.domain.anonymous_group.Circle
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
@@ -42,5 +43,12 @@ sealed class AnonymousGroupEvent {
         val anonymousGroupId: String,
         val connectionId: Long,
         val locationRecord: LocationRecord
+    ) : AnonymousGroupEvent()
+
+    data class ShowCircleOnMapEvent(
+        val anonymousGroupInternalId: Long,
+        val anonymousGroupId: String,
+        val connectionId: Long,
+        val circle: Circle
     ) : AnonymousGroupEvent()
 }

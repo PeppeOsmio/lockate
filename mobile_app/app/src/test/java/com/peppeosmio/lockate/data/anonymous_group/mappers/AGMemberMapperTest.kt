@@ -3,6 +3,7 @@ package com.peppeosmio.lockate.data.anonymous_group.mappers
 import com.peppeosmio.lockate.data.anonymous_group.database.AGMemberEntity
 import com.peppeosmio.lockate.data.anonymous_group.remote.EncryptedAGMemberDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.EncryptedDataDto
+import com.peppeosmio.lockate.service.anonymous_group.PayloadCodec
 import com.peppeosmio.lockate.service.crypto.CryptoService
 import io.mockk.coEvery
 import io.mockk.mockk
@@ -61,6 +62,7 @@ class AGMemberMapperTest {
     @Test
     fun `dtoToDomain decrypts the member name and internalId is always 0`() = runTest {
         val cryptoService = mockk<CryptoService>()
+        val payloadCodec = mockk<PayloadCodec>()
         val key = "key".toByteArray()
         coEvery { cryptoService.decrypt(any(), key) } returns "Alice".toByteArray()
         val createdAt = LocalDateTime(2026, 7, 12, 14, 30, 5)
@@ -72,7 +74,7 @@ class AGMemberMapperTest {
             isAGAdmin = true
         )
 
-        val result = AGMemberMapper.dtoToDomain(dto, cryptoService, key)
+        val result = AGMemberMapper.dtoToDomain(dto, cryptoService, payloadCodec, key, groupId = "group-1")
 
         assertEquals(0L, result.internalId)
         assertEquals("Alice", result.name)

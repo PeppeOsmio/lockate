@@ -27,6 +27,13 @@ class LockateApplication : Application() {
             val notificationManager =
                 getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.createNotificationChannel(channel)
+            notificationManager.createNotificationChannel(
+                NotificationChannel(
+                    AndroidSendLocationService.CIRCLE_NOTIFICATION_CHANNEL_ID,
+                    "Circles",
+                    NotificationManager.IMPORTANCE_DEFAULT
+                )
+            )
         }
     }
 }

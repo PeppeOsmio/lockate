@@ -9,6 +9,8 @@ import com.peppeosmio.lockate.service.PermissionsService
 import com.peppeosmio.lockate.service.invite.InviteService
 import com.peppeosmio.lockate.platform_service.LocationService
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.AGDetailsViewModel
+import com.peppeosmio.lockate.ui.screens.circles.CircleEditorViewModel
+import com.peppeosmio.lockate.ui.screens.circles.CirclesViewModel
 import com.peppeosmio.lockate.ui.screens.connection_settings.ConnectionSettingsViewModel
 import com.peppeosmio.lockate.ui.screens.create_anonymous_group.CreateAnonymousGroupViewModel
 import com.peppeosmio.lockate.ui.screens.invite.InviteViewModel
@@ -50,6 +52,18 @@ val viewModelModule = module {
         InviteViewModel(
             anonymousGroupService = get<AnonymousGroupService>(),
             inviteService = get<InviteService>()
+        )
+    }
+
+    viewModel<CirclesViewModel> {
+        CirclesViewModel(anonymousGroupService = get<AnonymousGroupService>())
+    }
+
+    viewModel<CircleEditorViewModel> {
+        CircleEditorViewModel(
+            anonymousGroupService = get<AnonymousGroupService>(),
+            locationService = get<LocationService>(),
+            mapStyleService = get<MapStyleService>()
         )
     }
 

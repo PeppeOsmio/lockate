@@ -51,6 +51,34 @@ class CoordinatesTest {
     }
 
     @Test
+    fun `distance to itself is zero`() {
+        assertEquals(0.0, Coordinates.NAPOLI.distanceMetersTo(Coordinates.NAPOLI), 0.001)
+    }
+
+    @Test
+    fun `distance between Napoli and Roma is about 190 km`() {
+        val roma = Coordinates(latitude = 41.9027835, longitude = 12.4963655)
+
+        assertEquals(189_000.0, Coordinates.NAPOLI.distanceMetersTo(roma), 2_000.0)
+    }
+
+    @Test
+    fun `a thousandth of a degree of latitude is about 111 m`() {
+        val moved = Coordinates(Coordinates.NAPOLI.latitude + 0.001, Coordinates.NAPOLI.longitude)
+
+        assertEquals(111.2, Coordinates.NAPOLI.distanceMetersTo(moved), 0.5)
+    }
+
+    @Test
+    fun `distance is symmetric and works across the antimeridian`() {
+        val a = Coordinates(latitude = 0.0, longitude = 179.9995)
+        val b = Coordinates(latitude = 0.0, longitude = -179.9995)
+
+        assertEquals(a.distanceMetersTo(b), b.distanceMetersTo(a), 0.001)
+        assertEquals(111.2, a.distanceMetersTo(b), 0.5)
+    }
+
+    @Test
     fun `toShareableString formats as lat,lng rounded to 6 decimals`() {
         assertEquals("40.851775,14.268124", Coordinates.NAPOLI.toShareableString())
     }

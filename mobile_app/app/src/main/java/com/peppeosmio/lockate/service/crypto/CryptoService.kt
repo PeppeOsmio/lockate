@@ -36,7 +36,7 @@ class CryptoService(
 
     @OptIn(DelicateCryptographyApi::class)
     suspend fun encrypt(
-        data: ByteArray, key: ByteArray
+        data: ByteArray, key: ByteArray, associatedData: ByteArray? = null
     ): EncryptedData = withContext(Dispatchers.Default) {
 
         val provider = CryptographyProvider.Default
@@ -46,7 +46,9 @@ class CryptoService(
             .decodeFromByteArray(format = AES.Key.Format.RAW, bytes = key)
         try {
             val cipherText = parsedKey.cipher(AES_GCM_TAG_BITS.bits)
-                .encryptWithIv(iv = ivBytes, plaintext = data)
+                .encryptWithIv(
+                    iv = ivBytes, plaintext = data, associatedData = associatedData
+                )
             EncryptedData(
                 cipherText = cipherText, iv = ivBytes
             )
@@ -57,7 +59,7 @@ class CryptoService(
 
     @OptIn(DelicateCryptographyApi::class)
     suspend fun decrypt(
-        encryptedData: EncryptedData, key: ByteArray
+        encryptedData: EncryptedData, key: ByteArray, associatedData: ByteArray? = null
     ): ByteArray = withContext(Dispatchers.Default) {
         val provider = CryptographyProvider.Default
         val gcmBlockCipher = provider.get(AES.GCM)
@@ -65,7 +67,11 @@ class CryptoService(
             .decodeFromByteArray(format = AES.Key.Format.RAW, bytes = key)
         try {
             val output = parsedKey.cipher(AES_GCM_TAG_BITS.bits)
-                .decryptWithIv(iv = encryptedData.iv, ciphertext = encryptedData.cipherText)
+                .decryptWithIv(
+                    iv = encryptedData.iv,
+                    ciphertext = encryptedData.cipherText,
+                    associatedData = associatedData
+                )
             output
         } catch (e: Exception) {
             throw CryptoException()

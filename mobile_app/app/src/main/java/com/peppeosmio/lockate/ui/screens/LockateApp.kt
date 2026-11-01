@@ -6,7 +6,11 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import com.peppeosmio.lockate.ui.routes.CircleEditorRoute
+import com.peppeosmio.lockate.ui.routes.CirclesRoute
 import com.peppeosmio.lockate.ui.routes.ConnectionSettingsRoute
+import com.peppeosmio.lockate.ui.screens.circles.CircleEditorScreen
+import com.peppeosmio.lockate.ui.screens.circles.CirclesScreen
 import com.peppeosmio.lockate.ui.routes.CreateAnonymousGroupRoute
 import com.peppeosmio.lockate.ui.routes.HomeRoute
 import com.peppeosmio.lockate.ui.routes.InviteRoute
@@ -85,6 +89,9 @@ fun LockateApp(startLocationService: () -> Unit) {
                     navigateToInvite = { anonymousGroupInternalId ->
                         appNavController.navigate(InviteRoute(anonymousGroupInternalId))
                     },
+                    navigateToCircles = { anonymousGroupInternalId ->
+                        appNavController.navigate(CirclesRoute(anonymousGroupInternalId))
+                    },
                     navigateToManageConnections = {
                         appNavController.navigate(ManageConnectionsRoute)
                     },
@@ -121,6 +128,27 @@ fun LockateApp(startLocationService: () -> Unit) {
                 val inviteRoute = navBackStackEntry.toRoute<InviteRoute>()
                 InviteScreen(
                     anonymousGroupInternalId = inviteRoute.anonymousGroupInternalId,
+                    navigateBack = { appNavController.popBackStack() })
+            }
+            composable<CirclesRoute> { navBackStackEntry ->
+                val circlesRoute = navBackStackEntry.toRoute<CirclesRoute>()
+                CirclesScreen(
+                    anonymousGroupInternalId = circlesRoute.anonymousGroupInternalId,
+                    navigateBack = { appNavController.popBackStack() },
+                    navigateToCircleEditor = { circleId ->
+                        appNavController.navigate(
+                            CircleEditorRoute(
+                                anonymousGroupInternalId = circlesRoute.anonymousGroupInternalId,
+                                circleId = circleId
+                            )
+                        )
+                    })
+            }
+            composable<CircleEditorRoute> { navBackStackEntry ->
+                val route = navBackStackEntry.toRoute<CircleEditorRoute>()
+                CircleEditorScreen(
+                    anonymousGroupInternalId = route.anonymousGroupInternalId,
+                    circleId = route.circleId,
                     navigateBack = { appNavController.popBackStack() })
             }
             composable<ConnectionSettingsRoute> { navBackStackEntry ->
