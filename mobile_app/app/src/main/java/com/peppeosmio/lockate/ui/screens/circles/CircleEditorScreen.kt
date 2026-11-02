@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -33,13 +35,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.peppeosmio.lockate.domain.Coordinates
 import com.peppeosmio.lockate.domain.anonymous_group.Circle
@@ -145,7 +153,37 @@ private fun BoxScope.EditorMapPanel(
                     singleLine = true,
                     enabled = !state.isSaving
                 )
-                Text("Radius: ${state.radiusMeters.roundToInt()} m")
+                val focusManager = LocalFocusManager.current
+                var hadFocus by remember { mutableStateOf(false) }
+                val isRadiusValid = parseRadiusMeters(state.radiusText) != null
+                OutlinedTextField(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onFocusChanged {
+                            // the circle is shown whole once the field is left, like after the slider
+                            if (hadFocus && !it.isFocused) onRadiusChangeFinished()
+                            hadFocus = it.isFocused
+                        },
+                    value = state.radiusText,
+                    onValueChange = viewModel::setRadiusText,
+                    label = { Text("Radius") },
+                    suffix = { Text("m") },
+                    isError = !isRadiusValid,
+                    supportingText = {
+                        if (!isRadiusValid) {
+                            Text(
+                                "Between ${CircleEditorViewModel.MIN_RADIUS_METERS.roundToInt()} and " +
+                                    "${CircleEditorViewModel.MAX_RADIUS_METERS.roundToInt()} m"
+                            )
+                        }
+                    },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number, imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                    singleLine = true,
+                    enabled = !state.isSaving
+                )
                 Slider(
                     value = state.radiusMeters.toFloat(),
                     onValueChange = { viewModel.setRadius(it.roundToInt().toDouble()) },
