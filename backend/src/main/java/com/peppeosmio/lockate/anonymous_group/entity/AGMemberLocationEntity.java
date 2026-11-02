@@ -47,9 +47,7 @@ public class AGMemberLocationEntity {
   private AGMemberEntity agMemberEntity;
 
   public AGMemberLocationEntity(
-      EncryptedString encryptedPayload,
-      AGMemberEntity agMemberEntity,
-      LocalDateTime timestamp) {
+      EncryptedString encryptedPayload, AGMemberEntity agMemberEntity, LocalDateTime timestamp) {
     this.payloadCipher = encryptedPayload.cipherText();
     this.payloadIv = encryptedPayload.iv();
     this.agMemberEntity = agMemberEntity;

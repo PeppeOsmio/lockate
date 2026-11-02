@@ -303,7 +303,8 @@ public class AnonymousGroupService {
     publishFrame(
         anonymousGroupId,
         AGFrameDto.memberMessage(
-            agMemberAuthentication.getId(), new LocationRecordDto(dto.encryptedPayload(), timestamp)));
+            agMemberAuthentication.getId(),
+            new LocationRecordDto(dto.encryptedPayload(), timestamp)));
     if (lastSavedLocationTimeStamp == null) {
       var lastSavedLocation =
           agLocationRepository

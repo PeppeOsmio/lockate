@@ -55,9 +55,7 @@ class AGWSHandshakeInterceptorTest {
     var memberId = UUID.randomUUID();
     var authentication =
         new com.peppeosmio.lockate.anonymous_group.security.AGMemberAuthentication(memberId);
-    withPath(
-        "/api/ws/anonymous-groups/" + groupId + "",
-        "AGMember " + memberId + " token");
+    withPath("/api/ws/anonymous-groups/" + groupId + "", "AGMember " + memberId + " token");
     when(agMemberAuthenticator.authenticate(groupId, "AGMember " + memberId + " token"))
         .thenReturn(authentication);
 

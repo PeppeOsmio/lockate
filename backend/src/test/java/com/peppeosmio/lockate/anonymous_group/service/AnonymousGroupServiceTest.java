@@ -575,8 +575,7 @@ class AnonymousGroupServiceTest {
   void getSnapshot_missingGroup_throwsAGNotFound() {
     when(anonymousGroupRepository.findById(groupId)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.getSnapshot(groupId))
-        .isInstanceOf(AGNotFoundException.class);
+    assertThatThrownBy(() -> service.getSnapshot(groupId)).isInstanceOf(AGNotFoundException.class);
   }
 
   // ---------- group frames ----------

@@ -112,8 +112,7 @@ class AGWSHandlerTest {
   }
 
   @Test
-  void afterConnectionEstablished_framesArrivingDuringTheSnapshotAreSentAfterIt()
-      throws Exception {
+  void afterConnectionEstablished_framesArrivingDuringTheSnapshotAreSentAfterIt() throws Exception {
     var consumerCaptor = ArgumentCaptor.forClass(Consumer.class);
     when(redisService.subscribe(eq("ag-" + groupId), consumerCaptor.capture()))
         .thenReturn(redisListener);
