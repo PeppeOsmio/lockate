@@ -14,6 +14,7 @@ import com.google.android.gms.location.ActivityTransitionResult
 import com.google.android.gms.location.DetectedActivity
 import com.peppeosmio.lockate.domain.UserActivity
 import com.peppeosmio.lockate.service.PermissionsService
+import com.peppeosmio.lockate.utils.SendLoopLog
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emitAll
@@ -38,6 +39,7 @@ internal fun userActivityOf(detectedActivityType: Int): UserActivity = when (det
 class ActivityService(
     private val context: Context,
     private val permissionsService: PermissionsService,
+    private val sendLoopLog: SendLoopLog,
 ) {
     private val activity = MutableStateFlow(UserActivity.Unknown)
 
@@ -87,12 +89,17 @@ class ActivityService(
 
     @Synchronized
     private fun startActivityUpdates() {
-        if (receiver != null || permissionsService.isPermissionDenied(Manifest.permission.ACTIVITY_RECOGNITION)) return
+        if (receiver != null) return
+        if (permissionsService.isPermissionDenied(Manifest.permission.ACTIVITY_RECOGNITION)) {
+            sendLoopLog.log("activity updates not started: permission denied")
+            return
+        }
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 val result = intent?.let { ActivityTransitionResult.extractResult(it) } ?: return
                 result.transitionEvents.forEach { event ->
                     val eventActivity = userActivityOf(event.activityType)
+                    sendLoopLog.log("activity transition type=${event.activityType} transition=${event.transitionType}")
                     when (event.transitionType) {
                         ActivityTransition.ACTIVITY_TRANSITION_ENTER -> activity.value = eventActivity
                         ActivityTransition.ACTIVITY_TRANSITION_EXIT ->
@@ -116,6 +123,10 @@ class ActivityService(
         try {
             ActivityRecognition.getClient(context)
                 .requestActivityTransitionUpdates(ActivityTransitionRequest(transitions), pendingIntent)
+                .addOnSuccessListener { sendLoopLog.log("activity updates registered") }
+                .addOnFailureListener { e ->
+                    sendLoopLog.log("activity updates failed ${e::class.simpleName}: ${e.message}")
+                }
         } catch (e: SecurityException) {
             e.printStackTrace()
         }

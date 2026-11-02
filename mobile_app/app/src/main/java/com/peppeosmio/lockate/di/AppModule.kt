@@ -127,7 +127,9 @@ val appModule = module {
     }
 
     single<ActivityService> {
-        ActivityService(context = androidContext(), permissionsService = get())
+        ActivityService(
+            context = androidContext(), permissionsService = get(), sendLoopLog = get()
+        )
     }
 
     single<PositionProvider> {
