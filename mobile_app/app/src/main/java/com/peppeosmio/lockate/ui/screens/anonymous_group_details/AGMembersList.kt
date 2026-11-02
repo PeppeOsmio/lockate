@@ -92,8 +92,7 @@ fun MemberRow(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 LastSeenText(lastSeen = member.lastLocationRecord?.timestamp)
                 member.lastLocationRecord?.let {
-                    Spacer(Modifier.size(6.dp))
-                    ActivityIndicator(it.activity)
+                    ActivityIndicator(it.activity, Modifier.padding(start = 6.dp))
                 }
             }
         }
@@ -150,21 +149,3 @@ private fun MemberAvatar(member: AGMember, isMe: Boolean) {
 internal fun memberInitials(name: String): String =
     name.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.take(2)
         .joinToString("") { it.first().uppercase() }.ifEmpty { "?" }
-
-@Composable
-internal fun AdminIndicator() {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(
-            painter = painterResource(R.drawable.baseline_security_24),
-            contentDescription = null,
-            modifier = Modifier.size(18.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.size(4.dp))
-        Text(
-            text = "Admin",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}

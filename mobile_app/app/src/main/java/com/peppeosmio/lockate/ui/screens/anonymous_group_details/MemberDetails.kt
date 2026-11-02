@@ -25,12 +25,13 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.peppeosmio.lockate.R
+import com.peppeosmio.lockate.domain.UserActivity
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.utils.DateTimeUtils
 import kotlinx.datetime.format
 
 /**
- * Name, admin flag, last location and follow toggle: the part of the member details that stays
+ * Name, last location and follow toggle: the part of the member details that stays
  * visible when the sheet is collapsed.
  */
 @Composable
@@ -67,14 +68,9 @@ fun MemberDetailsHeader(
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (member.isAGAdmin) {
-                    AdminIndicator()
-                    Spacer(Modifier.size(12.dp))
-                }
                 LastSeenText(lastSeen = member.lastLocationRecord?.timestamp)
                 member.lastLocationRecord?.let {
-                    Spacer(Modifier.size(6.dp))
-                    ActivityIndicator(it.activity)
+                    ActivityIndicator(it.activity, Modifier.padding(start = 6.dp))
                 }
             }
         }
@@ -101,15 +97,40 @@ fun MemberDetailsBody(
 ) {
     Column(modifier = modifier) {
         HorizontalDivider(modifier = Modifier.padding(bottom = 8.dp))
-        InfoRow(
-            label = "Last location",
-            value = member.lastLocationRecord?.timestamp?.let {
-                DateTimeUtils.utcToCurrentTimeZone(it).format(DateTimeUtils.DATE_FORMAT)
-            } ?: "never")
-        InfoRow(
-            label = "Joined",
-            value = DateTimeUtils.utcToCurrentTimeZone(member.createdAt)
-                .format(DateTimeUtils.DATE_FORMAT))
+        val activity = member.lastLocationRecord?.activity ?: UserActivity.Unknown
+        Row {
+            InfoRow(
+                modifier = Modifier.weight(1f),
+                label = "Last location",
+                value = member.lastLocationRecord?.timestamp?.let {
+                    DateTimeUtils.utcToCurrentTimeZone(it).format(DateTimeUtils.DATE_FORMAT)
+                } ?: "never")
+            InfoRow(
+                modifier = Modifier.weight(1f),
+                label = "Activity",
+                value = activity.label,
+                trailingContent = { ActivityIndicator(activity, size = 24.dp) })
+        }
+        Row {
+            InfoRow(
+                modifier = Modifier.weight(1f),
+                label = "Joined",
+                value = DateTimeUtils.utcToCurrentTimeZone(member.createdAt)
+                    .format(DateTimeUtils.DATE_FORMAT))
+            InfoRow(
+                modifier = Modifier.weight(1f),
+                label = "Role",
+                value = if (member.isAGAdmin) "Admin" else "Member",
+                trailingContent = if (member.isAGAdmin) {
+                    {
+                        Icon(
+                            painter = painterResource(R.drawable.baseline_security_24),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                } else null)
+        }
         ListItem(
             overlineContent = { Text("Member id") },
             headlineContent = { Text(member.id) },
@@ -137,10 +158,17 @@ fun MemberDetailsBody(
 }
 
 @Composable
-private fun InfoRow(label: String, value: String) {
+private fun InfoRow(
+    modifier: Modifier = Modifier,
+    label: String,
+    value: String,
+    trailingContent: (@Composable () -> Unit)? = null
+) {
     ListItem(
+        modifier = modifier,
         overlineContent = { Text(label) },
         headlineContent = { Text(value) },
+        trailingContent = trailingContent,
         colors = ListItemDefaults.colors(containerColor = Color.Transparent)
     )
 }
