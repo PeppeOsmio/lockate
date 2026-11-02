@@ -15,6 +15,10 @@ import com.peppeosmio.lockate.MainActivity
 import com.peppeosmio.lockate.R
 import com.peppeosmio.lockate.domain.anonymous_group.notificationText
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
+import com.peppeosmio.lockate.service.geofence.CIRCLE_NOTIFICATION_TIMEOUT_MILLIS
+import com.peppeosmio.lockate.service.geofence.CircleNotification
+import com.peppeosmio.lockate.service.geofence.CircleNotificationBook
+import com.peppeosmio.lockate.service.geofence.CircleNotificationUpdate
 import com.peppeosmio.lockate.utils.SendLoopLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -37,7 +41,7 @@ class AndroidSendLocationService : Service() {
     private var isRunning = false
     private var sendJob: Job? = null
     private var notifyJob: Job? = null
-    private var nextCircleNotificationId = FIRST_CIRCLE_NOTIFICATION_ID
+    private val circleNotificationBook = CircleNotificationBook(System::currentTimeMillis)
     private var restartJob: Job? = null
     private var notificationBuilder: NotificationCompat.Builder? = null
 
@@ -81,10 +85,10 @@ class AndroidSendLocationService : Service() {
         notifyJob = serviceScope.launch {
             // only the live frames notify, never the ones read back from the server
             anonymousGroupService.groupFrames.collect { groupFrame ->
-                val (groupName, texts) =
+                val events =
                     anonymousGroupService.describeCircleEvents(groupFrame) ?: return@collect
                 mainHandler.post {
-                    if (isRunning) texts.forEach { showCircleNotification(groupName, it) }
+                    if (isRunning) showCircleNotifications(circleNotificationBook.record(events))
                 }
             }
         }
@@ -109,7 +113,7 @@ class AndroidSendLocationService : Service() {
         }
     }
 
-    private fun showCircleNotification(groupName: String, text: String) {
+    private fun showCircleNotifications(update: CircleNotificationUpdate) {
         if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
         val openIntent = PendingIntent.getActivity(
             this,
@@ -117,14 +121,34 @@ class AndroidSendLocationService : Service() {
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val notification = NotificationCompat.Builder(this, CIRCLE_NOTIFICATION_CHANNEL_ID)
-            .setContentTitle(groupName).setContentText(text)
-            .setSmallIcon(R.drawable.ic_launcher_background).setContentIntent(openIntent)
-            .setAutoCancel(true).build()
-        (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).notify(
-            nextCircleNotificationId++, notification
+        val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.notify(
+            update.member.tag,
+            CIRCLE_NOTIFICATION_ID,
+            circleNotificationBuilder(update.member, openIntent)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(update.member.lines.joinToString("\n")))
+                .build()
+        )
+        // the summary is silent: the member's notification is the one that alerts
+        notificationManager.notify(
+            update.summary.tag,
+            CIRCLE_NOTIFICATION_ID,
+            circleNotificationBuilder(update.summary, openIntent).setGroupSummary(true)
+                .setOnlyAlertOnce(true).setStyle(
+                    NotificationCompat.InboxStyle().also { style ->
+                        update.summary.lines.forEach { style.addLine(it) }
+                    }).build()
         )
     }
+
+    private fun circleNotificationBuilder(
+        notification: CircleNotification, openIntent: PendingIntent
+    ) = NotificationCompat.Builder(this, CIRCLE_NOTIFICATION_CHANNEL_ID)
+        .setContentTitle(notification.title).setContentText(notification.text)
+        .setSmallIcon(R.drawable.ic_launcher_background).setContentIntent(openIntent)
+        .setGroup(notification.groupKey).setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
+        .setWhen(notification.whenMillis).setShowWhen(true)
+        .setTimeoutAfter(CIRCLE_NOTIFICATION_TIMEOUT_MILLIS).setAutoCancel(true)
 
     private fun createNotificationBuilder(): NotificationCompat.Builder {
         val stopIntent = Intent(this, AndroidSendLocationService::class.java).apply {
@@ -204,6 +228,7 @@ class AndroidSendLocationService : Service() {
         const val ACTION_RESTART = "ACTION_RESTART"
         const val NOTIFICATION_CHANNEL_ID = "lockateLocation"
         const val CIRCLE_NOTIFICATION_CHANNEL_ID = "lockateCircles"
-        private const val FIRST_CIRCLE_NOTIFICATION_ID = 100
+        // the notifications of the circles are told apart by their tag
+        private const val CIRCLE_NOTIFICATION_ID = 100
     }
 }

@@ -18,6 +18,7 @@ import com.peppeosmio.lockate.domain.anonymous_group.GroupFrame
 import com.peppeosmio.lockate.domain.anonymous_group.MemberMessage
 import com.peppeosmio.lockate.service.crypto.CryptoException
 import com.peppeosmio.lockate.service.geofence.GeofenceTracker
+import com.peppeosmio.lockate.service.geofence.CircleEvents
 import com.peppeosmio.lockate.service.geofence.circleEventTexts
 import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
 import io.ktor.client.request.request
@@ -1218,8 +1219,8 @@ class AnonymousGroupService(
         )
     }
 
-    /** The notification to show for a live frame: one text per transition, with the group's name. */
-    suspend fun describeCircleEvents(groupFrame: GroupFrame): Pair<String, List<String>>? =
+    /** The events to notify for a live frame: one text per transition, with the group and the member. */
+    suspend fun describeCircleEvents(groupFrame: GroupFrame): CircleEvents? =
         withContext(Dispatchers.IO) {
             val update = (groupFrame.frame as? AGChannelFrame.LiveLocation)?.update ?: return@withContext null
             if (update.transitions.isEmpty()) return@withContext null
@@ -1235,7 +1236,7 @@ class AnonymousGroupService(
                 circles = listCircles(group.internalId).associateBy { it.id },
                 mutedTargets = listMutedTargets(group.internalId)
             )
-            if (texts.isEmpty()) null else group.name to texts
+            if (texts.isEmpty()) null else CircleEvents(group.id, group.name, member.id, texts)
         }
 
     suspend fun listMutedTargets(anonymousGroupInternalId: Long): Set<String> =
