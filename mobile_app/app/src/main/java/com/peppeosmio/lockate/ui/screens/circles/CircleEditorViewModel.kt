@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
+import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.seconds
 
 data class CircleEditorState(
@@ -28,6 +29,8 @@ data class CircleEditorState(
     val isEditing: Boolean = false,
     val name: String = "",
     val radiusMeters: Double = CircleEditorViewModel.DEFAULT_RADIUS_METERS,
+    // what is written in the radius field, which may be half typed or out of range
+    val radiusText: String = CircleEditorViewModel.DEFAULT_RADIUS_METERS.roundToInt().toString(),
     // null until the point is put on the map
     val center: Coordinates? = null,
     val initialCamera: Coordinates = Coordinates.NAPOLI,
@@ -35,8 +38,16 @@ data class CircleEditorState(
     val mapStyleUrls: MapStyleUrls = MapStyleUrls(),
     val isSaving: Boolean = false,
 ) {
-    val canSave get() = !isLoading && name.isNotBlank() && center != null && !isSaving
+    val canSave
+        get() = !isLoading && name.isNotBlank() && center != null && !isSaving &&
+            parseRadiusMeters(radiusText) != null
 }
+
+/** The radius written in the field, or null when it is empty or outside the allowed range. */
+internal fun parseRadiusMeters(text: String): Double? =
+    text.toIntOrNull()?.toDouble()?.takeIf {
+        it in CircleEditorViewModel.MIN_RADIUS_METERS..CircleEditorViewModel.MAX_RADIUS_METERS
+    }
 
 class CircleEditorViewModel(
     private val anonymousGroupService: AnonymousGroupService,
@@ -78,6 +89,8 @@ class CircleEditorViewModel(
                         isEditing = circle != null,
                         name = circle?.name ?: "",
                         radiusMeters = circle?.radiusMeters ?: DEFAULT_RADIUS_METERS,
+                        radiusText = (circle?.radiusMeters ?: DEFAULT_RADIUS_METERS).roundToInt()
+                            .toString(),
                         center = circle?.center,
                         initialCamera = circle?.center ?: myLocation() ?: Coordinates.NAPOLI,
                         otherCircles = circles.filter { c -> c.id != circle?.id }
@@ -109,7 +122,15 @@ class CircleEditorViewModel(
     }
 
     fun setRadius(radiusMeters: Double) {
-        _state.update { it.copy(radiusMeters = radiusMeters) }
+        _state.update {
+            it.copy(radiusMeters = radiusMeters, radiusText = radiusMeters.roundToInt().toString())
+        }
+    }
+
+    /** The circle follows the text only while it is a valid radius, so it doesn't jump when half typed. */
+    fun setRadiusText(text: String) {
+        val digits = text.filter { it.isDigit() }.take(MAX_RADIUS_DIGITS)
+        _state.update { it.copy(radiusText = digits, radiusMeters = parseRadiusMeters(digits) ?: it.radiusMeters) }
     }
 
     fun setCenter(center: Coordinates) {
@@ -151,5 +172,6 @@ class CircleEditorViewModel(
         const val DEFAULT_RADIUS_METERS = 150.0
         const val MIN_RADIUS_METERS = 30.0
         const val MAX_RADIUS_METERS = 2000.0
+        private const val MAX_RADIUS_DIGITS = 4
     }
 }
