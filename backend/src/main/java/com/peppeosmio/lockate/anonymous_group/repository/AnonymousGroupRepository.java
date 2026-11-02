@@ -21,5 +21,6 @@ public interface AnonymousGroupRepository extends JpaRepository<AnonymousGroupEn
   /** Holds the group's row until the transaction ends, so its writes go one at a time. */
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("SELECT g FROM AnonymousGroupEntity g WHERE g.id = :anonymousGroupId")
-  Optional<AnonymousGroupEntity> findByIdForUpdate(@Param("anonymousGroupId") UUID anonymousGroupId);
+  Optional<AnonymousGroupEntity> findByIdForUpdate(
+      @Param("anonymousGroupId") UUID anonymousGroupId);
 }
