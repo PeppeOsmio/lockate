@@ -3,14 +3,14 @@ package com.peppeosmio.lockate.config;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.peppeosmio.lockate.anonymous_group.controllers.AnonymousGroupController;
+import com.peppeosmio.lockate.anonymous_group.controllers.SecuredAGController;
+import com.peppeosmio.lockate.anonymous_group.dto.AGFrameDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGJoinReqDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGJoinResDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGMemberMessageReqDto;
-import com.peppeosmio.lockate.anonymous_group.dto.LocationRecordDto;
-import com.peppeosmio.lockate.anonymous_group.dto.AGFrameDto;
 import com.peppeosmio.lockate.anonymous_group.dto.CircleDto;
 import com.peppeosmio.lockate.anonymous_group.dto.CircleUpsertReqDto;
-import com.peppeosmio.lockate.anonymous_group.controllers.SecuredAGController;
+import com.peppeosmio.lockate.anonymous_group.dto.LocationRecordDto;
 import com.peppeosmio.lockate.common.dto.EncryptedDataDto;
 import com.peppeosmio.lockate.common.dto.ErrorResponseDto;
 import com.peppeosmio.lockate.invite.InviteController;
@@ -54,7 +54,8 @@ class NativeReflectionTest {
                 .onMethodInvocation(LocationRecordDto.class, "encryptedPayload"))
         .accepts(hints);
     assertThat(
-            RuntimeHintsPredicates.reflection().onMethodInvocation(CircleDto.class, "encryptedData"))
+            RuntimeHintsPredicates.reflection()
+                .onMethodInvocation(CircleDto.class, "encryptedData"))
         .accepts(hints);
   }
 
