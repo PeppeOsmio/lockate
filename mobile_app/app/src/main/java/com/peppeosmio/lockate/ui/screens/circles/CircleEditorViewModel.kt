@@ -33,6 +33,8 @@ data class CircleEditorState(
     val radiusText: String = CircleEditorViewModel.DEFAULT_RADIUS_METERS.roundToInt().toString(),
     // null until the point is put on the map
     val center: Coordinates? = null,
+    // what is written in the coordinates field, which may be half typed or out of range
+    val coordinatesText: String = "",
     val initialCamera: Coordinates = Coordinates.NAPOLI,
     val otherCircles: List<Circle> = emptyList(),
     val mapStyleUrls: MapStyleUrls = MapStyleUrls(),
@@ -40,7 +42,16 @@ data class CircleEditorState(
 ) {
     val canSave
         get() = !isLoading && name.isNotBlank() && center != null && !isSaving &&
-            parseRadiusMeters(radiusText) != null
+            parseRadiusMeters(radiusText) != null && parseCoordinates(coordinatesText) != null
+}
+
+/** The "lat, lng" written in the field, or null when it isn't a pair of numbers on the globe. */
+internal fun parseCoordinates(text: String): Coordinates? {
+    val parts = text.trim().split(Regex("[\\s,;]+"))
+    if (parts.size != 2) return null
+    val latitude = parts[0].toDoubleOrNull()?.takeIf { it in -90.0..90.0 } ?: return null
+    val longitude = parts[1].toDoubleOrNull()?.takeIf { it in -180.0..180.0 } ?: return null
+    return Coordinates(latitude = latitude, longitude = longitude)
 }
 
 /** The radius written in the field, or null when it is empty or outside the allowed range. */
@@ -92,6 +103,7 @@ class CircleEditorViewModel(
                         radiusText = (circle?.radiusMeters ?: DEFAULT_RADIUS_METERS).roundToInt()
                             .toString(),
                         center = circle?.center,
+                        coordinatesText = circle?.center?.toShareableString() ?: "",
                         initialCamera = circle?.center ?: myLocation() ?: Coordinates.NAPOLI,
                         otherCircles = circles.filter { c -> c.id != circle?.id }
                     )
@@ -135,7 +147,13 @@ class CircleEditorViewModel(
 
     fun setCenter(center: Coordinates) {
         if (state.value.isSaving) return
-        _state.update { it.copy(center = center) }
+        _state.update { it.copy(center = center, coordinatesText = center.toShareableString()) }
+    }
+
+    /** The circle follows the text only while it is valid, so it doesn't jump when half typed. */
+    fun setCoordinatesText(text: String) {
+        if (state.value.isSaving) return
+        _state.update { it.copy(coordinatesText = text, center = parseCoordinates(text) ?: it.center) }
     }
 
     fun save() {
