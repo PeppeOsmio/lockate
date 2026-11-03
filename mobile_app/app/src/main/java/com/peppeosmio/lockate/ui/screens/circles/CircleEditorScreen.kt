@@ -17,6 +17,7 @@ import androidx.compose.material3.rememberStandardBottomSheetState
 import com.peppeosmio.lockate.ui.composables.PeekHeaderBottomSheetScaffold
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -39,6 +40,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -48,7 +50,10 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -73,6 +78,7 @@ import org.maplibre.compose.map.rememberMapState
 import org.maplibre.compose.material3.AttributionLinks
 import org.maplibre.compose.material3.ExpandingAttributionButton
 import org.maplibre.compose.style.BaseStyle
+import org.maplibre.compose.util.toDpPadding
 import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -153,6 +159,16 @@ private fun EditorContent(
     // the recomposition that has the new radius
     val latestState by rememberUpdatedState(state)
 
+    val density = LocalDensity.current
+    var mapHeightPx by remember { mutableIntStateOf(0) }
+
+    // the sheet covers the bottom of the map, so the circle is centred in what is left above it
+    fun coveredBySheet(): PaddingValues {
+        val sheetTop = runCatching { scaffoldState.bottomSheetState.requireOffset() }.getOrNull()
+            ?: return PaddingValues()
+        return PaddingValues(bottom = with(density) { (mapHeightPx - sheetTop).coerceAtLeast(0f).toDp() })
+    }
+
     // recenter also moves the camera when the circle is already in view
     suspend fun showCircle(recenter: Boolean) {
         val center = latestState.center ?: return
@@ -169,7 +185,8 @@ private fun EditorContent(
             CameraUpdate(
                 center = center.toMapLibreComposePosition(),
                 zoom = if (fits) mapState.cameraPosition.zoom
-                else zoomToFitCircle(center.latitude, radiusMeters, screenWidthDp)
+                else zoomToFitCircle(center.latitude, radiusMeters, screenWidthDp),
+                padding = coveredBySheet().toDpPadding(LayoutDirection.Ltr)
             ), CameraAnimation.Ease { duration = 400.milliseconds }
         )
     }
@@ -211,7 +228,9 @@ private fun EditorContent(
                 onCoordinatesApplied = { showCircleAfterFrame(recenter = true) },
                 onRadiusChangeFinished = { showCircleAfterFrame(recenter = false) })
         }) {
-        Box(Modifier.fillMaxSize()) {
+        Box(Modifier
+            .fillMaxSize()
+            .onSizeChanged { mapHeightPx = it.height }) {
             EditorMap(state = state, mapState = mapState, viewModel = viewModel)
             BackButton(navigateBack)
         }
