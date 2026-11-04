@@ -70,6 +70,29 @@ class PlaceSearchServiceTest {
     }
 
     @Test
+    fun `a place mapped twice a few metres apart is listed once`() {
+        val square = """{"name":"Piazza Dante","city":"Napoli","country":"Italia"}"""
+        val json = collection(
+            feature(14.2503, 40.8491, square),
+            feature(14.2506, 40.8494, square),
+            feature(14.31, 40.90, """{"name":"Piazza Dante","city":"Casoria","country":"Italia"}""")
+        )
+
+        val places = parsePhotonPlaces(json)
+
+        assertEquals(listOf("Napoli, Italia", "Casoria, Italia"), places.map { it.description })
+        assertEquals(Coordinates(latitude = 40.8491, longitude = 14.2503), places.first().coordinates)
+    }
+
+    @Test
+    fun `places with the same name and town far apart are both listed`() {
+        val square = """{"name":"Piazza Dante","city":"Napoli","country":"Italia"}"""
+        val json = collection(feature(14.2503, 40.8491, square), feature(14.20, 40.88, square))
+
+        assertEquals(2, parsePhotonPlaces(json).size)
+    }
+
+    @Test
     fun `no features gives no places`() {
         assertEquals(emptyList<Place>(), parsePhotonPlaces(collection()))
     }

@@ -48,13 +48,9 @@ class CircleEditorCoordinatesTest {
     }
 
     @Test
-    fun `a circle can't be saved while the coordinates text is not valid`() {
-        val ready = CircleEditorState(
-            isLoading = false, name = "Home", center = rome,
-            coordinatesText = rome.toShareableString()
-        )
+    fun `a circle can't be saved before it has a point`() {
+        val ready = CircleEditorState(isLoading = false, name = "Home", center = rome)
         assertEquals(true, ready.canSave)
-        assertFalse(ready.copy(coordinatesText = "41.9").canSave)
-        assertFalse(ready.copy(coordinatesText = "").canSave)
+        assertFalse(ready.copy(center = null).canSave)
     }
 }

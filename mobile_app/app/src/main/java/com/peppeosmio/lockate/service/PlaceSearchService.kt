@@ -40,7 +40,13 @@ private data class PhotonPropertiesDto(
 
 private val photonJson = Json { ignoreUnknownKeys = true }
 
-/** The places of a Photon GeoJSON answer; features with neither a name nor a street are skipped. */
+// OSM often maps one place more than once (a square and the road around it), a few metres apart
+private const val SAME_PLACE_METERS = 300.0
+
+/**
+ * The places of a Photon GeoJSON answer. Features with neither a name nor a street are skipped, and
+ * so are repeats of a place already listed.
+ */
 internal fun parsePhotonPlaces(json: String): List<Place> =
     photonJson.decodeFromString<PhotonResponseDto>(json).features.mapNotNull { feature ->
         val p = feature.properties
@@ -53,6 +59,12 @@ internal fun parsePhotonPlaces(json: String): List<Place> =
         // GeoJSON puts the longitude first
         val (longitude, latitude) = feature.geometry.coordinates
         Place(name, description, Coordinates(latitude = latitude, longitude = longitude))
+    }.fold(emptyList()) { places, place ->
+        val isRepeat = places.any {
+            it.name == place.name && it.description == place.description &&
+                it.coordinates.distanceMetersTo(place.coordinates) < SAME_PLACE_METERS
+        }
+        if (isRepeat) places else places + place
     }
 
 /** Searches places with a Photon geocoder, which sees the query and the area it is biased to. */

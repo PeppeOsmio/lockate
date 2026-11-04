@@ -39,7 +39,6 @@ class CircleEditorRadiusTest {
         isLoading = false,
         name = "Home",
         center = Coordinates(40.0, 14.0),
-        coordinatesText = "40.0, 14.0",
         radiusText = radiusText
     )
 

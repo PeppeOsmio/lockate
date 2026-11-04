@@ -1,5 +1,22 @@
 package com.peppeosmio.lockate.ui.screens.circles
 
+import android.content.ClipData
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.ui.layout.boundsInParent
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import com.peppeosmio.lockate.service.Place
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,7 +31,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Place
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.rememberBottomSheetScaffoldState
 import androidx.compose.material3.rememberStandardBottomSheetState
@@ -58,6 +74,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
@@ -102,6 +119,9 @@ import kotlin.time.Duration.Companion.milliseconds
 private const val MIN_VISIBLE_WIDTH_FRACTION = 0.15
 private const val MAX_VISIBLE_WIDTH_FRACTION = 0.85
 private const val MY_LOCATION_ZOOM = 15.0
+// the sheet is still once its top stays put this many frames in a row
+private const val SHEET_SETTLED_FRAMES = 3
+private const val MAX_SHEET_SETTLE_FRAMES = 60
 
 @Composable
 fun CircleEditorScreen(
@@ -150,12 +170,13 @@ private fun EditorContent(
 ) {
     val coroutineScope = rememberCoroutineScope()
     val screenWidthDp = LocalConfiguration.current.screenWidthDp.toDouble()
+    val clipboard = LocalClipboard.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scaffoldState = rememberBottomSheetScaffoldState(
         bottomSheetState = rememberStandardBottomSheetState(skipHiddenState = true),
         snackbarHostState = snackbarHostState
     )
-    // a new circle starts with the fields in view, since there is nothing to see on the map yet
+    // a new circle starts with the hint in view, since there is nothing to see on the map yet
     LaunchedEffect(Unit) { if (!state.isEditing) scaffoldState.bottomSheetState.expand() }
     LaunchedEffect(Unit) {
         viewModel.snackbarEvents.collect { snackbarHostState.showSnackbar(it.text) }
@@ -178,12 +199,17 @@ private fun EditorContent(
 
     val density = LocalDensity.current
     var mapHeightPx by remember { mutableIntStateOf(0) }
+    var searchBarBottomPx by remember { mutableIntStateOf(0) }
 
-    // the sheet covers the bottom of the map, so the circle is centred in what is left above it
-    fun coveredBySheet(): PaddingValues {
+    // the search bar covers the top of the map and the sheet the bottom, so the circle is centred
+    // in what is left between them
+    fun uncoveredMap(): PaddingValues {
+        val top = with(density) { searchBarBottomPx.toDp() }
         val sheetTop = runCatching { scaffoldState.bottomSheetState.requireOffset() }.getOrNull()
-            ?: return PaddingValues()
-        return PaddingValues(bottom = with(density) { (mapHeightPx - sheetTop).coerceAtLeast(0f).toDp() })
+            ?: return PaddingValues(top = top)
+        return PaddingValues(
+            top = top, bottom = with(density) { (mapHeightPx - sheetTop).coerceAtLeast(0f).toDp() }
+        )
     }
 
     // recenter also moves the camera when the circle is already in view
@@ -203,7 +229,7 @@ private fun EditorContent(
                 center = center.toMapLibreComposePosition(),
                 zoom = if (fits) mapState.cameraPosition.zoom
                 else zoomToFitCircle(center.latitude, radiusMeters, screenWidthDp),
-                padding = coveredBySheet().toDpPadding(LayoutDirection.Ltr)
+                padding = uncoveredMap().toDpPadding(LayoutDirection.Ltr)
             ), CameraAnimation.Ease { duration = 400.milliseconds }
         )
     }
@@ -216,7 +242,7 @@ private fun EditorContent(
                     CameraUpdate(
                         center = coordinates.toMapLibreComposePosition(),
                         zoom = MY_LOCATION_ZOOM,
-                        padding = coveredBySheet().toDpPadding(LayoutDirection.Ltr)
+                        padding = uncoveredMap().toDpPadding(LayoutDirection.Ltr)
                     ), CameraAnimation.Ease { duration = 400.milliseconds }
                 )
             } catch (_: CancellationException) {
@@ -225,13 +251,31 @@ private fun EditorContent(
         }
     }
 
-    val hasCenter = state.center != null
-    LaunchedEffect(hasCenter) { if (hasCenter) showCircle(recenter = false) }
-
-    fun showCircleAfterFrame(recenter: Boolean) {
+    // The fields appear once the circle has a point and the sheet grows to fit them, so the circle
+    // is centred once the sheet stops moving
+    fun showCircleWhenSheetSettles(recenter: Boolean) {
         coroutineScope.launch {
-            withFrameNanos { }
+            var lastSheetTop: Float? = null
+            var settledFrames = 0
+            var frames = 0
+            while (settledFrames < SHEET_SETTLED_FRAMES && frames < MAX_SHEET_SETTLE_FRAMES) {
+                withFrameNanos { }
+                frames++
+                val sheetTop = runCatching { scaffoldState.bottomSheetState.requireOffset() }.getOrNull()
+                settledFrames = if (sheetTop == lastSheetTop) settledFrames + 1 else 0
+                lastSheetTop = sheetTop
+            }
             showCircle(recenter)
+        }
+    }
+
+    val hasCenter = state.center != null
+    LaunchedEffect(hasCenter) { if (hasCenter) showCircleWhenSheetSettles(recenter = false) }
+
+    fun copyCoordinates(coordinates: Coordinates) {
+        coroutineScope.launch {
+            clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("coordinates", coordinates.toShareableString())))
+            snackbarHostState.showSnackbar("Coordinates copied to clipboard")
         }
     }
 
@@ -241,15 +285,37 @@ private fun EditorContent(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                    .padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(
-                    if (state.isEditing) "Edit circle" else "Add circle",
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.titleLarge
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        if (state.isEditing) "Edit circle" else "Add circle",
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                    state.center?.let { center ->
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable(onClickLabel = "Copy the coordinates") { copyCoordinates(center) },
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                center.toShareableString(),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Icon(
+                                painter = painterResource(R.drawable.outline_content_copy_24),
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
                 Button(onClick = viewModel::save, enabled = state.canSave) {
                     Text(if (state.isSaving) "Saving…" else "OK")
                 }
@@ -259,18 +325,32 @@ private fun EditorContent(
             EditorFields(
                 state = state,
                 viewModel = viewModel,
-                onSearchQueryChange = { query ->
-                    val near = mapState.cameraPosition.center
-                    viewModel.setSearchQuery(query, Coordinates(latitude = near.latitude, longitude = near.longitude))
-                },
-                onCoordinatesApplied = { showCircleAfterFrame(recenter = true) },
-                onRadiusChangeFinished = { showCircleAfterFrame(recenter = false) })
+                onRadiusChangeFinished = { showCircleWhenSheetSettles(recenter = false) })
         }) { sheetPeekHeight ->
         Box(Modifier
             .fillMaxSize()
             .onSizeChanged { mapHeightPx = it.height }) {
-            EditorMap(state = state, mapState = mapState, viewModel = viewModel)
-            BackButton(navigateBack)
+            EditorMap(state = state, mapState = mapState, viewModel = viewModel, bottomPadding = sheetPeekHeight)
+            SearchBar(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .onGloballyPositioned { searchBarBottomPx = it.boundsInParent().bottom.toInt() },
+                state = state,
+                onQueryChange = { query ->
+                    val near = mapState.cameraPosition.center
+                    viewModel.setSearchQuery(query, Coordinates(latitude = near.latitude, longitude = near.longitude))
+                },
+                onClear = viewModel::clearSearch,
+                onSelectPlace = { place ->
+                    viewModel.selectPlace(place)
+                    showCircleWhenSheetSettles(recenter = true)
+                },
+                onSelectCoordinates = {
+                    viewModel.selectSearchCoordinates()
+                    showCircleWhenSheetSettles(recenter = true)
+                },
+                navigateBack = navigateBack
+            )
             if (scaffoldState.bottomSheetState.targetValue != SheetValue.Expanded) {
                 FloatingActionButton(
                     modifier = Modifier
@@ -289,12 +369,123 @@ private fun EditorContent(
     }
 }
 
+/** Floating over the top of the map: the back button, the search and, below them, its results. */
+@Composable
+private fun SearchBar(
+    modifier: Modifier,
+    state: CircleEditorState,
+    onQueryChange: (String) -> Unit,
+    onClear: () -> Unit,
+    onSelectPlace: (Place) -> Unit,
+    onSelectCoordinates: () -> Unit,
+    navigateBack: () -> Unit
+) {
+    val focusManager = LocalFocusManager.current
+    val searchCoordinates = state.searchCoordinates
+    Surface(
+        modifier = modifier
+            .statusBarsPadding()
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .fillMaxWidth(),
+        shape = RoundedCornerShape(28.dp),
+        tonalElevation = 3.dp,
+        shadowElevation = 6.dp
+    ) {
+        Column(modifier = Modifier.animateContentSize()) {
+            Row(
+                modifier = Modifier.padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = navigateBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Navigate back")
+                }
+                TextField(
+                    modifier = Modifier.weight(1f),
+                    value = state.searchQuery,
+                    onValueChange = onQueryChange,
+                    placeholder = {
+                        Text("Search a place or coordinates", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    },
+                    singleLine = true,
+                    enabled = !state.isSaving,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = {
+                        focusManager.clearFocus()
+                        if (searchCoordinates != null) onSelectCoordinates()
+                    }),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        disabledContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        disabledIndicatorColor = Color.Transparent
+                    )
+                )
+                Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                    if (state.isSearching) {
+                        CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+                    } else if (state.searchQuery.isNotEmpty()) {
+                        IconButton(onClick = onClear) {
+                            Icon(Icons.Default.Clear, contentDescription = "Clear the search")
+                        }
+                    }
+                }
+            }
+            if (searchCoordinates != null || state.searchResults.isNotEmpty() || state.searchFailed) {
+                HorizontalDivider()
+                LazyColumn(modifier = Modifier.heightIn(max = LocalConfiguration.current.screenHeightDp.dp * 0.5f)) {
+                    searchCoordinates?.let { coordinates ->
+                        item {
+                            SearchResult(
+                                headline = coordinates.toShareableString(),
+                                supporting = "Coordinates",
+                                onClick = {
+                                    focusManager.clearFocus()
+                                    onSelectCoordinates()
+                                })
+                        }
+                    }
+                    items(state.searchResults) { place ->
+                        SearchResult(
+                            headline = place.name,
+                            supporting = place.description.takeIf { it.isNotEmpty() },
+                            onClick = {
+                                focusManager.clearFocus()
+                                onSelectPlace(place)
+                            })
+                    }
+                    if (state.searchFailed) {
+                        item {
+                            Text(
+                                "Can't search right now",
+                                modifier = Modifier.padding(16.dp),
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchResult(headline: String, supporting: String?, onClick: () -> Unit) {
+    ListItem(
+        modifier = Modifier.clickable(onClick = onClick),
+        headlineContent = { Text(headline) },
+        supportingContent = supporting?.let { { Text(it) } },
+        leadingContent = { Icon(Icons.Default.Place, contentDescription = null) },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+    )
+}
+
 @Composable
 private fun EditorFields(
     state: CircleEditorState,
     viewModel: CircleEditorViewModel,
-    onSearchQueryChange: (String) -> Unit,
-    onCoordinatesApplied: () -> Unit,
     onRadiusChangeFinished: () -> Unit
 ) {
     val focusManager = LocalFocusManager.current
@@ -305,139 +496,65 @@ private fun EditorFields(
             .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        if (state.center == null) {
+            Text(
+                "Tap the map, or search a place or coordinates",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            return@Column
+        }
         OutlinedTextField(
             modifier = Modifier.fillMaxWidth(),
-            value = state.searchQuery,
-            onValueChange = onSearchQueryChange,
-            label = { Text("Search a place") },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-            trailingIcon = {
-                if (state.isSearching) {
-                    CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
-                } else if (state.searchQuery.isNotEmpty()) {
-                    IconButton(onClick = viewModel::clearSearch) {
-                        Icon(Icons.Default.Clear, contentDescription = "Clear the search")
-                    }
-                }
-            },
-            isError = state.searchFailed,
-            supportingText = if (state.searchFailed) {
-                { Text("Can't search right now") }
-            } else null,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
+            value = state.name,
+            onValueChange = viewModel::setName,
+            label = { Text("Name") },
             singleLine = true,
             enabled = !state.isSaving
         )
-        state.searchResults.forEach { place ->
-            ListItem(
-                modifier = Modifier.clickable {
-                    focusManager.clearFocus()
-                    viewModel.selectPlace(place)
-                    onCoordinatesApplied()
-                },
-                headlineContent = { Text(place.name) },
-                supportingContent = if (place.description.isNotEmpty()) {
-                    { Text(place.description) }
-                } else null,
-                leadingContent = { Icon(Icons.Default.Place, contentDescription = null) },
-                colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-            )
-        }
-        var coordinatesHadFocus by remember { mutableStateOf(false) }
-        val areCoordinatesValid = parseCoordinates(state.coordinatesText) != null
+        var hadFocus by remember { mutableStateOf(false) }
+        val isRadiusValid = parseRadiusMeters(state.radiusText) != null
         OutlinedTextField(
             modifier = Modifier
                 .fillMaxWidth()
                 .onFocusChanged {
-                    // the map goes to the point once the field is left, like after the radius
-                    if (coordinatesHadFocus && !it.isFocused && areCoordinatesValid) {
-                        onCoordinatesApplied()
-                    }
-                    coordinatesHadFocus = it.isFocused
+                    // the circle is shown whole once the field is left, like after the slider
+                    if (hadFocus && !it.isFocused) onRadiusChangeFinished()
+                    hadFocus = it.isFocused
                 },
-            value = state.coordinatesText,
-            onValueChange = viewModel::setCoordinatesText,
-            label = { Text("Coordinates") },
-            placeholder = { Text("41.902800, 12.496400") },
-            isError = state.coordinatesText.isNotEmpty() && !areCoordinatesValid,
+            value = state.radiusText,
+            onValueChange = viewModel::setRadiusText,
+            label = { Text("Radius") },
+            suffix = { Text("m") },
+            isError = !isRadiusValid,
             supportingText = {
-                Text(
-                    if (state.center == null && state.coordinatesText.isEmpty())
-                        "Tap the map or write latitude, longitude"
-                    else "Latitude, longitude"
-                )
-            },
-            trailingIcon = {
-                IconButton(
-                    enabled = areCoordinatesValid && !state.isSaving,
-                    onClick = {
-                        if (coordinatesHadFocus) focusManager.clearFocus()
-                        else onCoordinatesApplied()
-                    }) {
-                    Icon(Icons.Default.Place, contentDescription = "Go to the coordinates")
+                if (!isRadiusValid) {
+                    Text(
+                        "Between ${CircleEditorViewModel.MIN_RADIUS_METERS.roundToInt()} and " +
+                            "${CircleEditorViewModel.MAX_RADIUS_METERS.roundToInt()} m"
+                    )
                 }
             },
             keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Text, imeAction = ImeAction.Go
+                keyboardType = KeyboardType.Number, imeAction = ImeAction.Done
             ),
-            keyboardActions = KeyboardActions(onGo = { focusManager.clearFocus() }),
+            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
             singleLine = true,
             enabled = !state.isSaving
         )
-        if (state.center != null) {
-            OutlinedTextField(
-                modifier = Modifier.fillMaxWidth(),
-                value = state.name,
-                onValueChange = viewModel::setName,
-                label = { Text("Name") },
-                singleLine = true,
-                enabled = !state.isSaving
-            )
-            var hadFocus by remember { mutableStateOf(false) }
-            val isRadiusValid = parseRadiusMeters(state.radiusText) != null
-            OutlinedTextField(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .onFocusChanged {
-                        // the circle is shown whole once the field is left, like after the slider
-                        if (hadFocus && !it.isFocused) onRadiusChangeFinished()
-                        hadFocus = it.isFocused
-                    },
-                value = state.radiusText,
-                onValueChange = viewModel::setRadiusText,
-                label = { Text("Radius") },
-                suffix = { Text("m") },
-                isError = !isRadiusValid,
-                supportingText = {
-                    if (!isRadiusValid) {
-                        Text(
-                            "Between ${CircleEditorViewModel.MIN_RADIUS_METERS.roundToInt()} and " +
-                                "${CircleEditorViewModel.MAX_RADIUS_METERS.roundToInt()} m"
-                        )
-                    }
-                },
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Number, imeAction = ImeAction.Done
-                ),
-                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-                singleLine = true,
-                enabled = !state.isSaving
-            )
-            Slider(
-                value = state.radiusMeters.toFloat(),
-                onValueChange = { viewModel.setRadius(it.roundToInt().toDouble()) },
-                onValueChangeFinished = onRadiusChangeFinished,
-                valueRange = CircleEditorViewModel.MIN_RADIUS_METERS.toFloat()..CircleEditorViewModel.MAX_RADIUS_METERS.toFloat(),
-                enabled = !state.isSaving
-            )
-        }
+        Slider(
+            value = state.radiusMeters.toFloat(),
+            onValueChange = { viewModel.setRadius(it.roundToInt().toDouble()) },
+            onValueChangeFinished = onRadiusChangeFinished,
+            valueRange = CircleEditorViewModel.MIN_RADIUS_METERS.toFloat()..CircleEditorViewModel.MAX_RADIUS_METERS.toFloat(),
+            enabled = !state.isSaving
+        )
     }
 }
 
 @Composable
 private fun EditorMap(
-    state: CircleEditorState, mapState: MapState, viewModel: CircleEditorViewModel
+    state: CircleEditorState, mapState: MapState, viewModel: CircleEditorViewModel, bottomPadding: Dp
 ) {
     val currentSetCenter by rememberUpdatedState(viewModel::setCenter)
     val interactions = remember {
@@ -459,9 +576,9 @@ private fun EditorMap(
         // The data licences require showing the attribution declared by the style's sources
         ExpandingAttributionButton(
             modifier = Modifier
-                .align(Alignment.TopStart)
-                .windowInsetsPadding(WindowInsets.statusBars)
-                .padding(start = 64.dp, top = 8.dp),
+                .align(Alignment.BottomStart)
+                // leaves room for the my-location button, so the text wraps instead of going under it
+                .padding(start = 8.dp, end = 88.dp, bottom = bottomPadding + 8.dp),
             expandedContent = { attributions, textStyle ->
                 AttributionLinks(attributions, textStyle = textStyle, breakWithinAttribution = true)
             }

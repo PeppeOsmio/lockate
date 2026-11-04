@@ -40,14 +40,14 @@ data class CircleEditorState(
     val radiusText: String = CircleEditorViewModel.DEFAULT_RADIUS_METERS.roundToInt().toString(),
     // null until the point is put on the map
     val center: Coordinates? = null,
-    // what is written in the coordinates field, which may be half typed or out of range
-    val coordinatesText: String = "",
     val initialCamera: Coordinates = Coordinates.NAPOLI,
     val otherCircles: List<Circle> = emptyList(),
     val mapStyleUrls: MapStyleUrls = MapStyleUrls(),
     val isSaving: Boolean = false,
     val searchQuery: String = "",
     val searchResults: List<Place> = emptyList(),
+    // what is written in the search when it reads as a point, which is never sent to the geocoder
+    val searchCoordinates: Coordinates? = null,
     val isSearching: Boolean = false,
     val searchFailed: Boolean = false,
     // shown as a still dot: the editor takes one fix and doesn't keep the GPS on
@@ -55,10 +55,10 @@ data class CircleEditorState(
 ) {
     val canSave
         get() = !isLoading && name.isNotBlank() && center != null && !isSaving &&
-            parseRadiusMeters(radiusText) != null && parseCoordinates(coordinatesText) != null
+            parseRadiusMeters(radiusText) != null
 }
 
-/** The "lat, lng" written in the field, or null when it isn't a pair of numbers on the globe. */
+/** The "lat, lng" written in the search, or null when it isn't a pair of numbers on the globe. */
 internal fun parseCoordinates(text: String): Coordinates? {
     val parts = text.trim().split(Regex("[\\s,;]+"))
     if (parts.size != 2) return null
@@ -121,7 +121,6 @@ class CircleEditorViewModel(
                         radiusText = (circle?.radiusMeters ?: DEFAULT_RADIUS_METERS).roundToInt()
                             .toString(),
                         center = circle?.center,
-                        coordinatesText = circle?.center?.toShareableString() ?: "",
                         initialCamera = circle?.center ?: myLocation() ?: Coordinates.NAPOLI,
                         otherCircles = circles.filter { c -> c.id != circle?.id }
                     )
@@ -165,21 +164,19 @@ class CircleEditorViewModel(
 
     fun setCenter(center: Coordinates) {
         if (state.value.isSaving) return
-        _state.update { it.copy(center = center, coordinatesText = center.toShareableString()) }
+        _state.update { it.copy(center = center) }
     }
 
-    /** The circle follows the text only while it is valid, so it doesn't jump when half typed. */
-    fun setCoordinatesText(text: String) {
-        if (state.value.isSaving) return
-        _state.update { it.copy(coordinatesText = text, center = parseCoordinates(text) ?: it.center) }
-    }
-
-    /** Searches once the text stops changing, biased to [near] so the closest matches come first. */
+    /**
+     * Searches once the text stops changing, biased to [near] so the closest matches come first.
+     * Coordinates are recognised here and offered as the only result.
+     */
     fun setSearchQuery(query: String, near: Coordinates) {
         searchJob?.cancel()
-        _state.update { it.copy(searchQuery = query, searchFailed = false) }
         val trimmed = query.trim()
-        if (trimmed.length < MIN_SEARCH_CHARS) {
+        val coordinates = parseCoordinates(trimmed)
+        _state.update { it.copy(searchQuery = query, searchFailed = false, searchCoordinates = coordinates) }
+        if (coordinates != null || trimmed.length < MIN_SEARCH_CHARS) {
             _state.update { it.copy(searchResults = emptyList(), isSearching = false) }
             return
         }
@@ -200,7 +197,13 @@ class CircleEditorViewModel(
     fun clearSearch() {
         searchJob?.cancel()
         _state.update {
-            it.copy(searchQuery = "", searchResults = emptyList(), isSearching = false, searchFailed = false)
+            it.copy(
+                searchQuery = "",
+                searchResults = emptyList(),
+                searchCoordinates = null,
+                isSearching = false,
+                searchFailed = false
+            )
         }
     }
 
@@ -211,10 +214,16 @@ class CircleEditorViewModel(
         _state.update {
             it.copy(
                 center = place.coordinates,
-                coordinatesText = place.coordinates.toShareableString(),
                 name = it.name.ifBlank { place.name.take(PayloadCodec.MAX_CIRCLE_NAME_CHARS) }
             )
         }
+    }
+
+    fun selectSearchCoordinates() {
+        val coordinates = state.value.searchCoordinates ?: return
+        if (state.value.isSaving) return
+        clearSearch()
+        _state.update { it.copy(center = coordinates) }
     }
 
     fun goToMyLocation() {
