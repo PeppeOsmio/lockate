@@ -81,8 +81,11 @@ import org.maplibre.compose.camera.CameraPosition
 import org.maplibre.compose.camera.CameraUpdate
 import org.maplibre.compose.map.rememberMapState
 import org.maplibre.compose.style.BaseStyle
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
@@ -178,10 +181,15 @@ fun MapScreen(
                     viewportWidthDp = screenWidthDp
                 )
             } ?: 15.0
-            mapState.animateCamera(
-                CameraUpdate(center = target.coordinates.toMapLibreComposePosition(), zoom = zoom),
-                CameraAnimation.Ease { duration = MARKER_MOVE_DURATION_MS.milliseconds }
-            )
+            // a map gesture cancels the animation by throwing, which would otherwise end this collector
+            try {
+                mapState.animateCamera(
+                    CameraUpdate(center = target.coordinates.toMapLibreComposePosition(), zoom = zoom),
+                    CameraAnimation.Ease { duration = MARKER_MOVE_DURATION_MS.milliseconds }
+                )
+            } catch (_: CancellationException) {
+                currentCoroutineContext().ensureActive()
+            }
         }
     }
 
