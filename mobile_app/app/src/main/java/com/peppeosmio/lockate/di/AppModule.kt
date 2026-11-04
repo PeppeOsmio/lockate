@@ -17,6 +17,7 @@ import com.peppeosmio.lockate.service.anonymous_group.PayloadCodec
 import com.peppeosmio.lockate.service.ConnectionService
 import com.peppeosmio.lockate.service.MapStyleService
 import com.peppeosmio.lockate.service.PermissionsService
+import com.peppeosmio.lockate.service.PlaceSearchService
 import com.peppeosmio.lockate.service.crypto.CryptoService
 import com.peppeosmio.lockate.service.invite.InviteService
 import com.peppeosmio.lockate.platform_service.LocationService
@@ -94,6 +95,10 @@ val appModule = module {
 
     single<MapStyleService> {
         MapStyleService(context = androidContext(), httpClient = get())
+    }
+
+    single<PlaceSearchService> {
+        PlaceSearchService(context = androidContext(), httpClient = get())
     }
 
     single<CryptoService> {

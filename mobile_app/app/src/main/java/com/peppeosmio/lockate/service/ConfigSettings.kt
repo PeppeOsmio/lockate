@@ -16,6 +16,7 @@ object ConfigSettings {
     val LAST_MAP_LOCATION = stringPreferencesKey("last_map_location")
     val MAP_STYLE_URL_LIGHT = stringPreferencesKey("map_style_url_light")
     val MAP_STYLE_URL_DARK = stringPreferencesKey("map_style_url_dark")
+    val GEOCODER_URL = stringPreferencesKey("geocoder_url")
 
     fun lastAGInternalId(connectionId: Long) = longPreferencesKey("last_ag_internal_id_$connectionId")
 }

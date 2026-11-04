@@ -27,9 +27,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.peppeosmio.lockate.service.DEFAULT_GEOCODER_URL
 import com.peppeosmio.lockate.ui.screens.map.DEFAULT_DARK_STYLE_URL
 import com.peppeosmio.lockate.ui.screens.map.DEFAULT_LIGHT_STYLE_URL
 import org.koin.compose.viewmodel.koinViewModel
+
+private const val STYLE_ERROR_TEXT = "This isn't a valid map style. Check the URL and your connection."
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,19 +62,34 @@ fun SettingsScreen(navigateBack: () -> Unit, viewModel: SettingsViewModel = koin
                 "Use any MapLibre style URL. Leave a field empty for the default. The map provider can see the area you're looking at.",
                 style = MaterialTheme.typography.bodyMedium
             )
-            StyleUrlField(
+            UrlField(
                 label = "Light map style URL",
                 placeholder = DEFAULT_LIGHT_STYLE_URL,
                 value = state.lightStyleUrl,
                 isError = state.lightStyleError,
+                errorText = STYLE_ERROR_TEXT,
                 onValueChange = viewModel::onLightStyleUrlChanged
             )
-            StyleUrlField(
+            UrlField(
                 label = "Dark map style URL",
                 placeholder = DEFAULT_DARK_STYLE_URL,
                 value = state.darkStyleUrl,
                 isError = state.darkStyleError,
+                errorText = STYLE_ERROR_TEXT,
                 onValueChange = viewModel::onDarkStyleUrlChanged
+            )
+            Text("Place search", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Searching places when you add or edit a circle uses a Photon geocoder. Leave the field empty for the default. The geocoder can see what you search and the area you're looking at.",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            UrlField(
+                label = "Photon URL",
+                placeholder = DEFAULT_GEOCODER_URL,
+                value = state.geocoderUrl,
+                isError = state.geocoderError,
+                errorText = "This isn't a Photon geocoder. Check the URL and your connection.",
+                onValueChange = viewModel::onGeocoderUrlChanged
             )
             Row(
                 modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -88,8 +106,13 @@ fun SettingsScreen(navigateBack: () -> Unit, viewModel: SettingsViewModel = koin
 }
 
 @Composable
-private fun StyleUrlField(
-    label: String, placeholder: String, value: String, isError: Boolean, onValueChange: (String) -> Unit
+private fun UrlField(
+    label: String,
+    placeholder: String,
+    value: String,
+    isError: Boolean,
+    errorText: String,
+    onValueChange: (String) -> Unit
 ) {
     OutlinedTextField(
         modifier = Modifier.fillMaxWidth(),
@@ -99,7 +122,7 @@ private fun StyleUrlField(
         placeholder = { Text(placeholder, maxLines = 1) },
         isError = isError,
         supportingText = if (isError) {
-            { Text("This isn't a valid map style. Check the URL and your connection.") }
+            { Text(errorText) }
         } else null,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
         singleLine = true

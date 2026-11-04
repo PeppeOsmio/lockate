@@ -5,15 +5,21 @@ import androidx.lifecycle.viewModelScope
 import com.peppeosmio.lockate.domain.Coordinates
 import com.peppeosmio.lockate.domain.anonymous_group.AnonymousGroup
 import com.peppeosmio.lockate.domain.anonymous_group.Circle
+import com.peppeosmio.lockate.exceptions.LocationDisabledException
+import com.peppeosmio.lockate.exceptions.NoPermissionException
 import com.peppeosmio.lockate.platform_service.LocationService
 import com.peppeosmio.lockate.service.MapStyleService
 import com.peppeosmio.lockate.service.MapStyleUrls
+import com.peppeosmio.lockate.service.Place
+import com.peppeosmio.lockate.service.PlaceSearchService
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
 import com.peppeosmio.lockate.service.anonymous_group.PayloadCodec
 import com.peppeosmio.lockate.utils.ErrorInfo
 import com.peppeosmio.lockate.utils.SnackbarErrorMessage
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -22,6 +28,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
 import kotlin.math.roundToInt
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 data class CircleEditorState(
@@ -39,6 +46,12 @@ data class CircleEditorState(
     val otherCircles: List<Circle> = emptyList(),
     val mapStyleUrls: MapStyleUrls = MapStyleUrls(),
     val isSaving: Boolean = false,
+    val searchQuery: String = "",
+    val searchResults: List<Place> = emptyList(),
+    val isSearching: Boolean = false,
+    val searchFailed: Boolean = false,
+    // shown as a still dot: the editor takes one fix and doesn't keep the GPS on
+    val myLocation: Coordinates? = null,
 ) {
     val canSave
         get() = !isLoading && name.isNotBlank() && center != null && !isSaving &&
@@ -63,7 +76,8 @@ internal fun parseRadiusMeters(text: String): Double? =
 class CircleEditorViewModel(
     private val anonymousGroupService: AnonymousGroupService,
     private val locationService: LocationService,
-    private val mapStyleService: MapStyleService
+    private val mapStyleService: MapStyleService,
+    private val placeSearchService: PlaceSearchService
 ) : ViewModel() {
     private val _state = MutableStateFlow(CircleEditorState())
     val state = _state.asStateFlow()
@@ -71,6 +85,10 @@ class CircleEditorViewModel(
     val snackbarEvents = _snackbarEvents.receiveAsFlow()
     private val _navigateBackEvents = Channel<Unit>()
     val navigateBackEvents = _navigateBackEvents.receiveAsFlow()
+    // conflated so that a tap made before the map starts collecting isn't lost
+    private val _cameraEvents = Channel<Coordinates>(Channel.CONFLATED)
+    val cameraEvents = _cameraEvents.receiveAsFlow()
+    private var searchJob: Job? = null
 
     private var group: AnonymousGroup? = null
     private var circleId: String? = null
@@ -156,6 +174,73 @@ class CircleEditorViewModel(
         _state.update { it.copy(coordinatesText = text, center = parseCoordinates(text) ?: it.center) }
     }
 
+    /** Searches once the text stops changing, biased to [near] so the closest matches come first. */
+    fun setSearchQuery(query: String, near: Coordinates) {
+        searchJob?.cancel()
+        _state.update { it.copy(searchQuery = query, searchFailed = false) }
+        val trimmed = query.trim()
+        if (trimmed.length < MIN_SEARCH_CHARS) {
+            _state.update { it.copy(searchResults = emptyList(), isSearching = false) }
+            return
+        }
+        searchJob = viewModelScope.launch {
+            delay(SEARCH_DEBOUNCE)
+            _state.update { it.copy(isSearching = true) }
+            try {
+                val places = placeSearchService.search(trimmed, near)
+                _state.update { it.copy(searchResults = places, isSearching = false) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _state.update { it.copy(searchResults = emptyList(), isSearching = false, searchFailed = true) }
+            }
+        }
+    }
+
+    fun clearSearch() {
+        searchJob?.cancel()
+        _state.update {
+            it.copy(searchQuery = "", searchResults = emptyList(), isSearching = false, searchFailed = false)
+        }
+    }
+
+    /** Puts the circle on [place], naming it after the place unless it already has a name. */
+    fun selectPlace(place: Place) {
+        if (state.value.isSaving) return
+        clearSearch()
+        _state.update {
+            it.copy(
+                center = place.coordinates,
+                coordinatesText = place.coordinates.toShareableString(),
+                name = it.name.ifBlank { place.name.take(PayloadCodec.MAX_CIRCLE_NAME_CHARS) }
+            )
+        }
+    }
+
+    fun goToMyLocation() {
+        viewModelScope.launch {
+            val coordinates = try {
+                locationService.getCurrentLocation() ?: locationService.getLastLocation()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: LocationDisabledException) {
+                _snackbarEvents.trySend(SnackbarErrorMessage("Geolocation is disabled", errorInfo = null))
+                return@launch
+            } catch (_: NoPermissionException) {
+                _snackbarEvents.trySend(SnackbarErrorMessage("No location permissions", errorInfo = null))
+                return@launch
+            } catch (_: Exception) {
+                null
+            }
+            if (coordinates == null) {
+                _snackbarEvents.trySend(SnackbarErrorMessage("Can't find your location", errorInfo = null))
+                return@launch
+            }
+            _state.update { it.copy(myLocation = coordinates) }
+            _cameraEvents.trySend(coordinates)
+        }
+    }
+
     fun save() {
         val anonymousGroup = group ?: return
         val current = state.value
@@ -191,5 +276,7 @@ class CircleEditorViewModel(
         const val MIN_RADIUS_METERS = 30.0
         const val MAX_RADIUS_METERS = 2000.0
         private const val MAX_RADIUS_DIGITS = 4
+        private const val MIN_SEARCH_CHARS = 3
+        private val SEARCH_DEBOUNCE = 400.milliseconds
     }
 }

@@ -6,11 +6,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.rememberBottomSheetScaffoldState
 import androidx.compose.material3.rememberStandardBottomSheetState
@@ -28,17 +32,22 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -50,21 +59,28 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.peppeosmio.lockate.R
 import com.peppeosmio.lockate.domain.Coordinates
 import com.peppeosmio.lockate.domain.anonymous_group.Circle
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.CircleOverlay
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.CircleStyle
+import com.peppeosmio.lockate.ui.screens.anonymous_group_details.MyMarker
 import com.peppeosmio.lockate.ui.screens.map.circleWidthFraction
 import com.peppeosmio.lockate.ui.screens.map.resolveMapStyleUrl
 import com.peppeosmio.lockate.ui.screens.map.zoomToFitCircle
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 import org.maplibre.compose.camera.CameraAnimation
@@ -85,6 +101,7 @@ import kotlin.time.Duration.Companion.milliseconds
 // the circle is zoomed into view when it takes less or more than this share of the map's width
 private const val MIN_VISIBLE_WIDTH_FRACTION = 0.15
 private const val MAX_VISIBLE_WIDTH_FRACTION = 0.85
+private const val MY_LOCATION_ZOOM = 15.0
 
 @Composable
 fun CircleEditorScreen(
@@ -191,6 +208,23 @@ private fun EditorContent(
         )
     }
 
+    LaunchedEffect(Unit) {
+        viewModel.cameraEvents.collect { coordinates ->
+            // a map gesture cancels the animation by throwing, which would otherwise end this collector
+            try {
+                mapState.animateCamera(
+                    CameraUpdate(
+                        center = coordinates.toMapLibreComposePosition(),
+                        zoom = MY_LOCATION_ZOOM,
+                        padding = coveredBySheet().toDpPadding(LayoutDirection.Ltr)
+                    ), CameraAnimation.Ease { duration = 400.milliseconds }
+                )
+            } catch (_: CancellationException) {
+                currentCoroutineContext().ensureActive()
+            }
+        }
+    }
+
     val hasCenter = state.center != null
     LaunchedEffect(hasCenter) { if (hasCenter) showCircle(recenter = false) }
 
@@ -225,14 +259,32 @@ private fun EditorContent(
             EditorFields(
                 state = state,
                 viewModel = viewModel,
+                onSearchQueryChange = { query ->
+                    val near = mapState.cameraPosition.center
+                    viewModel.setSearchQuery(query, Coordinates(latitude = near.latitude, longitude = near.longitude))
+                },
                 onCoordinatesApplied = { showCircleAfterFrame(recenter = true) },
                 onRadiusChangeFinished = { showCircleAfterFrame(recenter = false) })
-        }) {
+        }) { sheetPeekHeight ->
         Box(Modifier
             .fillMaxSize()
             .onSizeChanged { mapHeightPx = it.height }) {
             EditorMap(state = state, mapState = mapState, viewModel = viewModel)
             BackButton(navigateBack)
+            if (scaffoldState.bottomSheetState.targetValue != SheetValue.Expanded) {
+                FloatingActionButton(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(16.dp)
+                        .padding(bottom = sheetPeekHeight),
+                    onClick = viewModel::goToMyLocation
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.outline_location_searching_24),
+                        contentDescription = "My location"
+                    )
+                }
+            }
         }
     }
 }
@@ -241,6 +293,7 @@ private fun EditorContent(
 private fun EditorFields(
     state: CircleEditorState,
     viewModel: CircleEditorViewModel,
+    onSearchQueryChange: (String) -> Unit,
     onCoordinatesApplied: () -> Unit,
     onRadiusChangeFinished: () -> Unit
 ) {
@@ -252,6 +305,45 @@ private fun EditorFields(
             .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        OutlinedTextField(
+            modifier = Modifier.fillMaxWidth(),
+            value = state.searchQuery,
+            onValueChange = onSearchQueryChange,
+            label = { Text("Search a place") },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            trailingIcon = {
+                if (state.isSearching) {
+                    CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+                } else if (state.searchQuery.isNotEmpty()) {
+                    IconButton(onClick = viewModel::clearSearch) {
+                        Icon(Icons.Default.Clear, contentDescription = "Clear the search")
+                    }
+                }
+            },
+            isError = state.searchFailed,
+            supportingText = if (state.searchFailed) {
+                { Text("Can't search right now") }
+            } else null,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
+            singleLine = true,
+            enabled = !state.isSaving
+        )
+        state.searchResults.forEach { place ->
+            ListItem(
+                modifier = Modifier.clickable {
+                    focusManager.clearFocus()
+                    viewModel.selectPlace(place)
+                    onCoordinatesApplied()
+                },
+                headlineContent = { Text(place.name) },
+                supportingContent = if (place.description.isNotEmpty()) {
+                    { Text(place.description) }
+                } else null,
+                leadingContent = { Icon(Icons.Default.Place, contentDescription = null) },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+            )
+        }
         var coordinatesHadFocus by remember { mutableStateOf(false) }
         val areCoordinatesValid = parseCoordinates(state.coordinatesText) != null
         OutlinedTextField(
@@ -377,6 +469,12 @@ private fun EditorMap(
     }
 
     state.otherCircles.forEach { CircleOverlay(mapState, it, CircleStyle.Faint) }
+    state.myLocation?.let { myLocation ->
+        val projection by remember(mapState.cameraPosition, myLocation) {
+            derivedStateOf { mapState.screenLocationFromPosition(myLocation.toMapLibreComposePosition()) }
+        }
+        projection?.let { MyMarker(center = it, orientation = null, isOld = false) }
+    }
     state.center?.let { center ->
         CircleOverlay(
             mapState,
