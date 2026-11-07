@@ -11,7 +11,9 @@ public class LocationRecordMapper {
   public LocationRecordDto toDto(AGMemberLocationEntity entity) {
     return new LocationRecordDto(
         EncryptedDataDto.fromEncryptedString(
-            new EncryptedString(entity.getPayloadCipher(), entity.getPayloadIv())),
+            new EncryptedString(entity.getCoordinatesCipher(), entity.getCoordinatesIv())),
+        EncryptedDataDto.fromEncryptedString(
+            new EncryptedString(entity.getActivityCipher(), entity.getActivityIv())),
         entity.getTimestamp());
   }
 }

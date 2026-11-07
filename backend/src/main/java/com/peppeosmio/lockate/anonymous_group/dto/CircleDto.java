@@ -4,4 +4,9 @@ import com.peppeosmio.lockate.common.dto.EncryptedDataDto;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-public record CircleDto(UUID id, EncryptedDataDto encryptedData, LocalDateTime updatedAt) {}
+public record CircleDto(
+    UUID id,
+    EncryptedDataDto encryptedCoordinates,
+    EncryptedDataDto encryptedRadius,
+    EncryptedDataDto encryptedName,
+    LocalDateTime updatedAt) {}

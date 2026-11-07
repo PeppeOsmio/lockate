@@ -3,7 +3,6 @@ package com.peppeosmio.lockate.anonymous_group.repository;
 import com.peppeosmio.lockate.anonymous_group.entity.AGMemberEntity;
 import com.peppeosmio.lockate.anonymous_group.entity.AGMemberLocationEntity;
 import java.time.Instant;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.Modifying;
@@ -14,29 +13,6 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface AGLocationRepository extends CrudRepository<AGMemberLocationEntity, UUID> {
-  @NativeQuery(
-      value =
-          """
-                WITH ranked_locations AS (
-                    SELECT
-                        l.*,
-                        m.anonymous_group_id as m_anonymous_group_id,
-                        m.id as m_id,
-                        ROW_NUMBER() OVER (
-                            PARTITION BY m.id
-                            ORDER BY l.timestamp DESC
-                        ) AS row_number
-                    FROM ag_member_location l
-                    JOIN ag_member m ON l.ag_member_id = m.id
-                    WHERE m.anonymous_group_id = :anonymousGroupId
-                )
-                SELECT *
-                FROM ranked_locations
-                WHERE row_number = 1
-            """)
-  List<AGMemberLocationEntity> findLastLocationOfMembers(
-      @Param("anonymousGroupId") UUID anonymousGroupId);
-
   @Modifying
   @NativeQuery(
       value =

@@ -78,8 +78,12 @@ public class AnonymousGroupService {
   }
 
   public static final int MAX_CIRCLES_PER_GROUP = 50;
-  // The clients pad circles to 384 bytes and member messages to 512, plus the 16-byte GCM tag
-  public static final int MAX_ENCRYPTED_BLOB_BYTES = 1024;
+  // Every encrypted field of a member message or a circle has one size, plus the 16-byte GCM tag:
+  // two big-endian Int32 microdegrees, one activity byte, a Float64 radius, a name padded to 128
+  public static final int COORDINATES_CIPHER_BYTES = 24;
+  public static final int MEMBER_ACTIVITY_CIPHER_BYTES = 17;
+  public static final int CIRCLE_RADIUS_CIPHER_BYTES = 24;
+  public static final int CIRCLE_NAME_CIPHER_BYTES = 144;
 
   public static String getRedisAGChannel(UUID anonymousGroupId) {
     return "ag-" + anonymousGroupId.toString();
@@ -105,7 +109,9 @@ public class AnonymousGroupService {
   private CircleDto toCircleDto(AGCircleEntity entity) {
     return new CircleDto(
         entity.getId(),
-        EncryptedDataDto.fromEncryptedString(entity.getEncryptedData()),
+        EncryptedDataDto.fromEncryptedString(entity.getEncryptedCoordinates()),
+        EncryptedDataDto.fromEncryptedString(entity.getEncryptedRadius()),
+        EncryptedDataDto.fromEncryptedString(entity.getEncryptedName()),
         entity.getUpdatedAt());
   }
 
@@ -123,9 +129,12 @@ public class AnonymousGroupService {
   }
 
   @Transactional
-  public void upsertCircle(UUID anonymousGroupId, UUID circleId, EncryptedDataDto encryptedData)
+  public void upsertCircle(UUID anonymousGroupId, UUID circleId, CircleUpsertReqDto dto)
       throws AGNotFoundException, AGCircleConflictException, InvalidEncryptedDataException {
-    var encrypted = encryptedData.toEncryptedString(MAX_ENCRYPTED_BLOB_BYTES);
+    var coordinates =
+        dto.encryptedCoordinates().toEncryptedStringOfLength(COORDINATES_CIPHER_BYTES);
+    var radius = dto.encryptedRadius().toEncryptedStringOfLength(CIRCLE_RADIUS_CIPHER_BYTES);
+    var name = dto.encryptedName().toEncryptedStringOfLength(CIRCLE_NAME_CIPHER_BYTES);
     // locked, or two creations at once could both see room for one more circle
     var agEntity =
         anonymousGroupRepository
@@ -138,11 +147,13 @@ public class AnonymousGroupService {
       if (agCircleRepository.countByAnonymousGroupId(anonymousGroupId) >= MAX_CIRCLES_PER_GROUP) {
         throw new AGCircleConflictException("circle_limit_reached");
       }
-      circle = agCircleRepository.save(new AGCircleEntity(circleId, encrypted, agEntity, now));
+      circle =
+          agCircleRepository.save(
+              new AGCircleEntity(circleId, coordinates, radius, name, agEntity, now));
     } else if (!existing.getAnonymousGroupId().equals(anonymousGroupId)) {
       throw new AGCircleConflictException("circle_id_taken");
     } else {
-      existing.setEncryptedData(encrypted, now);
+      existing.setEncryptedFields(coordinates, radius, name, now);
       circle = existing;
     }
     publishFrame(anonymousGroupId, AGFrameDto.circleUpserted(toCircleDto(circle)));
@@ -293,7 +304,13 @@ public class AnonymousGroupService {
     if (!(authentication instanceof AGMemberAuthentication agMemberAuthentication)) {
       throw new UnauthorizedException();
     }
-    var encryptedPayload = dto.encryptedPayload().toEncryptedString(MAX_ENCRYPTED_BLOB_BYTES);
+    if (dto.encryptedCoordinates() == null || dto.encryptedActivity() == null) {
+      throw new InvalidEncryptedDataException();
+    }
+    var encryptedCoordinates =
+        dto.encryptedCoordinates().toEncryptedStringOfLength(COORDINATES_CIPHER_BYTES);
+    var encryptedActivity =
+        dto.encryptedActivity().toEncryptedStringOfLength(MEMBER_ACTIVITY_CIPHER_BYTES);
     // should never throw
     var anonymousGroupEntity =
         anonymousGroupRepository
@@ -309,7 +326,7 @@ public class AnonymousGroupService {
         anonymousGroupId,
         AGFrameDto.memberMessage(
             agMemberAuthentication.getId(),
-            new LocationRecordDto(dto.encryptedPayload(), timestamp)));
+            new LocationRecordDto(dto.encryptedCoordinates(), dto.encryptedActivity(), timestamp)));
     if (lastSavedLocationTimeStamp == null) {
       var lastSavedLocation =
           agLocationRepository
@@ -330,7 +347,8 @@ public class AnonymousGroupService {
     if (shouldSave) {
       var lastLocation =
           agLocationRepository.save(
-              new AGMemberLocationEntity(encryptedPayload, agMemberEntity, timestamp));
+              new AGMemberLocationEntity(
+                  encryptedCoordinates, encryptedActivity, agMemberEntity, timestamp));
       agMemberEntity.setLastLocation(lastLocation);
       agMemberRepository.save(agMemberEntity);
       return Optional.of(timestamp);

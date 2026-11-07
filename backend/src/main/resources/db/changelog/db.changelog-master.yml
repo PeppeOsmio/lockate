@@ -11,3 +11,7 @@ databaseChangeLog:
       file: classpath:db/changelog/passwordless-groups.sql
   - include:
       file: classpath:db/changelog/circles.sql
+  - include:
+      file: classpath:db/changelog/member-message-fields.sql
+  - include:
+      file: classpath:db/changelog/circle-fields.sql

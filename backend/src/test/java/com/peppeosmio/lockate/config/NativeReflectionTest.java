@@ -51,11 +51,15 @@ class NativeReflectionTest {
 
     assertThat(
             RuntimeHintsPredicates.reflection()
-                .onMethodInvocation(LocationRecordDto.class, "encryptedPayload"))
+                .onMethodInvocation(LocationRecordDto.class, "encryptedCoordinates"))
         .accepts(hints);
     assertThat(
             RuntimeHintsPredicates.reflection()
-                .onMethodInvocation(CircleDto.class, "encryptedData"))
+                .onMethodInvocation(LocationRecordDto.class, "encryptedActivity"))
+        .accepts(hints);
+    assertThat(
+            RuntimeHintsPredicates.reflection()
+                .onMethodInvocation(CircleDto.class, "encryptedName"))
         .accepts(hints);
   }
 
@@ -65,7 +69,11 @@ class NativeReflectionTest {
 
     assertThat(
             RuntimeHintsPredicates.reflection()
-                .onMethodInvocation(AGMemberMessageReqDto.class, "encryptedPayload"))
+                .onMethodInvocation(AGMemberMessageReqDto.class, "encryptedCoordinates"))
+        .accepts(hints);
+    assertThat(
+            RuntimeHintsPredicates.reflection()
+                .onMethodInvocation(AGMemberMessageReqDto.class, "encryptedActivity"))
         .accepts(hints);
   }
 
@@ -94,7 +102,7 @@ class NativeReflectionTest {
     assertThat(reflection.onMethodInvocation(AGJoinReqDto.class, "joinToken")).accepts(hints);
     assertThat(reflection.onMethodInvocation(AGJoinResDto.class, "members")).accepts(hints);
     assertThat(reflection.onMethodInvocation(EncryptedDataDto.class, "cipherText")).accepts(hints);
-    assertThat(reflection.onMethodInvocation(CircleUpsertReqDto.class, "encryptedData"))
+    assertThat(reflection.onMethodInvocation(CircleUpsertReqDto.class, "encryptedName"))
         .accepts(hints);
     // Only the controllers' own types: what the service serializes itself needs its annotation
     assertThat(reflection.onMethodInvocation(InviteRecord.class, "expiresAt")).rejects(hints);

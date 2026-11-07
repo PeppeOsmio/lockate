@@ -24,11 +24,23 @@ public class AGCircleEntity {
   @Column(name = "id")
   private UUID id;
 
-  @Column(name = "data_cipher", nullable = false)
-  private byte[] dataCipher;
+  @Column(name = "coordinates_cipher", nullable = false)
+  private byte[] coordinatesCipher;
 
-  @Column(name = "data_iv", nullable = false)
-  private byte[] dataIv;
+  @Column(name = "coordinates_iv", nullable = false)
+  private byte[] coordinatesIv;
+
+  @Column(name = "radius_cipher", nullable = false)
+  private byte[] radiusCipher;
+
+  @Column(name = "radius_iv", nullable = false)
+  private byte[] radiusIv;
+
+  @Column(name = "name_cipher", nullable = false)
+  private byte[] nameCipher;
+
+  @Column(name = "name_iv", nullable = false)
+  private byte[] nameIv;
 
   @Column(name = "created_at", nullable = false)
   private LocalDateTime createdAt;
@@ -46,25 +58,41 @@ public class AGCircleEntity {
 
   public AGCircleEntity(
       UUID id,
-      EncryptedString encryptedData,
+      EncryptedString encryptedCoordinates,
+      EncryptedString encryptedRadius,
+      EncryptedString encryptedName,
       AnonymousGroupEntity anonymousGroupEntity,
       LocalDateTime now) {
     this.id = id;
-    this.dataCipher = encryptedData.cipherText();
-    this.dataIv = encryptedData.iv();
+    setEncryptedFields(encryptedCoordinates, encryptedRadius, encryptedName, now);
     this.anonymousGroupEntity = anonymousGroupEntity;
     this.anonymousGroupId = anonymousGroupEntity.getId();
     this.createdAt = now;
-    this.updatedAt = now;
   }
 
-  public EncryptedString getEncryptedData() {
-    return new EncryptedString(dataCipher, dataIv);
+  public EncryptedString getEncryptedCoordinates() {
+    return new EncryptedString(coordinatesCipher, coordinatesIv);
   }
 
-  public void setEncryptedData(EncryptedString encryptedData, LocalDateTime now) {
-    this.dataCipher = encryptedData.cipherText();
-    this.dataIv = encryptedData.iv();
+  public EncryptedString getEncryptedRadius() {
+    return new EncryptedString(radiusCipher, radiusIv);
+  }
+
+  public EncryptedString getEncryptedName() {
+    return new EncryptedString(nameCipher, nameIv);
+  }
+
+  public void setEncryptedFields(
+      EncryptedString encryptedCoordinates,
+      EncryptedString encryptedRadius,
+      EncryptedString encryptedName,
+      LocalDateTime now) {
+    this.coordinatesCipher = encryptedCoordinates.cipherText();
+    this.coordinatesIv = encryptedCoordinates.iv();
+    this.radiusCipher = encryptedRadius.cipherText();
+    this.radiusIv = encryptedRadius.iv();
+    this.nameCipher = encryptedName.cipherText();
+    this.nameIv = encryptedName.iv();
     this.updatedAt = now;
   }
 }

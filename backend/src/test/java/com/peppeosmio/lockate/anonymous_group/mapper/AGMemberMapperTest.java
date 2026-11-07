@@ -55,6 +55,7 @@ class AGMemberMapperTest {
     var locationEntity =
         new AGMemberLocationEntity(
             new EncryptedString("coord-cipher".getBytes(), "coord-iv".getBytes()),
+            new EncryptedString("activity-cipher".getBytes(), "activity-iv".getBytes()),
             entity,
             LocalDateTime.now());
     entity.setLastLocation(locationEntity);
@@ -62,7 +63,14 @@ class AGMemberMapperTest {
     var dto = mapper.toDto(entity);
 
     assertThat(dto.encryptedLastLocationRecord()).isPresent();
-    assertThat(dto.encryptedLastLocationRecord().get().encryptedPayload().cipherText())
+    var record = dto.encryptedLastLocationRecord().get();
+    assertThat(record.encryptedCoordinates().cipherText())
         .isEqualTo(Base64.getEncoder().encodeToString("coord-cipher".getBytes()));
+    assertThat(record.encryptedCoordinates().iv())
+        .isEqualTo(Base64.getEncoder().encodeToString("coord-iv".getBytes()));
+    assertThat(record.encryptedActivity().cipherText())
+        .isEqualTo(Base64.getEncoder().encodeToString("activity-cipher".getBytes()));
+    assertThat(record.encryptedActivity().iv())
+        .isEqualTo(Base64.getEncoder().encodeToString("activity-iv".getBytes()));
   }
 }

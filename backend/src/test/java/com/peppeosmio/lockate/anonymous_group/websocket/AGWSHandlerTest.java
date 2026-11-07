@@ -68,6 +68,9 @@ class AGWSHandlerTest {
         new AGMemberMessageReqDto(
             new EncryptedDataDto(
                 java.util.Base64.getEncoder().encodeToString("coord".getBytes()),
+                java.util.Base64.getEncoder().encodeToString("iv".getBytes())),
+            new EncryptedDataDto(
+                java.util.Base64.getEncoder().encodeToString("activity".getBytes()),
                 java.util.Base64.getEncoder().encodeToString("iv".getBytes())));
     return new TextMessage(objectMapper.writeValueAsString(dto));
   }
@@ -92,7 +95,10 @@ class AGWSHandlerTest {
         author,
         new LocationRecordDto(
             new EncryptedDataDto(
-                java.util.Base64.getEncoder().encodeToString("p".getBytes()),
+                java.util.Base64.getEncoder().encodeToString("c".getBytes()),
+                java.util.Base64.getEncoder().encodeToString("iv".getBytes())),
+            new EncryptedDataDto(
+                java.util.Base64.getEncoder().encodeToString("a".getBytes()),
                 java.util.Base64.getEncoder().encodeToString("iv".getBytes())),
             LocalDateTime.now()));
   }
