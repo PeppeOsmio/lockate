@@ -8,6 +8,7 @@ import com.peppeosmio.lockate.anonymous_group.entity.AnonymousGroupEntity;
 import com.peppeosmio.lockate.common.classes.EncryptedString;
 import java.time.LocalDateTime;
 import java.util.Base64;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -20,13 +21,15 @@ class AGMemberMapperTest {
   @BeforeEach
   void setUp() {
     anonymousGroupEntity =
-        new AnonymousGroupEntity(new EncryptedString("groupname".getBytes(), "groupiv".getBytes()));
+        new AnonymousGroupEntity(
+            UUID.randomUUID(), new EncryptedString("groupname".getBytes(), "groupiv".getBytes()));
   }
 
   @Test
   void toDto_withoutLastLocation_mapsFieldsAndReturnsEmptyOptional() {
     var entity =
         new AGMemberEntity(
+            UUID.randomUUID(),
             new EncryptedString("name-cipher".getBytes(), "name-iv".getBytes()),
             "token".getBytes(),
             true,
@@ -48,6 +51,7 @@ class AGMemberMapperTest {
   void toDto_withLastLocation_returnsPresentOptional() {
     var entity =
         new AGMemberEntity(
+            UUID.randomUUID(),
             new EncryptedString("name-cipher".getBytes(), "name-iv".getBytes()),
             "token".getBytes(),
             false,
