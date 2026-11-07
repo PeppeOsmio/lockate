@@ -27,11 +27,17 @@ public class AGMemberLocationEntity {
   @Column(name = "id")
   private UUID id;
 
-  @Column(name = "payload_cipher", nullable = false)
-  private byte[] payloadCipher;
+  @Column(name = "coordinates_cipher", nullable = false)
+  private byte[] coordinatesCipher;
 
-  @Column(name = "payload_iv", nullable = false)
-  private byte[] payloadIv;
+  @Column(name = "coordinates_iv", nullable = false)
+  private byte[] coordinatesIv;
+
+  @Column(name = "activity_cipher", nullable = false)
+  private byte[] activityCipher;
+
+  @Column(name = "activity_iv", nullable = false)
+  private byte[] activityIv;
 
   @Column(name = "timestamp", nullable = false)
   private LocalDateTime timestamp;
@@ -46,9 +52,14 @@ public class AGMemberLocationEntity {
   private AGMemberEntity agMemberEntity;
 
   public AGMemberLocationEntity(
-      EncryptedString encryptedPayload, AGMemberEntity agMemberEntity, LocalDateTime timestamp) {
-    this.payloadCipher = encryptedPayload.cipherText();
-    this.payloadIv = encryptedPayload.iv();
+      EncryptedString encryptedCoordinates,
+      EncryptedString encryptedActivity,
+      AGMemberEntity agMemberEntity,
+      LocalDateTime timestamp) {
+    this.coordinatesCipher = encryptedCoordinates.cipherText();
+    this.coordinatesIv = encryptedCoordinates.iv();
+    this.activityCipher = encryptedActivity.cipherText();
+    this.activityIv = encryptedActivity.iv();
     this.agMemberEntity = agMemberEntity;
     this.agMemberId = agMemberEntity.getId();
     this.timestamp = timestamp;

@@ -14,19 +14,26 @@ public record EncryptedDataDto(@NotBlank String cipherText, @NotBlank String iv)
   }
 
   /**
-   * For the blobs a member can store and have relayed to the whole group: without a cap one member
-   * could make every snapshot and every relay huge.
+   * Every encrypted field has one size, so its length tells the server nothing and no member can
+   * make every snapshot and every relay huge.
    */
-  public EncryptedString toEncryptedString(int maxCipherTextBytes)
+  public EncryptedString toEncryptedStringOfLength(int cipherTextBytes)
       throws InvalidEncryptedDataException {
+    var decoded = decodeWithValidIv();
+    if (decoded.cipherText().length != cipherTextBytes) {
+      throw new InvalidEncryptedDataException();
+    }
+    return decoded;
+  }
+
+  private EncryptedString decodeWithValidIv() throws InvalidEncryptedDataException {
     EncryptedString decoded;
     try {
       decoded = toEncryptedString();
     } catch (IllegalArgumentException e) {
       throw new InvalidEncryptedDataException();
     }
-    if (decoded.iv().length != AES_GCM_IV_BYTES
-        || decoded.cipherText().length > maxCipherTextBytes) {
+    if (decoded.iv().length != AES_GCM_IV_BYTES) {
       throw new InvalidEncryptedDataException();
     }
     return decoded;

@@ -88,7 +88,7 @@ public class SecuredAGController {
       @Valid @RequestBody CircleUpsertReqDto dto,
       AGMemberAuthentication authentication)
       throws AGNotFoundException, AGCircleConflictException, InvalidEncryptedDataException {
-    anonymousGroupService.upsertCircle(anonymousGroupId, circleId, dto.encryptedData());
+    anonymousGroupService.upsertCircle(anonymousGroupId, circleId, dto);
   }
 
   @DeleteMapping("/{anonymousGroupId}/circles/{circleId}")
