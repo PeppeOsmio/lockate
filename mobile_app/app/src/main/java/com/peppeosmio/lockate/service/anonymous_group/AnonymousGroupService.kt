@@ -7,6 +7,7 @@ import com.peppeosmio.lockate.data.anonymous_group.database.MutedTargetEntity
 import com.peppeosmio.lockate.data.anonymous_group.mappers.CircleMapper
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGFrameDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGMemberMessageReqDto
+import com.peppeosmio.lockate.data.anonymous_group.remote.MemberLocationDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.CircleUpsertReqDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.EncryptedAGMemberDto
 import com.peppeosmio.lockate.domain.anonymous_group.AGChannelFrame
@@ -16,6 +17,7 @@ import com.peppeosmio.lockate.domain.anonymous_group.ChannelStatus
 import com.peppeosmio.lockate.domain.anonymous_group.GroupFrame
 import com.peppeosmio.lockate.domain.anonymous_group.MemberMessage
 import com.peppeosmio.lockate.service.crypto.CryptoException
+import com.peppeosmio.lockate.service.geofence.CircleEventQueue
 import com.peppeosmio.lockate.service.geofence.GeofenceTracker
 import com.peppeosmio.lockate.service.geofence.CircleEvents
 import com.peppeosmio.lockate.service.geofence.circleEventTexts
@@ -28,7 +30,9 @@ import io.ktor.websocket.readText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -74,6 +78,9 @@ import com.peppeosmio.lockate.utils.SendLoopLog
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.ResponseException
+import io.ktor.client.plugins.sse.SSEClientException
+import io.ktor.client.plugins.sse.sse
+import io.ktor.client.statement.HttpResponse
 import io.ktor.client.plugins.websocket.webSocket
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
@@ -640,12 +647,50 @@ class AnonymousGroupService(
         }
     }
 
+    /**
+     * Connects the group's websocket, reconnecting when it drops. The location is followed while
+     * the group has a send lease, also while the socket is down, so the circle events found
+     * meanwhile wait in a queue and go out when it is back.
+     */
+    private suspend fun runChannel(anonymousGroup: AnonymousGroup, channel: GroupChannel) =
+        coroutineScope {
+            val tracker = GeofenceTracker()
+            val session = MutableStateFlow<DefaultClientWebSocketSession?>(null)
+            val circleEvents = CircleEventQueue()
+            val sender = launch {
+                channel.sendLeases.map { it > 0 }.distinctUntilChanged().collectLatest { sending ->
+                    if (sending) {
+                        sendLocationWhileEnabled(
+                            anonymousGroup, channel, tracker, session, circleEvents
+                        )
+                    }
+                }
+            }
+            connectChannel(anonymousGroup, channel, tracker, session, circleEvents)
+            sender.cancel()
+        }
+
+    private suspend fun responseFailure(response: HttpResponse, e: Exception): Exception = try {
+        when (response.status.value) {
+            401, 403 -> ErrorHandler.handleUnauthorized(response)
+            404 -> throw RemoteAGNotFoundException()
+            else -> ErrorHandler.handleGeneric(response)
+        }
+        e
+    } catch (ee: Exception) {
+        ee
+    }
+
     @OptIn(ExperimentalTime::class)
-    private suspend fun runChannel(anonymousGroup: AnonymousGroup, channel: GroupChannel) {
+    private suspend fun connectChannel(
+        anonymousGroup: AnonymousGroup,
+        channel: GroupChannel,
+        tracker: GeofenceTracker,
+        session: MutableStateFlow<DefaultClientWebSocketSession?>,
+        circleEvents: CircleEventQueue,
+    ) {
         val connectionSettings =
             connectionService.getConnectionSettingsById(anonymousGroup.connectionId)
-        // outlives the connections, so a reconnect's snapshot can't rewind the members it knows
-        val tracker = GeofenceTracker()
         val maxRetries = 10
         var retries = 0
         val tag = "channel ${anonymousGroup.id}"
@@ -669,17 +714,9 @@ class AnonymousGroupService(
                     retries = 0
                     channel.status.update { it.copy(state = ChannelState.Connected) }
                     sendLoopLog.log("$tag connected")
-                    coroutineScope {
-                        val sender = launch {
-                            channel.sendLeases.map { it > 0 }.distinctUntilChanged()
-                                .collectLatest { sending ->
-                                    if (sending) {
-                                        sendLocationWhileEnabled(
-                                            anonymousGroup, channel, this@webSocket
-                                        )
-                                    }
-                                }
-                        }
+                    session.value = this
+                    try {
+                        sendCircleEvents(anonymousGroup, this, circleEvents)
                         for (frame in incoming) {
                             if (frame !is Frame.Text) continue
                             handleFrame(
@@ -688,7 +725,8 @@ class AnonymousGroupService(
                                 tracker = tracker
                             )
                         }
-                        sender.cancel()
+                    } finally {
+                        session.value = null
                     }
                     when (closeReason.await()?.code) {
                         MEMBER_REMOVED_CLOSE_CODE -> {
@@ -716,18 +754,7 @@ class AnonymousGroupService(
                 }
                 e.printStackTrace()
                 sendLoopLog.log("$tag failed ${e::class.simpleName} connected=$isConnected")
-                val failure = if (e is ResponseException) {
-                    try {
-                        when (e.response.status.value) {
-                            401, 403 -> ErrorHandler.handleUnauthorized(e.response)
-                            404 -> throw RemoteAGNotFoundException()
-                            else -> ErrorHandler.handleGeneric(e.response)
-                        }
-                        e
-                    } catch (ee: Exception) {
-                        ee
-                    }
-                } else e
+                val failure = if (e is ResponseException) responseFailure(e.response, e) else e
                 when (failure) {
                     is UnauthorizedException -> setAGIsMemberFalse(anonymousGroup)
                     is RemoteAGNotFoundException -> setAGExistsRemoteFalse(anonymousGroup)
@@ -762,20 +789,25 @@ class AnonymousGroupService(
     }
 
     /**
-     * Sends the location on the open channel. GPS faults don't close the channel, which keeps
-     * receiving: they are reported in the channel's status and the sending resumes by itself.
+     * Follows the location and sends it while the channel is open. GPS faults don't close the
+     * channel, which keeps receiving: they are reported in the channel's status and the sending
+     * resumes by itself.
      */
     private suspend fun sendLocationWhileEnabled(
         anonymousGroup: AnonymousGroup,
         channel: GroupChannel,
-        session: DefaultClientWebSocketSession,
+        tracker: GeofenceTracker,
+        session: StateFlow<DefaultClientWebSocketSession?>,
+        circleEvents: CircleEventQueue,
     ) {
+        // we may have moved anywhere since the last time we shared the location
+        tracker.forgetPosition()
         try {
             while (true) {
                 try {
                     locationService.checkPermissionsAndLocationEnabled()
                     channel.status.update { it.copy(isLocationDisabled = false) }
-                    sendLocation(anonymousGroup, channel, session)
+                    sendLocation(anonymousGroup, channel, tracker, session, circleEvents)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -802,11 +834,30 @@ class AnonymousGroupService(
         }
     }
 
+    private suspend fun sendMessage(
+        session: DefaultClientWebSocketSession, message: AGMemberMessageReqDto
+    ) = session.send(Frame.Text(Json.encodeToString(message)))
+
+    private suspend fun sendCircleEvents(
+        anonymousGroup: AnonymousGroup,
+        session: DefaultClientWebSocketSession,
+        circleEvents: CircleEventQueue,
+    ) {
+        circleEvents.drain(System.currentTimeMillis()).forEach { transition ->
+            val encrypted = payloadCodec.encryptCircleEvent(
+                transition, anonymousGroup.key, anonymousGroup.id, anonymousGroup.memberId
+            )
+            sendMessage(session, AGMemberMessageReqDto.CircleEvent(EncryptedDataMapper.toDto(encrypted)))
+        }
+    }
+
     @OptIn(ExperimentalTime::class)
     private suspend fun sendLocation(
         anonymousGroup: AnonymousGroup,
         channel: GroupChannel,
-        session: DefaultClientWebSocketSession,
+        tracker: GeofenceTracker,
+        session: StateFlow<DefaultClientWebSocketSession?>,
+        circleEvents: CircleEventQueue,
     ) = coroutineScope {
         Log.i(
             "",
@@ -821,7 +872,7 @@ class AnonymousGroupService(
         var lastSent: Instant? = null
         var lastMode: Pair<UserActivity, Boolean>? = null
 
-        var timeoutJob = launch {
+        var timeoutJob: Job? = launch {
             getTimeoutJob()
         }
         // location can be disabled while the socket stays open; fused updates just
@@ -839,6 +890,18 @@ class AnonymousGroupService(
                 lastMode = mode
                 sendLoopLog.log("channel ${anonymousGroup.id} activity=${mode.first} fresh=${mode.second}")
             }
+            channel.status.update { it.copy(isLocationUnavailable = false) }
+
+            timeoutJob?.cancel()
+            // while still the position comes once a minute
+            timeoutJob = if (position.activity == UserActivity.Still) null else launch {
+                getTimeoutJob()
+            }
+            tracker.update(position.fix).forEach {
+                circleEvents.add(it, now.toEpochMilliseconds())
+            }
+            val current = session.value ?: return@collect
+            sendCircleEvents(anonymousGroup, current, circleEvents)
 
             lastSent?.let {
                 if ((now - it).inMs < 1500) {
@@ -847,26 +910,17 @@ class AnonymousGroupService(
             }
             lastSent = now
 
-            channel.status.update { it.copy(isLocationUnavailable = false) }
-
-            timeoutJob.cancel()
-            timeoutJob = launch {
-                getTimeoutJob()
-            }
             val encrypted = payloadCodec.encryptMemberMessage(
                 message = MemberMessage(coordinates = coordinates, activity = position.activity),
                 key = anonymousGroup.key,
                 groupId = anonymousGroup.id,
                 memberId = anonymousGroup.memberId
             )
-            session.send(
-                Frame.Text(
-                    text = Json.encodeToString(
-                        AGMemberMessageReqDto(
-                            encryptedCoordinates = EncryptedDataMapper.toDto(encrypted.coordinates),
-                            encryptedActivity = EncryptedDataMapper.toDto(encrypted.activity)
-                        )
-                    )
+            sendMessage(
+                current,
+                AGMemberMessageReqDto.Location(
+                    encryptedCoordinates = EncryptedDataMapper.toDto(encrypted.coordinates),
+                    encryptedActivity = EncryptedDataMapper.toDto(encrypted.activity)
                 )
             )
             _events.tryEmit(
@@ -902,9 +956,14 @@ class AnonymousGroupService(
         val frame: AGChannelFrame = try {
             when (dto.type) {
                 AGFrameDto.SNAPSHOT -> {
+                    // the socket carries no positions: keep those the locations stream saved
+                    val knownLocations = anonymousGroupDao.listAGMembers(internalId)
+                        .associate { it.id to AGMemberMapper.entityToDomain(it).lastLocationRecord }
                     val members = dto.members!!.mapDecryptable(onUndecryptable = {
                         Log.e("", "Skipped member ${it.id} of ${anonymousGroup.id}: can't decrypt it")
-                    }) { decryptMember(anonymousGroup, it) }
+                    }) { decryptMember(anonymousGroup, it) }.map {
+                        it.copy(lastLocationRecord = it.lastLocationRecord ?: knownLocations[it.id])
+                    }
                     val circles = dto.circles!!.mapDecryptable(onUndecryptable = {
                         Log.e("", "Skipped circle ${it.id} of ${anonymousGroup.id}: can't decrypt it")
                     }) {
@@ -922,13 +981,6 @@ class AnonymousGroupService(
                         })
                     anonymousGroupDao.syncCircles(internalId, circles)
                     tracker.replaceCircles(circles)
-                    val others = members.filter { it.id != anonymousGroup.memberId }
-                    tracker.retainMembers(others.map { it.id }.toSet())
-                    others.forEach { member ->
-                        member.lastLocationRecord?.let {
-                            tracker.seedMember(member.id, it.coordinates, it.timestamp)
-                        }
-                    }
                     AGChannelFrame.Snapshot(members, circles)
                 }
 
@@ -939,17 +991,11 @@ class AnonymousGroupService(
                             AGMemberMapper.domainToEntity(member, anonymousGroupInternalId = internalId)
                         )
                     }
-                    if (member.id != anonymousGroup.memberId) {
-                        member.lastLocationRecord?.let {
-                            tracker.seedMember(member.id, it.coordinates, it.timestamp)
-                        }
-                    }
                     AGChannelFrame.MemberJoined(member)
                 }
 
                 AGFrameDto.MEMBER_LEFT -> {
                     anonymousGroupDao.deleteAGMemberById(dto.memberId!!, internalId)
-                    tracker.removeMember(dto.memberId)
                     AGChannelFrame.MemberLeft(dto.memberId)
                 }
 
@@ -961,36 +1007,22 @@ class AnonymousGroupService(
                     AGChannelFrame.MemberUpdated(dto.memberId, dto.isAGAdmin)
                 }
 
-                AGFrameDto.MEMBER_MESSAGE -> {
+                AGFrameDto.CIRCLE_EVENT -> {
                     val memberId = dto.memberId!!
-                    val locationRecord = LocationRecordMapper.toDomain(
-                        encryptedLocationRecordDto = dto.record!!,
-                        payloadCodec = payloadCodec,
-                        key = anonymousGroup.key,
-                        groupId = anonymousGroup.id,
-                        memberId = memberId
-                    )
-                    // a member unknown locally joined after our last snapshot: its joined frame
-                    // brings it in
-                    anonymousGroupDao.getAGMemberByIdAndAGInternalId(memberId, internalId)
-                        ?.let { agMember ->
-                            anonymousGroupDao.setAGMemberLastLocation(
-                                agMemberInternalId = agMember.internalId,
-                                lastLatitude = locationRecord.coordinates.latitude,
-                                lastLongitude = locationRecord.coordinates.longitude,
-                                lastSeen = locationRecord.timestamp.toInstant(TimeZone.UTC)
-                                    .toEpochMilliseconds(),
-                                lastActivity = locationRecord.activity.name
-                            )
-                        }
-                    // the server never relays our own messages, but if it did they mustn't tell us
+                    // the server never relays our own events, but if it did they mustn't tell us
                     // about ourselves
-                    val transitions = if (memberId == anonymousGroup.memberId) {
-                        emptyList()
-                    } else {
-                        tracker.update(memberId, locationRecord.coordinates, locationRecord.timestamp)
-                    }
-                    AGChannelFrame.LiveLocation(AGLocationUpdate(locationRecord, memberId, transitions))
+                    if (memberId == anonymousGroup.memberId) return
+                    val circleEvent = dto.circleEvent!!
+                    AGChannelFrame.CircleEvent(
+                        memberId = memberId,
+                        transition = payloadCodec.decryptCircleEvent(
+                            EncryptedDataMapper.toDomain(circleEvent.encryptedEvent),
+                            anonymousGroup.key,
+                            anonymousGroup.id,
+                            memberId
+                        ),
+                        timestamp = circleEvent.timestamp
+                    )
                 }
 
                 AGFrameDto.CIRCLE_UPSERTED -> {
@@ -1015,6 +1047,100 @@ class AnonymousGroupService(
             return
         }
         _groupFrames.emit(GroupFrame(internalId, anonymousGroup.id, frame))
+    }
+
+    /**
+     * Streams the positions of the group's members for as long as the caller is suspended here:
+     * first the last saved one of each, then the live ones. Only the open map holds it, so the phone
+     * receives the others' positions only while someone looks at them. The positions are saved
+     * locally before [onLocations] gets them.
+     */
+    suspend fun holdLocationStream(
+        anonymousGroup: AnonymousGroup,
+        onState: (ChannelState) -> Unit,
+        onLocations: (List<AGLocationUpdate>) -> Unit,
+    ): Unit = withContext(Dispatchers.IO) {
+        val connectionSettings =
+            connectionService.getConnectionSettingsById(anonymousGroup.connectionId)
+        val maxRetries = 10
+        var retries = 0
+        while (true) {
+            try {
+                httpClient.sse(request = {
+                    url("${connectionSettings.url}/api/anonymous-groups/${anonymousGroup.id}/locations")
+                    headers {
+                        connectionSettings.apiKey?.let { ak -> append("X-API-KEY", ak) }
+                        append(
+                            HttpHeaders.Authorization,
+                            "AGMember ${anonymousGroup.memberId} ${Base64.encode(anonymousGroup.memberToken)}"
+                        )
+                    }
+                }) {
+                    retries = 0
+                    onState(ChannelState.Connected)
+                    incoming.collect { event ->
+                        val locations = when (event.event) {
+                            "snapshot" -> Json.decodeFromString<List<MemberLocationDto>>(event.data!!)
+                            "location" -> listOf(Json.decodeFromString<MemberLocationDto>(event.data!!))
+                            else -> return@collect
+                        }
+                        onLocations(saveLocations(anonymousGroup, locations))
+                    }
+                }
+                throw IOException("Locations stream closed by the server")
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                val response = (e as? SSEClientException)?.response
+                val failure = response?.let { responseFailure(it, e) } ?: e
+                when (classifyStreamFailure(failure, connectivityService.isNetworkAvailable())) {
+                    // the group's channel finds out too, and marks the group
+                    StreamRetryAction.Stop -> {
+                        onState(ChannelState.Stopped)
+                        awaitCancellation()
+                    }
+
+                    StreamRetryAction.AwaitNetwork -> {
+                        onState(ChannelState.Reconnecting)
+                        withTimeoutOrNull(60.seconds) { connectivityService.awaitNetworkAvailable() }
+                    }
+
+                    StreamRetryAction.Backoff -> {
+                        onState(ChannelState.Reconnecting)
+                        retries = min(retries + 1, maxRetries)
+                        delay(nextBackoffSeconds(retries).seconds)
+                    }
+                }
+            }
+        }
+    }
+
+    @OptIn(ExperimentalTime::class)
+    private suspend fun saveLocations(
+        anonymousGroup: AnonymousGroup, locations: List<MemberLocationDto>
+    ): List<AGLocationUpdate> = locations.mapDecryptable(onUndecryptable = {
+        Log.e("", "Skipped a location of ${it.memberId} in ${anonymousGroup.id}: can't decrypt it")
+    }) { dto ->
+        val record = LocationRecordMapper.toDomain(
+            encryptedLocationRecordDto = dto.record,
+            payloadCodec = payloadCodec,
+            key = anonymousGroup.key,
+            groupId = anonymousGroup.id,
+            memberId = dto.memberId
+        )
+        val lastSeen = record.timestamp.toInstant(TimeZone.UTC).toEpochMilliseconds()
+        // a member unknown locally joined after our last snapshot: its joined frame brings it in
+        anonymousGroupDao.getAGMemberByIdAndAGInternalId(dto.memberId, anonymousGroup.internalId)
+            ?.takeIf { it.lastSeen == null || it.lastSeen < lastSeen }
+            ?.let { member ->
+                anonymousGroupDao.setAGMemberLastLocation(
+                    agMemberInternalId = member.internalId,
+                    lastLatitude = record.coordinates.latitude,
+                    lastLongitude = record.coordinates.longitude,
+                    lastSeen = lastSeen,
+                    lastActivity = record.activity.name
+                )
+            }
+        AGLocationUpdate(record, dto.memberId)
     }
 
     /**
@@ -1189,20 +1315,19 @@ class AnonymousGroupService(
         )
     }
 
-    /** The events to notify for a live frame: one text per transition, with the group and the member. */
+    /** The event to notify for a live frame, with the group and the member. */
     suspend fun describeCircleEvents(groupFrame: GroupFrame): CircleEvents? =
         withContext(Dispatchers.IO) {
-            val update = (groupFrame.frame as? AGChannelFrame.LiveLocation)?.update ?: return@withContext null
-            if (update.transitions.isEmpty()) return@withContext null
+            val event = groupFrame.frame as? AGChannelFrame.CircleEvent ?: return@withContext null
             val group = anonymousGroupDao.getAGByInternalId(groupFrame.anonymousGroupInternalId)
                 ?: return@withContext null
             val member = anonymousGroupDao.getAGMemberByIdAndAGInternalId(
-                update.agMemberId, groupFrame.anonymousGroupInternalId
+                event.memberId, groupFrame.anonymousGroupInternalId
             ) ?: return@withContext null
             val texts = circleEventTexts(
                 memberId = member.id,
                 memberName = member.name,
-                transitions = update.transitions,
+                transitions = listOf(event.transition),
                 circles = listCircles(group.internalId).associateBy { it.id },
                 mutedTargets = listMutedTargets(group.internalId)
             )

@@ -7,7 +7,9 @@ import com.peppeosmio.lockate.domain.Coordinates
 import com.peppeosmio.lockate.domain.LocationRecord
 import com.peppeosmio.lockate.domain.UserActivity
 import com.peppeosmio.lockate.domain.anonymous_group.AGChannelFrame
+import com.peppeosmio.lockate.domain.anonymous_group.AGLocationUpdate
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
+import com.peppeosmio.lockate.domain.anonymous_group.AnonymousGroup
 import com.peppeosmio.lockate.domain.anonymous_group.ChannelState
 import com.peppeosmio.lockate.domain.anonymous_group.Circle
 import com.peppeosmio.lockate.exceptions.AGMemberNotAdminException
@@ -60,6 +62,8 @@ class AGDetailsViewModel(
     private var listenForDeviceOrientationJob: Job? = null
     private var groupJob: Job? = null
     private var remoteJob: Job? = null
+    private var locationStreamJob: Job? = null
+    private var isMapStarted = false
     private var connectionId: Long? = null
 
     init {
@@ -97,6 +101,17 @@ class AGDetailsViewModel(
         listenForUserLocation()
     }
 
+    /** The others' positions stream only while the map is on screen, so the radio can rest */
+    fun startLocationStream() {
+        isMapStarted = true
+        state.value.anonymousGroup?.let { holdLocationStream(it) }
+    }
+
+    fun stopLocationStream() {
+        isMapStarted = false
+        locationStreamJob?.cancel()
+    }
+
     /**
      * Loads the given group, cancelling any work done for the previously selected one.
      * A null [anonymousGroupInternalId] means no group is selected.
@@ -104,6 +119,7 @@ class AGDetailsViewModel(
     fun selectGroup(connectionId: Long, anonymousGroupInternalId: Long?) {
         groupJob?.cancel()
         remoteJob?.cancel()
+        locationStreamJob?.cancel()
         this.connectionId = connectionId
         _state.update {
             it.copy(
@@ -171,6 +187,27 @@ class AGDetailsViewModel(
         }
     }
 
+    private fun holdLocationStream(anonymousGroup: AnonymousGroup) {
+        locationStreamJob?.cancel()
+        locationStreamJob = viewModelScope.launch {
+            anonymousGroupService.holdLocationStream(
+                anonymousGroup,
+                onState = { streamState ->
+                    _state.update {
+                        it.copy(
+                            locationStreamState = when (streamState) {
+                                ChannelState.Connecting -> LocationStreamState.Connecting
+                                ChannelState.Connected -> LocationStreamState.Connected
+                                ChannelState.Reconnecting -> LocationStreamState.Reconnecting
+                                ChannelState.Stopped -> LocationStreamState.Stopped
+                            }
+                        )
+                    }
+                },
+                onLocations = { applyLocations(it) })
+        }
+    }
+
     fun remoteOperations() {
         val anonymousGroup = state.value.anonymousGroup ?: return
         remoteJob?.cancel()
@@ -187,6 +224,7 @@ class AGDetailsViewModel(
                     .filter { it.anonymousGroupInternalId == anonymousGroup.internalId }
                     .collect { applyFrame(it.frame) }
             }
+            if (isMapStarted) holdLocationStream(anonymousGroup)
             anonymousGroupService.holdChannel(anonymousGroup, send = false) { status ->
                 _state.update {
                     it.copy(
@@ -195,15 +233,27 @@ class AGDetailsViewModel(
                             ChannelState.Connected -> LoadingState.Success
                             ChannelState.Reconnecting -> if (it.remoteDataLoadingState == LoadingState.IsLoading) LoadingState.Failed else it.remoteDataLoadingState
                             ChannelState.Stopped -> LoadingState.Failed
-                        }, locationStreamState = when (status.state) {
-                            ChannelState.Connecting -> LocationStreamState.Connecting
-                            ChannelState.Connected -> LocationStreamState.Connected
-                            ChannelState.Reconnecting -> LocationStreamState.Reconnecting
-                            ChannelState.Stopped -> LocationStreamState.Stopped
                         }
                     )
                 }
             }
+        }
+    }
+
+    /** Keeps the newer record of each member, so a reconnect's snapshot can't rewind one. */
+    private fun applyLocations(updates: List<AGLocationUpdate>) {
+        _state.update {
+            val members = it.members ?: return@update it
+            it.copy(members = members + updates.mapNotNull { update ->
+                val member = members[update.agMemberId] ?: return@mapNotNull null
+                val known = member.lastLocationRecord
+                if (known != null && known.timestamp >= update.locationRecord.timestamp) return@mapNotNull null
+                member.id to member.copy(lastLocationRecord = update.locationRecord)
+            })
+        }
+        val followed = state.value.selectedMemberId.takeIf { state.value.isFollowingSelectedMember }
+        updates.lastOrNull { it.agMemberId == followed }?.let {
+            _cameraPositionEvents.trySend(CameraTarget(it.locationRecord.coordinates))
         }
     }
 
@@ -231,18 +281,7 @@ class AGDetailsViewModel(
                 }
             }
 
-            is AGChannelFrame.LiveLocation -> {
-                val update = frame.update
-                val member = state.value.members?.get(update.agMemberId) ?: return
-                _state.update {
-                    it.copy(
-                        members = it.members!! + (member.id to member.copy(lastLocationRecord = update.locationRecord))
-                    )
-                }
-                if (state.value.isFollowingSelectedMember && update.agMemberId == state.value.selectedMemberId) {
-                    _cameraPositionEvents.trySend(CameraTarget(update.locationRecord.coordinates))
-                }
-            }
+            is AGChannelFrame.CircleEvent -> Unit
 
             is AGChannelFrame.MemberJoined -> _state.update {
                 val members = it.members ?: return@update it

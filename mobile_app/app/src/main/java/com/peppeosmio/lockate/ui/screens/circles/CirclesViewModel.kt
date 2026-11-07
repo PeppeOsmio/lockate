@@ -101,7 +101,7 @@ class CirclesViewModel(private val anonymousGroupService: AnonymousGroupService)
                 it.copy(members = it.members.filter { m -> m.id != frame.memberId })
             }
 
-            is AGChannelFrame.LiveLocation, is AGChannelFrame.MemberUpdated -> Unit
+            is AGChannelFrame.CircleEvent, is AGChannelFrame.MemberUpdated -> Unit
         }
     }
 
