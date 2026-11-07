@@ -17,27 +17,23 @@ public record AGFrameDto(
     List<CircleDto> circles,
     AGMemberDto member,
     UUID memberId,
-    LocationRecordDto record,
+    CircleEventDto circleEvent,
     Boolean isAGAdmin,
     CircleDto circle,
     UUID circleId) {
 
   public static final String SNAPSHOT = "snapshot";
-  public static final String MEMBER_MESSAGE = "member.message";
   public static final String MEMBER_JOINED = "member.joined";
   public static final String MEMBER_LEFT = "member.left";
   public static final String MEMBER_UPDATED = "member.updated";
   public static final String CIRCLE_UPSERTED = "circle.upserted";
   public static final String CIRCLE_DELETED = "circle.deleted";
+  public static final String CIRCLE_EVENT = "circle.event";
   // Never sent to clients: it closes their sockets
   public static final String GROUP_DELETED = "group.deleted";
 
   public static AGFrameDto snapshot(List<AGMemberDto> members, List<CircleDto> circles) {
     return new AGFrameDto(SNAPSHOT, members, circles, null, null, null, null, null, null);
-  }
-
-  public static AGFrameDto memberMessage(UUID memberId, LocationRecordDto record) {
-    return new AGFrameDto(MEMBER_MESSAGE, null, null, null, memberId, record, null, null, null);
   }
 
   public static AGFrameDto memberJoined(AGMemberDto member) {
@@ -58,6 +54,10 @@ public record AGFrameDto(
 
   public static AGFrameDto circleDeleted(UUID circleId) {
     return new AGFrameDto(CIRCLE_DELETED, null, null, null, null, null, null, null, circleId);
+  }
+
+  public static AGFrameDto circleEventOf(UUID memberId, CircleEventDto circleEvent) {
+    return new AGFrameDto(CIRCLE_EVENT, null, null, null, memberId, circleEvent, null, null, null);
   }
 
   public static AGFrameDto groupDeleted() {

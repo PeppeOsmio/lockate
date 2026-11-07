@@ -10,14 +10,17 @@ import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotFoundExcepti
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.security.AGMemberAuthentication;
 import com.peppeosmio.lockate.anonymous_group.service.AnonymousGroupService;
+import com.peppeosmio.lockate.anonymous_group.sse.AGLocationStreams;
 import com.peppeosmio.lockate.common.exceptions.InvalidEncryptedDataException;
 import com.peppeosmio.lockate.common.exceptions.UnauthorizedException;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @SecuredAGMember
 @Slf4j
@@ -26,9 +29,12 @@ import org.springframework.web.bind.annotation.*;
 @Validated
 public class SecuredAGController {
   private final AnonymousGroupService anonymousGroupService;
+  private final AGLocationStreams agLocationStreams;
 
-  public SecuredAGController(AnonymousGroupService anonymousGroupService) {
+  public SecuredAGController(
+      AnonymousGroupService anonymousGroupService, AGLocationStreams agLocationStreams) {
     this.anonymousGroupService = anonymousGroupService;
+    this.agLocationStreams = agLocationStreams;
   }
 
   @GetMapping("/{anonymousGroupId}/members/auth/verify")
@@ -99,5 +105,12 @@ public class SecuredAGController {
       AGMemberAuthentication authentication)
       throws AGCircleNotFoundException {
     anonymousGroupService.deleteCircle(anonymousGroupId, circleId);
+  }
+
+  @GetMapping(value = "/{anonymousGroupId}/locations", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+  public SseEmitter streamLocations(
+      @PathVariable UUID anonymousGroupId, AGMemberAuthentication authentication)
+      throws AGNotFoundException {
+    return agLocationStreams.open(anonymousGroupId, authentication.getId(), new SseEmitter(0L));
   }
 }

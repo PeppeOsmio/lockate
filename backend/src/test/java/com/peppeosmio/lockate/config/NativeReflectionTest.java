@@ -4,13 +4,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.peppeosmio.lockate.anonymous_group.controllers.AnonymousGroupController;
 import com.peppeosmio.lockate.anonymous_group.controllers.SecuredAGController;
+import com.peppeosmio.lockate.anonymous_group.dto.AGCircleEventReqDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGFrameDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGJoinReqDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGJoinResDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGMemberMessageReqDto;
 import com.peppeosmio.lockate.anonymous_group.dto.CircleDto;
+import com.peppeosmio.lockate.anonymous_group.dto.CircleEventDto;
 import com.peppeosmio.lockate.anonymous_group.dto.CircleUpsertReqDto;
 import com.peppeosmio.lockate.anonymous_group.dto.LocationRecordDto;
+import com.peppeosmio.lockate.anonymous_group.dto.MemberLocationDto;
 import com.peppeosmio.lockate.common.dto.EncryptedDataDto;
 import com.peppeosmio.lockate.common.dto.ErrorResponseDto;
 import com.peppeosmio.lockate.invite.InviteController;
@@ -42,7 +45,7 @@ class NativeReflectionTest {
 
     var reflection = RuntimeHintsPredicates.reflection();
     assertThat(reflection.onMethodInvocation(AGFrameDto.class, "type")).accepts(hints);
-    assertThat(reflection.onMethodInvocation(AGFrameDto.class, "record")).accepts(hints);
+    assertThat(reflection.onMethodInvocation(AGFrameDto.class, "circleEvent")).accepts(hints);
   }
 
   @Test
@@ -51,15 +54,33 @@ class NativeReflectionTest {
 
     assertThat(
             RuntimeHintsPredicates.reflection()
-                .onMethodInvocation(LocationRecordDto.class, "encryptedCoordinates"))
-        .accepts(hints);
-    assertThat(
-            RuntimeHintsPredicates.reflection()
-                .onMethodInvocation(LocationRecordDto.class, "encryptedActivity"))
+                .onMethodInvocation(CircleEventDto.class, "encryptedEvent"))
         .accepts(hints);
     assertThat(
             RuntimeHintsPredicates.reflection()
                 .onMethodInvocation(CircleDto.class, "encryptedName"))
+        .accepts(hints);
+  }
+
+  @Test
+  void memberLocationDto_registersTheRecordTransitively() {
+    register(MemberLocationDto.class);
+
+    var reflection = RuntimeHintsPredicates.reflection();
+    assertThat(reflection.onMethodInvocation(MemberLocationDto.class, "memberId")).accepts(hints);
+    assertThat(reflection.onMethodInvocation(LocationRecordDto.class, "encryptedCoordinates"))
+        .accepts(hints);
+    assertThat(reflection.onMethodInvocation(LocationRecordDto.class, "encryptedActivity"))
+        .accepts(hints);
+  }
+
+  @Test
+  void agCircleEventReqDto_registersAccessors() {
+    register(AGCircleEventReqDto.class);
+
+    assertThat(
+            RuntimeHintsPredicates.reflection()
+                .onMethodInvocation(AGCircleEventReqDto.class, "encryptedEvent"))
         .accepts(hints);
   }
 

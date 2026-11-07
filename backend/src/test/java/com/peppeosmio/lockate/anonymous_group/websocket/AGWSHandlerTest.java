@@ -6,14 +6,18 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.peppeosmio.lockate.anonymous_group.dto.AGCircleEventReqDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGFrameDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGMemberMessageReqDto;
-import com.peppeosmio.lockate.anonymous_group.dto.LocationRecordDto;
+import com.peppeosmio.lockate.anonymous_group.dto.CircleEventDto;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.security.AGMemberAuthentication;
 import com.peppeosmio.lockate.anonymous_group.service.AnonymousGroupService;
@@ -63,22 +67,31 @@ class AGWSHandlerTest {
     lenient().when(session.getId()).thenReturn("session-id");
   }
 
+  private static EncryptedDataDto blob(String text) {
+    return new EncryptedDataDto(
+        java.util.Base64.getEncoder().encodeToString(text.getBytes()),
+        java.util.Base64.getEncoder().encodeToString("iv".getBytes()));
+  }
+
   private TextMessage locationMessage() throws Exception {
-    var dto =
-        new AGMemberMessageReqDto(
-            new EncryptedDataDto(
-                java.util.Base64.getEncoder().encodeToString("coord".getBytes()),
-                java.util.Base64.getEncoder().encodeToString("iv".getBytes())),
-            new EncryptedDataDto(
-                java.util.Base64.getEncoder().encodeToString("activity".getBytes()),
-                java.util.Base64.getEncoder().encodeToString("iv".getBytes())));
-    return new TextMessage(objectMapper.writeValueAsString(dto));
+    return new TextMessage(
+        objectMapper.writeValueAsString(
+            Map.of(
+                "type", "member.location",
+                "encryptedCoordinates", blob("coord"),
+                "encryptedActivity", blob("activity"))));
+  }
+
+  private TextMessage circleEventMessage() throws Exception {
+    return new TextMessage(
+        objectMapper.writeValueAsString(
+            Map.of("type", "circle.event", "encryptedEvent", blob("event"))));
   }
 
   @SuppressWarnings("unchecked")
   private Consumer<String> connect() throws Exception {
     var consumerCaptor = ArgumentCaptor.forClass(Consumer.class);
-    when(redisService.subscribe(eq("ag-" + groupId), consumerCaptor.capture()))
+    when(redisService.subscribe(eq("ag-" + groupId + "-events"), consumerCaptor.capture()))
         .thenReturn(redisListener);
     when(anonymousGroupService.getSnapshot(groupId))
         .thenReturn(AGFrameDto.snapshot(java.util.List.of(), java.util.List.of()));
@@ -90,17 +103,8 @@ class AGWSHandlerTest {
     return objectMapper.writeValueAsString(frame);
   }
 
-  private AGFrameDto messageFrom(UUID author) {
-    return AGFrameDto.memberMessage(
-        author,
-        new LocationRecordDto(
-            new EncryptedDataDto(
-                java.util.Base64.getEncoder().encodeToString("c".getBytes()),
-                java.util.Base64.getEncoder().encodeToString("iv".getBytes())),
-            new EncryptedDataDto(
-                java.util.Base64.getEncoder().encodeToString("a".getBytes()),
-                java.util.Base64.getEncoder().encodeToString("iv".getBytes())),
-            LocalDateTime.now()));
+  private AGFrameDto circleEventFrom(UUID author) {
+    return AGFrameDto.circleEventOf(author, new CircleEventDto(blob("e"), LocalDateTime.now()));
   }
 
   private java.util.List<String> sentPayloads() throws Exception {
@@ -122,7 +126,7 @@ class AGWSHandlerTest {
   @Test
   void afterConnectionEstablished_framesArrivingDuringTheSnapshotAreSentAfterIt() throws Exception {
     var consumerCaptor = ArgumentCaptor.forClass(Consumer.class);
-    when(redisService.subscribe(eq("ag-" + groupId), consumerCaptor.capture()))
+    when(redisService.subscribe(eq("ag-" + groupId + "-events"), consumerCaptor.capture()))
         .thenReturn(redisListener);
     var other = UUID.randomUUID();
     when(anonymousGroupService.getSnapshot(groupId))
@@ -130,7 +134,7 @@ class AGWSHandlerTest {
             i -> {
               @SuppressWarnings("unchecked")
               Consumer<String> consumer = consumerCaptor.getValue();
-              consumer.accept(json(messageFrom(other)));
+              consumer.accept(json(circleEventFrom(other)));
               return AGFrameDto.snapshot(java.util.List.of(), java.util.List.of());
             });
 
@@ -141,17 +145,17 @@ class AGWSHandlerTest {
     assertThat(objectMapper.readValue(sent.get(0), AGFrameDto.class).type())
         .isEqualTo(AGFrameDto.SNAPSHOT);
     assertThat(objectMapper.readValue(sent.get(1), AGFrameDto.class).type())
-        .isEqualTo(AGFrameDto.MEMBER_MESSAGE);
+        .isEqualTo(AGFrameDto.CIRCLE_EVENT);
   }
 
   @Test
   void afterConnectionEstablished_frameArrivingWhileSubscribing_isSentAfterTheSnapshot()
       throws Exception {
     var other = UUID.randomUUID();
-    when(redisService.subscribe(eq("ag-" + groupId), any()))
+    when(redisService.subscribe(eq("ag-" + groupId + "-events"), any()))
         .thenAnswer(
             i -> {
-              i.<Consumer<String>>getArgument(1).accept(json(messageFrom(other)));
+              i.<Consumer<String>>getArgument(1).accept(json(circleEventFrom(other)));
               return redisListener;
             });
     when(anonymousGroupService.getSnapshot(groupId))
@@ -164,18 +168,18 @@ class AGWSHandlerTest {
     assertThat(objectMapper.readValue(sent.get(0), AGFrameDto.class).type())
         .isEqualTo(AGFrameDto.SNAPSHOT);
     assertThat(objectMapper.readValue(sent.get(1), AGFrameDto.class).type())
-        .isEqualTo(AGFrameDto.MEMBER_MESSAGE);
+        .isEqualTo(AGFrameDto.CIRCLE_EVENT);
   }
 
   @Test
   void afterConnectionEstablished_frameArrivingWhileHeldOnesAreSent_isSentAfterThem()
       throws Exception {
     var consumerCaptor = ArgumentCaptor.forClass(Consumer.class);
-    when(redisService.subscribe(eq("ag-" + groupId), consumerCaptor.capture()))
+    when(redisService.subscribe(eq("ag-" + groupId + "-events"), consumerCaptor.capture()))
         .thenReturn(redisListener);
-    var first = json(messageFrom(UUID.randomUUID()));
-    var second = json(messageFrom(UUID.randomUUID()));
-    var third = json(messageFrom(UUID.randomUUID()));
+    var first = json(circleEventFrom(UUID.randomUUID()));
+    var second = json(circleEventFrom(UUID.randomUUID()));
+    var third = json(circleEventFrom(UUID.randomUUID()));
     when(anonymousGroupService.getSnapshot(groupId))
         .thenAnswer(
             i -> {
@@ -222,18 +226,18 @@ class AGWSHandlerTest {
   }
 
   @Test
-  void redisFrame_ownMemberMessage_isNotSentBack() throws Exception {
+  void redisFrame_ownCircleEvent_isNotSentBack() throws Exception {
     var consumer = connect();
 
-    consumer.accept(json(messageFrom(memberId)));
+    consumer.accept(json(circleEventFrom(memberId)));
 
     assertThat(sentPayloads()).hasSize(1);
   }
 
   @Test
-  void redisFrame_otherMemberMessage_isRelayedUnchanged() throws Exception {
+  void redisFrame_otherCircleEvent_isRelayedUnchanged() throws Exception {
     var consumer = connect();
-    var frame = json(messageFrom(UUID.randomUUID()));
+    var frame = json(circleEventFrom(UUID.randomUUID()));
 
     consumer.accept(frame);
 
@@ -276,7 +280,7 @@ class AGWSHandlerTest {
 
     handler.afterConnectionClosed(session, CloseStatus.NORMAL);
 
-    verify(redisService).unsubscribe("ag-" + groupId, redisListener);
+    verify(redisService).unsubscribe("ag-" + groupId + "-events", redisListener);
   }
 
   @Test
@@ -362,5 +366,60 @@ class AGWSHandlerTest {
     handler.handleTextMessage(session, locationMessage());
 
     verify(session).close(CloseStatus.SERVER_ERROR);
+  }
+
+  @Test
+  void handleTextMessage_memberLocation_relaysTheEncryptedFields() throws Exception {
+    when(anonymousGroupService.relayMemberMessage(eq(groupId), any(), any(), any()))
+        .thenReturn(Optional.empty());
+
+    handler.handleTextMessage(session, locationMessage());
+
+    var captor = ArgumentCaptor.forClass(AGMemberMessageReqDto.class);
+    verify(anonymousGroupService).relayMemberMessage(eq(groupId), any(), captor.capture(), any());
+    assertThat(captor.getValue())
+        .isEqualTo(new AGMemberMessageReqDto(blob("coord"), blob("activity")));
+  }
+
+  @Test
+  void handleTextMessage_circleEvent_relaysIt() throws Exception {
+    handler.handleTextMessage(session, circleEventMessage());
+
+    var authentication = ArgumentCaptor.forClass(AGMemberAuthentication.class);
+    verify(anonymousGroupService)
+        .relayCircleEvent(
+            eq(groupId), authentication.capture(), eq(new AGCircleEventReqDto(blob("event"))));
+    assertThat(authentication.getValue().getId()).isEqualTo(memberId);
+    verify(session, never()).close(any());
+  }
+
+  @Test
+  void handleTextMessage_invalidCircleEvent_closesWithBadData() throws Exception {
+    doThrow(new InvalidEncryptedDataException())
+        .when(anonymousGroupService)
+        .relayCircleEvent(any(), any(), any());
+
+    handler.handleTextMessage(session, circleEventMessage());
+
+    verify(session).close(CloseStatus.BAD_DATA);
+  }
+
+  @Test
+  void handleTextMessage_unknownType_closesWithBadData() throws Exception {
+    handler.handleTextMessage(
+        session, new TextMessage(objectMapper.writeValueAsString(Map.of("type", "nope"))));
+
+    verify(session).close(CloseStatus.BAD_DATA);
+    verifyNoInteractions(anonymousGroupService);
+  }
+
+  @Test
+  void handleTextMessage_missingType_closesWithBadData() throws Exception {
+    handler.handleTextMessage(
+        session,
+        new TextMessage(objectMapper.writeValueAsString(Map.of("encryptedEvent", blob("event")))));
+
+    verify(session).close(CloseStatus.BAD_DATA);
+    verifyNoInteractions(anonymousGroupService);
   }
 }

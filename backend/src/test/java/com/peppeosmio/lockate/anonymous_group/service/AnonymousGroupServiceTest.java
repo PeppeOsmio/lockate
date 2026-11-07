@@ -444,7 +444,30 @@ class AnonymousGroupServiceTest {
 
     assertThat(result).isEmpty();
     verify(agLocationRepository, never()).save(any());
-    verify(redisService).publish(eq("ag-" + groupId), eq("{}"));
+    verify(redisService).publish(eq("ag-" + groupId + "-locations"), eq("{}"));
+    verify(redisService, never()).publish(eq("ag-" + groupId + "-events"), any());
+  }
+
+  @Test
+  void relayMemberMessage_publishesTheMemberAndTheRecord() throws Exception {
+    var memberId = UUID.randomUUID();
+    var member = newMember(memberId, "token".getBytes(), false, groupEntity);
+    when(anonymousGroupRepository.findById(groupId)).thenReturn(Optional.of(groupEntity));
+    when(agMemberRepository.findById(memberId)).thenReturn(Optional.of(member));
+    when(agLocationConfigurationProperties.getSaveInterval()).thenReturn(Duration.ofMinutes(2));
+    when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+    var dto = validMemberMessage();
+
+    service.relayMemberMessage(
+        groupId, new AGMemberAuthentication(memberId), dto, LocalDateTime.now(ZoneOffset.UTC));
+
+    var captor = ArgumentCaptor.forClass(Object.class);
+    verify(objectMapper).writeValueAsString(captor.capture());
+    var published = (MemberLocationDto) captor.getValue();
+    assertThat(published.memberId()).isEqualTo(memberId);
+    assertThat(published.record().encryptedCoordinates()).isEqualTo(dto.encryptedCoordinates());
+    assertThat(published.record().encryptedActivity()).isEqualTo(dto.encryptedActivity());
+    assertThat(published.record().timestamp()).isNotNull();
   }
 
   @Test
@@ -626,7 +649,7 @@ class AnonymousGroupServiceTest {
   private AGFrameDto publishedFrame() {
     var captor = ArgumentCaptor.forClass(AGFrameDto.class);
     verify(objectMapper).writeValueAsString(captor.capture());
-    verify(redisService).publish(eq("ag-" + groupId), any());
+    verify(redisService).publish(eq("ag-" + groupId + "-events"), any());
     return captor.getValue();
   }
 
@@ -730,11 +753,19 @@ class AnonymousGroupServiceTest {
     verify(redisService, never()).publish(any(), any());
   }
 
+  private LocationRecordDto locationRecord() {
+    return new LocationRecordDto(
+        blobOfSize(AnonymousGroupService.COORDINATES_CIPHER_BYTES),
+        blobOfSize(AnonymousGroupService.MEMBER_ACTIVITY_CIPHER_BYTES),
+        LocalDateTime.now(ZoneOffset.UTC));
+  }
+
   @Test
-  void getSnapshot_returnsMembersAndCircles() throws Exception {
+  void getSnapshot_returnsMembersWithoutLocationsAndCircles() throws Exception {
     var circle = circleEntity(UUID.randomUUID(), groupEntity, LocalDateTime.now(ZoneOffset.UTC));
     var memberDto =
-        new AGMemberDto(UUID.randomUUID(), encryptedData(), null, false, Optional.empty());
+        new AGMemberDto(
+            UUID.randomUUID(), encryptedData(), null, false, Optional.of(locationRecord()));
     var member = newMember(memberDto.id(), "t".getBytes(), false, groupEntity);
     when(anonymousGroupRepository.findById(groupId)).thenReturn(Optional.of(groupEntity));
     when(agMemberRepository.findMembersWithLastLocation(groupId)).thenReturn(List.of(member));
@@ -745,8 +776,89 @@ class AnonymousGroupServiceTest {
     var snapshot = service.getSnapshot(groupId);
 
     assertThat(snapshot.type()).isEqualTo(AGFrameDto.SNAPSHOT);
-    assertThat(snapshot.members()).containsExactly(memberDto);
+    assertThat(snapshot.members())
+        .containsExactly(
+            new AGMemberDto(
+                memberDto.id(),
+                memberDto.encryptedName(),
+                memberDto.createdAt(),
+                memberDto.isAGAdmin(),
+                Optional.empty()));
     assertThat(snapshot.circles()).extracting(CircleDto::id).containsExactly(circle.getId());
+  }
+
+  @Test
+  void getLocationSnapshot_returnsTheLastRecordOfTheMembersThatHaveOne() throws Exception {
+    var record = locationRecord();
+    var located =
+        new AGMemberDto(UUID.randomUUID(), encryptedData(), null, false, Optional.of(record));
+    var unlocated =
+        new AGMemberDto(UUID.randomUUID(), encryptedData(), null, false, Optional.empty());
+    var locatedEntity = newMember(located.id(), "t".getBytes(), false, groupEntity);
+    var unlocatedEntity = newMember(unlocated.id(), "t".getBytes(), false, groupEntity);
+    when(anonymousGroupRepository.findById(groupId)).thenReturn(Optional.of(groupEntity));
+    when(agMemberRepository.findMembersWithLastLocation(groupId))
+        .thenReturn(List.of(locatedEntity, unlocatedEntity));
+    when(agMemberMapper.toDto(locatedEntity)).thenReturn(located);
+    when(agMemberMapper.toDto(unlocatedEntity)).thenReturn(unlocated);
+
+    var snapshot = service.getLocationSnapshot(groupId);
+
+    assertThat(snapshot).containsExactly(new MemberLocationDto(located.id(), record));
+  }
+
+  @Test
+  void getLocationSnapshot_missingGroup_throwsAGNotFound() {
+    when(anonymousGroupRepository.findById(groupId)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.getLocationSnapshot(groupId))
+        .isInstanceOf(AGNotFoundException.class);
+  }
+
+  // ---------- relayCircleEvent ----------
+
+  @Test
+  void relayCircleEvent_validEvent_publishesItWithTheSenderAndTheServerTime() throws Exception {
+    var memberId = UUID.randomUUID();
+    when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+    var event = blobOfSize(AnonymousGroupService.CIRCLE_EVENT_CIPHER_BYTES);
+
+    service.relayCircleEvent(
+        groupId, new AGMemberAuthentication(memberId), new AGCircleEventReqDto(event));
+
+    var captor = ArgumentCaptor.forClass(Object.class);
+    verify(objectMapper).writeValueAsString(captor.capture());
+    var frame = (AGFrameDto) captor.getValue();
+    assertThat(frame.type()).isEqualTo(AGFrameDto.CIRCLE_EVENT);
+    assertThat(frame.memberId()).isEqualTo(memberId);
+    assertThat(frame.circleEvent().encryptedEvent()).isEqualTo(event);
+    assertThat(frame.circleEvent().timestamp()).isNotNull();
+    verify(redisService).publish(eq("ag-" + groupId + "-events"), eq("{}"));
+  }
+
+  @Test
+  void relayCircleEvent_eventOfTheWrongLength_throwsAndPublishesNothing() {
+    var dto =
+        new AGCircleEventReqDto(blobOfSize(AnonymousGroupService.CIRCLE_EVENT_CIPHER_BYTES + 1));
+
+    assertThatThrownBy(
+            () ->
+                service.relayCircleEvent(
+                    groupId, new AGMemberAuthentication(UUID.randomUUID()), dto))
+        .isInstanceOf(InvalidEncryptedDataException.class);
+    verify(redisService, never()).publish(any(), any());
+  }
+
+  @Test
+  void relayCircleEvent_missingEvent_throwsAndPublishesNothing() {
+    assertThatThrownBy(
+            () ->
+                service.relayCircleEvent(
+                    groupId,
+                    new AGMemberAuthentication(UUID.randomUUID()),
+                    new AGCircleEventReqDto(null)))
+        .isInstanceOf(InvalidEncryptedDataException.class);
+    verify(redisService, never()).publish(any(), any());
   }
 
   @Test

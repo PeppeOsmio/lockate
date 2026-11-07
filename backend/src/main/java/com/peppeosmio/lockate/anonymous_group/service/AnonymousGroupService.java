@@ -81,20 +81,30 @@ public class AnonymousGroupService {
   public static final int MAX_CIRCLES_PER_GROUP = 50;
   // Every encrypted field has one size, plus the 16-byte GCM tag: two big-endian Int32
   // microdegrees, one activity byte, a Float64 radius, a name (of a group, member or circle) padded
-  // to 128
+  // to 128, a circle event (16-byte circle id and one enter/exit byte)
   public static final int COORDINATES_CIPHER_BYTES = 24;
   public static final int MEMBER_ACTIVITY_CIPHER_BYTES = 17;
   public static final int CIRCLE_RADIUS_CIPHER_BYTES = 24;
   public static final int NAME_CIPHER_BYTES = 144;
+  public static final int CIRCLE_EVENT_CIPHER_BYTES = 33;
 
-  public static String getRedisAGChannel(UUID anonymousGroupId) {
-    return "ag-" + anonymousGroupId.toString();
+  public static String getRedisAGEventsChannel(UUID anonymousGroupId) {
+    return "ag-" + anonymousGroupId + "-events";
   }
 
-  /** Frames announce state changes, so they go out only once the change is committed. */
+  public static String getRedisAGLocationsChannel(UUID anonymousGroupId) {
+    return "ag-" + anonymousGroupId + "-locations";
+  }
+
   private void publishFrame(UUID anonymousGroupId, AGFrameDto frame) {
-    var channel = getRedisAGChannel(anonymousGroupId);
-    var json = objectMapper.writeValueAsString(frame);
+    publish(getRedisAGEventsChannel(anonymousGroupId), frame);
+  }
+
+  /**
+   * Goes out only once the transaction commits, so nobody hears of a change that is rolled back.
+   */
+  private void publish(String channel, Object message) {
+    var json = objectMapper.writeValueAsString(message);
     if (TransactionSynchronizationManager.isSynchronizationActive()) {
       TransactionSynchronizationManager.registerSynchronization(
           new TransactionSynchronization() {
@@ -127,7 +137,29 @@ public class AnonymousGroupService {
         agCircleRepository.findByAnonymousGroupIdOrderByCreatedAtAscIdAsc(anonymousGroupId).stream()
             .map(this::toCircleDto)
             .toList();
-    return AGFrameDto.snapshot(listMembers(agEntity), circles);
+    var members =
+        listMembers(agEntity).stream()
+            .map(
+                m ->
+                    new AGMemberDto(
+                        m.id(), m.encryptedName(), m.createdAt(), m.isAGAdmin(), Optional.empty()))
+            .toList();
+    return AGFrameDto.snapshot(members, circles);
+  }
+
+  @Transactional
+  public List<MemberLocationDto> getLocationSnapshot(UUID anonymousGroupId)
+      throws AGNotFoundException {
+    var agEntity =
+        anonymousGroupRepository
+            .findById(anonymousGroupId)
+            .orElseThrow(() -> new AGNotFoundException(anonymousGroupId));
+    return listMembers(agEntity).stream()
+        .flatMap(
+            m ->
+                m.encryptedLastLocationRecord().stream()
+                    .map(record -> new MemberLocationDto(m.id(), record)))
+        .toList();
   }
 
   @Transactional
@@ -341,9 +373,9 @@ public class AnonymousGroupService {
             .findById(agMemberAuthentication.getId())
             .orElseThrow(UnauthorizedException::new);
     var timestamp = LocalDateTime.now(ZoneOffset.UTC);
-    publishFrame(
-        anonymousGroupId,
-        AGFrameDto.memberMessage(
+    publish(
+        getRedisAGLocationsChannel(anonymousGroupId),
+        new MemberLocationDto(
             agMemberAuthentication.getId(),
             new LocationRecordDto(dto.encryptedCoordinates(), dto.encryptedActivity(), timestamp)));
     if (lastSavedLocationTimeStamp == null) {
@@ -373,6 +405,21 @@ public class AnonymousGroupService {
       return Optional.of(timestamp);
     }
     return Optional.empty();
+  }
+
+  /** Relays a circle event to the other members, without storing it. */
+  public void relayCircleEvent(
+      UUID anonymousGroupId, AGMemberAuthentication authentication, AGCircleEventReqDto dto)
+      throws InvalidEncryptedDataException {
+    if (dto.encryptedEvent() == null) {
+      throw new InvalidEncryptedDataException();
+    }
+    dto.encryptedEvent().toEncryptedStringOfLength(CIRCLE_EVENT_CIPHER_BYTES);
+    publishFrame(
+        anonymousGroupId,
+        AGFrameDto.circleEventOf(
+            authentication.getId(),
+            new CircleEventDto(dto.encryptedEvent(), LocalDateTime.now(ZoneOffset.UTC))));
   }
 
   @Transactional
