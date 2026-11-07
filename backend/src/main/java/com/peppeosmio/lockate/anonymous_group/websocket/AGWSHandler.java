@@ -1,5 +1,6 @@
 package com.peppeosmio.lockate.anonymous_group.websocket;
 
+import com.peppeosmio.lockate.anonymous_group.dto.AGCircleEventReqDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGFrameDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGMemberMessageReqDto;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
@@ -29,8 +30,9 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * The only realtime channel of a group member: it receives the member's encrypted messages and
- * sends back the group's state and everything that happens in it.
+ * The realtime channel of a group member: it receives the member's encrypted locations and circle
+ * events and sends back the group's state and everything that happens in it. The other members'
+ * locations go on the SSE stream instead, open only while the member looks at the map.
  */
 @Slf4j
 @Component
@@ -38,6 +40,8 @@ public class AGWSHandler extends TextWebSocketHandler {
 
   public static final CloseStatus MEMBER_REMOVED = new CloseStatus(4401, "member_removed");
   public static final CloseStatus GROUP_DELETED = new CloseStatus(4404, "group_deleted");
+  public static final String MEMBER_LOCATION = "member.location";
+  public static final String CIRCLE_EVENT = "circle.event";
   private static final int SEND_TIME_LIMIT_MS = 10_000;
   private static final int SEND_BUFFER_LIMIT_BYTES = 512 * 1024;
 
@@ -107,7 +111,7 @@ public class AGWSHandler extends TextWebSocketHandler {
     var session =
         new ConcurrentWebSocketSessionDecorator(
             wsSession, SEND_TIME_LIMIT_MS, SEND_BUFFER_LIMIT_BYTES);
-    var channel = AnonymousGroupService.getRedisAGChannel(anonymousGroupId);
+    var channel = AnonymousGroupService.getRedisAGEventsChannel(anonymousGroupId);
     var connection = new Connection(session, authentication.getId(), channel);
     connection.listener = redisService.subscribe(channel, connection::onRedisMessage);
     connections.put(wsSession.getId(), connection);
@@ -133,7 +137,7 @@ public class AGWSHandler extends TextWebSocketHandler {
             session.sendMessage(new TextMessage(message));
           }
         }
-        case AGFrameDto.MEMBER_MESSAGE -> {
+        case AGFrameDto.CIRCLE_EVENT -> {
           if (!ownMemberId.equals(frame.memberId())) {
             session.sendMessage(new TextMessage(message));
           }
@@ -172,16 +176,27 @@ public class AGWSHandler extends TextWebSocketHandler {
           instanceof AGMemberAuthentication agMemberAuthentication)) {
         throw new UnauthorizedException();
       }
-      var dto = objectMapper.readValue(message.getPayload(), AGMemberMessageReqDto.class);
-      var lastSavedLocationTimestamp =
-          lastSavedLocationsCache.get(agMemberAuthentication.getId()).orElse(null);
-      var timestampSaved =
-          anonymousGroupService
-              .relayMemberMessage(
-                  anonymousGroupId, agMemberAuthentication, dto, lastSavedLocationTimestamp)
-              .orElse(null);
-      if (timestampSaved != null) {
-        lastSavedLocationsCache.put(agMemberAuthentication.getId(), timestampSaved);
+      var tree = objectMapper.readTree(message.getPayload());
+      switch (tree.path("type").asString("")) {
+        case MEMBER_LOCATION -> {
+          var dto = objectMapper.treeToValue(tree, AGMemberMessageReqDto.class);
+          var lastSavedLocationTimestamp =
+              lastSavedLocationsCache.get(agMemberAuthentication.getId()).orElse(null);
+          var timestampSaved =
+              anonymousGroupService
+                  .relayMemberMessage(
+                      anonymousGroupId, agMemberAuthentication, dto, lastSavedLocationTimestamp)
+                  .orElse(null);
+          if (timestampSaved != null) {
+            lastSavedLocationsCache.put(agMemberAuthentication.getId(), timestampSaved);
+          }
+        }
+        case CIRCLE_EVENT ->
+            anonymousGroupService.relayCircleEvent(
+                anonymousGroupId,
+                agMemberAuthentication,
+                objectMapper.treeToValue(tree, AGCircleEventReqDto.class));
+        default -> throw new InvalidEncryptedDataException();
       }
     } catch (AGNotFoundException
         | UnauthorizedException
