@@ -154,11 +154,11 @@ class PayloadCodecTest {
         val circles = listOf(
             circle(name = "A", center = Coordinates(0.0, 0.0), radiusMeters = 30.0),
             circle(
-                name = "😀".repeat(PayloadCodec.MAX_CIRCLE_NAME_CHARS / 2),
+                name = "😀".repeat(PayloadCodec.MAX_NAME_CHARS / 2),
                 center = Coordinates(-89.123456, -179.654321),
                 radiusMeters = 1999.5
             ),
-            circle(name = "€".repeat(PayloadCodec.MAX_CIRCLE_NAME_CHARS))
+            circle(name = "€".repeat(PayloadCodec.MAX_NAME_CHARS))
         )
 
         circles.forEach {
@@ -166,7 +166,7 @@ class PayloadCodecTest {
             assertEquals(8 + CryptoService.AES_GCM_TAG_BYTES, encrypted.coordinates.cipherText.size)
             assertEquals(8 + CryptoService.AES_GCM_TAG_BYTES, encrypted.radius.cipherText.size)
             assertEquals(
-                PayloadCodec.CIRCLE_NAME_SIZE + CryptoService.AES_GCM_TAG_BYTES,
+                PayloadCodec.NAME_SIZE + CryptoService.AES_GCM_TAG_BYTES,
                 encrypted.name.cipherText.size
             )
         }
@@ -210,5 +210,50 @@ class PayloadCodecTest {
                 message.copy(coordinates = encryptedCircle.coordinates), key, "group", "shared-id"
             )
         }
+    }
+
+    @Test
+    fun `group and member names round trip`() = runTest {
+        val groupName = codec.encryptGroupName("Famiglia 😀", key, "group")
+        val memberName = codec.encryptMemberName("Peppe", key, "group", "member")
+
+        assertEquals("Famiglia 😀", codec.decryptGroupName(groupName, key, "group"))
+        assertEquals("Peppe", codec.decryptMemberName(memberName, key, "group", "member"))
+    }
+
+    @Test
+    fun `every name has the same size whatever it says`() = runTest {
+        listOf("A", "😀".repeat(PayloadCodec.MAX_NAME_CHARS / 2), "€".repeat(PayloadCodec.MAX_NAME_CHARS))
+            .forEach {
+                val size = PayloadCodec.NAME_SIZE + CryptoService.AES_GCM_TAG_BYTES
+                assertEquals(size, codec.encryptGroupName(it, key, "group").cipherText.size)
+                assertEquals(size, codec.encryptMemberName(it, key, "group", "member").cipherText.size)
+            }
+    }
+
+    @Test
+    fun `a member's name can't be passed off as another member's or as the group's`() = runTest {
+        val name = codec.encryptMemberName("Peppe", key, "group", "member")
+
+        assertCryptoException { codec.decryptMemberName(name, key, "group", "other-member") }
+        assertCryptoException { codec.decryptMemberName(name, key, "other-group", "member") }
+        assertCryptoException { codec.decryptGroupName(name, key, "group") }
+    }
+
+    @Test
+    fun `a group's name can't be passed off as another group's or as a member's`() = runTest {
+        val name = codec.encryptGroupName("Famiglia", key, "group")
+
+        assertCryptoException { codec.decryptGroupName(name, key, "other-group") }
+        assertCryptoException { codec.decryptMemberName(name, key, "group", "member") }
+    }
+
+    @Test
+    fun `an unpadded name is rejected`() = runTest {
+        val unpadded = cryptoService.encrypt(
+            "Peppe".toByteArray(), key, "lockate-group-name-v1|group".toByteArray()
+        )
+
+        assertCryptoException { codec.decryptGroupName(unpadded, key, "group") }
     }
 }

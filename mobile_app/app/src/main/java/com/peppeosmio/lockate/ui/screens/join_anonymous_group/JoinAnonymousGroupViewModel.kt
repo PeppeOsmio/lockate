@@ -8,6 +8,7 @@ import com.peppeosmio.lockate.exceptions.InviteNotFoundException
 import com.peppeosmio.lockate.exceptions.InviteRejectedException
 import com.peppeosmio.lockate.exceptions.LocalAGExistsException
 import com.peppeosmio.lockate.exceptions.TooManyRequestsException
+import com.peppeosmio.lockate.service.anonymous_group.PayloadCodec
 import com.peppeosmio.lockate.service.invite.InviteCode
 import com.peppeosmio.lockate.service.invite.InviteService
 import com.peppeosmio.lockate.utils.ErrorInfo
@@ -37,7 +38,9 @@ class JoinAnonymousGroupViewModel(
     }
 
     fun setUserNameText(text: String) {
-        _state.update { it.copy(memberNameText = text, memberNameError = null) }
+        _state.update {
+            it.copy(memberNameText = text.take(PayloadCodec.MAX_NAME_CHARS), memberNameError = null)
+        }
     }
 
     fun joinAnonymousGroup(connectionSettingsId: Long) {

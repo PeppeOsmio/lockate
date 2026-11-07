@@ -7,7 +7,6 @@ import com.peppeosmio.lockate.domain.LocationRecord
 import com.peppeosmio.lockate.domain.UserActivity
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.service.anonymous_group.PayloadCodec
-import com.peppeosmio.lockate.service.crypto.CryptoService
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
@@ -62,15 +61,16 @@ object AGMemberMapper {
 
     suspend fun dtoToDomain(
         encryptedAGMemberDto: EncryptedAGMemberDto,
-        cryptoService: CryptoService,
         payloadCodec: PayloadCodec,
         key: ByteArray,
         groupId: String
     ): AGMember {
-        val name = cryptoService.decrypt(
-            encryptedData = EncryptedDataMapper.toDomain(encryptedAGMemberDto.encryptedName),
-            key = key
-        ).toString(Charsets.UTF_8)
+        val name = payloadCodec.decryptMemberName(
+            EncryptedDataMapper.toDomain(encryptedAGMemberDto.encryptedName),
+            key,
+            groupId,
+            encryptedAGMemberDto.id
+        )
         val lastLocation = encryptedAGMemberDto.encryptedLastLocationRecord?.let {
             LocationRecordMapper.toDomain(
                 encryptedLocationRecordDto = it,
