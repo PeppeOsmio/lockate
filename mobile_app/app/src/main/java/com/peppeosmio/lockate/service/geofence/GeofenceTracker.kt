@@ -4,29 +4,27 @@ import com.peppeosmio.lockate.domain.Coordinates
 import com.peppeosmio.lockate.domain.anonymous_group.Circle
 import com.peppeosmio.lockate.domain.anonymous_group.CircleTransition
 import com.peppeosmio.lockate.domain.anonymous_group.TransitionKind
+import kotlinx.datetime.LocalDateTime
 import kotlin.math.min
 
 /**
- * Tells when this device enters or leaves the circles of a group. Entering needs to get
- * [HYSTERESIS_MAX_METERS] (at most a fifth of the radius) inside the circle and leaving that far
- * outside, so a GPS jittering on the edge doesn't produce a burst of events. A circle whose state
- * isn't known (new, moved, resized, or never seen) takes the state of the next fix without
- * announcing anything, so nobody is told about an arrival that happened hours ago.
+ * Tells when the other members of a group enter or leave its circles, from the positions they
+ * send. Entering needs to get [HYSTERESIS_MAX_METERS] (at most a fifth of the radius) inside the
+ * circle and leaving that far outside, so a GPS jittering on the edge doesn't produce a burst of
+ * events. A member seen for the first time, and a circle that is new, moved or resized, take the
+ * state of the member's position without announcing anything, so nobody is told about an arrival
+ * that happened hours ago. Positions are ordered by the server's timestamp, so a stored record
+ * older than a live position (from the snapshot of a reconnect) can't rewind a member.
  */
 class GeofenceTracker {
-    data class UpdateResult(
-        val transitions: List<CircleTransition>,
-        val changedStates: Map<String, Boolean>,
+    private class MemberState(
+        var position: Coordinates,
+        var at: LocalDateTime,
+        val inside: MutableMap<String, Boolean>,
     )
 
     private val circles = mutableMapOf<String, Circle>()
-    private val inside = mutableMapOf<String, Boolean>()
-
-    fun states(): Map<String, Boolean> = inside.toMap()
-
-    fun restoreStates(states: Map<String, Boolean>) {
-        states.forEach { (id, isInside) -> if (id in circles) inside[id] = isInside }
-    }
+    private val members = mutableMapOf<String, MemberState>()
 
     fun replaceCircles(newCircles: List<Circle>) {
         circles.keys.filter { id -> newCircles.none { it.id == id } }.forEach { removeCircle(it) }
@@ -35,41 +33,62 @@ class GeofenceTracker {
 
     fun upsertCircle(circle: Circle) {
         val old = circles.put(circle.id, circle)
-        if (old != null && (old.center != circle.center || old.radiusMeters != circle.radiusMeters)) {
-            inside.remove(circle.id)
+        if (old == null || old.center != circle.center || old.radiusMeters != circle.radiusMeters) {
+            members.values.forEach { it.inside[circle.id] = circle.contains(it.position) }
         }
     }
 
     fun removeCircle(circleId: String) {
         circles.remove(circleId)
-        inside.remove(circleId)
+        members.values.forEach { it.inside.remove(circleId) }
     }
 
-    fun update(position: Coordinates): UpdateResult {
-        val transitions = mutableListOf<CircleTransition>()
-        val changed = mutableMapOf<String, Boolean>()
-        circles.values.forEach { circle ->
+    fun seedMember(memberId: String, position: Coordinates, at: LocalDateTime) {
+        val known = members[memberId]
+        if (known != null && at <= known.at) return
+        members[memberId] = MemberState(
+            position = position,
+            at = at,
+            inside = circles.values.associateTo(mutableMapOf()) { it.id to it.contains(position) }
+        )
+    }
+
+    fun update(memberId: String, position: Coordinates, at: LocalDateTime): List<CircleTransition> {
+        val state = members[memberId]
+        if (state == null) {
+            seedMember(memberId, position, at)
+            return emptyList()
+        }
+        if (at < state.at) return emptyList()
+        state.position = position
+        state.at = at
+        return circles.values.mapNotNull { circle ->
             val distance = position.distanceMetersTo(circle.center)
             val margin = min(HYSTERESIS_MAX_METERS, circle.radiusMeters * 0.2)
-            val wasInside = inside[circle.id]
-            val isInside = when (wasInside) {
-                null -> distance <= circle.radiusMeters
-                true -> distance <= circle.radiusMeters + margin
-                false -> distance < circle.radiusMeters - margin
+            val wasInside = state.inside.getValue(circle.id)
+            val isInside = if (wasInside) {
+                distance <= circle.radiusMeters + margin
+            } else {
+                distance < circle.radiusMeters - margin
             }
-            if (isInside == wasInside) return@forEach
-            inside[circle.id] = isInside
-            changed[circle.id] = isInside
-            if (wasInside != null) {
-                transitions += CircleTransition(
-                    circle.id, if (isInside) TransitionKind.Enter else TransitionKind.Exit
-                )
-            }
+            if (isInside == wasInside) return@mapNotNull null
+            state.inside[circle.id] = isInside
+            CircleTransition(circle.id, if (isInside) TransitionKind.Enter else TransitionKind.Exit)
         }
-        return UpdateResult(transitions, changed)
     }
 
+    fun retainMembers(memberIds: Set<String>) {
+        members.keys.retainAll(memberIds)
+    }
+
+    fun removeMember(memberId: String) {
+        members.remove(memberId)
+    }
+
+    private fun Circle.contains(position: Coordinates) =
+        position.distanceMetersTo(center) <= radiusMeters
+
     companion object {
-        const val HYSTERESIS_MAX_METERS = 20.0
+        private const val HYSTERESIS_MAX_METERS = 20.0
     }
 }

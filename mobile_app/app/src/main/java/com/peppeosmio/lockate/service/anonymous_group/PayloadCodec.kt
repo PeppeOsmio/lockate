@@ -1,145 +1,151 @@
 package com.peppeosmio.lockate.service.anonymous_group
 
 import com.peppeosmio.lockate.domain.Coordinates
-import com.peppeosmio.lockate.domain.anonymous_group.Circle
-import com.peppeosmio.lockate.domain.anonymous_group.CircleTransition
 import com.peppeosmio.lockate.domain.UserActivity
+import com.peppeosmio.lockate.domain.anonymous_group.Circle
+import com.peppeosmio.lockate.domain.anonymous_group.EncryptedCircle
+import com.peppeosmio.lockate.domain.anonymous_group.EncryptedMemberMessage
 import com.peppeosmio.lockate.domain.anonymous_group.MemberMessage
-import com.peppeosmio.lockate.domain.anonymous_group.TransitionKind
 import com.peppeosmio.lockate.domain.crypto.EncryptedData
 import com.peppeosmio.lockate.service.crypto.CryptoException
 import com.peppeosmio.lockate.service.crypto.CryptoService
 import com.peppeosmio.lockate.service.crypto.Padding
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
+import java.nio.ByteBuffer
+import kotlin.math.roundToInt
 
 /**
- * Member messages and circles all have the same padded size, so the server can't tell a message
- * with transitions from one without, and can't guess the length of a circle's name. The ids of the
- * group and of the author (or of the circle) are bound to the ciphertext as associated data, so
- * the server can't hand one's data over as another's.
+ * Member messages and circles are made of fields of a fixed length (a circle's name is padded to
+ * one size), so the server learns nothing from the length of what it relays: not the hemisphere,
+ * the activity or the radius, not the length of a circle's name. Every field is bound to the
+ * ciphertext as associated data together with the ids of the group and of the author (or of the
+ * circle), so the server can't hand one's data over as another's, nor one field as another.
  */
 class PayloadCodec(private val cryptoService: CryptoService) {
 
-    @Serializable
-    private data class TransitionPayload(
-        val circleId: String, val kind: String
-    )
+    private fun aad(prefix: String, groupId: String, ownerId: String) =
+        "$prefix|$groupId|$ownerId".toByteArray()
 
-    @Serializable
-    private data class MemberMessagePayload(
-        val lat: Double,
-        val lon: Double,
-        val ts: Long,
-        val transitions: List<TransitionPayload> = emptyList(),
-        val act: String? = null
-    )
+    private suspend fun decrypt(
+        data: EncryptedData, key: ByteArray, aad: ByteArray, size: Int
+    ): ByteArray = cryptoService.decrypt(data, key, aad).also {
+        if (it.size != size) throw CryptoException()
+    }
 
-    @Serializable
-    private data class CirclePayload(
-        val name: String,
-        val lat: Double,
-        val lon: Double,
-        @SerialName("radius") val radiusMeters: Double
-    )
+    private fun encodeCoordinates(coordinates: Coordinates): ByteArray =
+        ByteBuffer.allocate(COORDINATES_BYTES)
+            .putInt((coordinates.latitude * MICRODEGREES).roundToInt())
+            .putInt((coordinates.longitude * MICRODEGREES).roundToInt())
+            .array()
 
-    private val json = Json { ignoreUnknownKeys = true }
-
-    private fun memberAad(groupId: String, memberId: String) =
-        "$MEMBER_MESSAGE_AAD_PREFIX|$groupId|$memberId".toByteArray()
-
-    private fun circleAad(groupId: String, circleId: String) =
-        "$CIRCLE_AAD_PREFIX|$groupId|$circleId".toByteArray()
+    private fun decodeCoordinates(bytes: ByteArray): Coordinates {
+        val buffer = ByteBuffer.wrap(bytes)
+        return Coordinates(
+            latitude = buffer.getInt() / MICRODEGREES,
+            longitude = buffer.getInt() / MICRODEGREES
+        )
+    }
 
     suspend fun encryptMemberMessage(
         message: MemberMessage, key: ByteArray, groupId: String, memberId: String
-    ): EncryptedData {
-        val payload = MemberMessagePayload(
-            lat = message.coordinates.latitude,
-            lon = message.coordinates.longitude,
-            ts = message.sentAtMillis,
-            transitions = message.transitions.map {
-                TransitionPayload(it.circleId, it.kind.name.lowercase())
-            },
-            act = ACTIVITY_NAMES[message.activity]
+    ): EncryptedMemberMessage {
+        val activity = byteArrayOf(ACTIVITY_CODES.indexOf(message.activity).toByte())
+        return EncryptedMemberMessage(
+            coordinates = cryptoService.encrypt(
+                encodeCoordinates(message.coordinates),
+                key,
+                aad(MEMBER_COORDINATES_AAD_PREFIX, groupId, memberId)
+            ),
+            activity = cryptoService.encrypt(
+                activity, key, aad(MEMBER_ACTIVITY_AAD_PREFIX, groupId, memberId)
+            )
         )
-        val padded = Padding.pad(
-            json.encodeToString(MemberMessagePayload.serializer(), payload).toByteArray(),
-            MEMBER_MESSAGE_SIZE
-        )
-        return cryptoService.encrypt(padded, key, memberAad(groupId, memberId))
     }
 
     suspend fun decryptMemberMessage(
-        data: EncryptedData, key: ByteArray, groupId: String, memberId: String
+        message: EncryptedMemberMessage, key: ByteArray, groupId: String, memberId: String
     ): MemberMessage {
-        val plaintext = Padding.unpad(cryptoService.decrypt(data, key, memberAad(groupId, memberId)))
-        try {
-            val payload =
-                json.decodeFromString(MemberMessagePayload.serializer(), plaintext.decodeToString())
-            return MemberMessage(
-                coordinates = Coordinates(payload.lat, payload.lon),
-                sentAtMillis = payload.ts,
-                // a kind added by a newer version is skipped, so its position still counts
-                transitions = payload.transitions.mapNotNull {
-                    TransitionKind.entries.firstOrNull { kind ->
-                        kind.name.equals(it.kind, ignoreCase = true)
-                    }?.let { kind -> CircleTransition(circleId = it.circleId, kind = kind) }
-                },
-                activity = ACTIVITY_NAMES.entries.firstOrNull { it.value == payload.act }?.key
-                    ?: UserActivity.Unknown
-            )
-        } catch (e: Exception) {
-            throw CryptoException()
-        }
+        val coordinates = decrypt(
+            message.coordinates,
+            key,
+            aad(MEMBER_COORDINATES_AAD_PREFIX, groupId, memberId),
+            COORDINATES_BYTES
+        )
+        val activity =
+            decrypt(message.activity, key, aad(MEMBER_ACTIVITY_AAD_PREFIX, groupId, memberId), 1)
+        return MemberMessage(
+            coordinates = decodeCoordinates(coordinates),
+            // an activity added by a newer version is read as unknown, so its position still counts
+            activity = ACTIVITY_CODES.getOrNull(activity[0].toInt()) ?: UserActivity.Unknown
+        )
     }
 
-    suspend fun encryptCircle(
-        circle: Circle, key: ByteArray, groupId: String
-    ): EncryptedData {
-        val payload = CirclePayload(
-            name = circle.name,
-            lat = circle.center.latitude,
-            lon = circle.center.longitude,
-            radiusMeters = circle.radiusMeters
+    suspend fun encryptCircle(circle: Circle, key: ByteArray, groupId: String): EncryptedCircle =
+        EncryptedCircle(
+            coordinates = cryptoService.encrypt(
+                encodeCoordinates(circle.center),
+                key,
+                aad(CIRCLE_COORDINATES_AAD_PREFIX, groupId, circle.id)
+            ),
+            radius = cryptoService.encrypt(
+                ByteBuffer.allocate(RADIUS_BYTES).putDouble(circle.radiusMeters).array(),
+                key,
+                aad(CIRCLE_RADIUS_AAD_PREFIX, groupId, circle.id)
+            ),
+            name = cryptoService.encrypt(
+                Padding.pad(circle.name.toByteArray(), CIRCLE_NAME_SIZE),
+                key,
+                aad(CIRCLE_NAME_AAD_PREFIX, groupId, circle.id)
+            )
         )
-        val padded = Padding.pad(
-            json.encodeToString(CirclePayload.serializer(), payload).toByteArray(), CIRCLE_SIZE
-        )
-        return cryptoService.encrypt(padded, key, circleAad(groupId, circle.id))
-    }
 
     suspend fun decryptCircle(
-        data: EncryptedData, key: ByteArray, groupId: String, circleId: String
+        circle: EncryptedCircle, key: ByteArray, groupId: String, circleId: String
     ): Circle {
-        val plaintext = Padding.unpad(cryptoService.decrypt(data, key, circleAad(groupId, circleId)))
-        try {
-            val payload =
-                json.decodeFromString(CirclePayload.serializer(), plaintext.decodeToString())
-            return Circle(
-                id = circleId,
-                name = payload.name,
-                center = Coordinates(payload.lat, payload.lon),
-                radiusMeters = payload.radiusMeters
+        val coordinates = decrypt(
+            circle.coordinates,
+            key,
+            aad(CIRCLE_COORDINATES_AAD_PREFIX, groupId, circleId),
+            COORDINATES_BYTES
+        )
+        val radius = ByteBuffer.wrap(
+            decrypt(circle.radius, key, aad(CIRCLE_RADIUS_AAD_PREFIX, groupId, circleId), RADIUS_BYTES)
+        ).getDouble()
+        if (!radius.isFinite() || radius <= 0) throw CryptoException()
+        val name = Padding.unpad(
+            decrypt(
+                circle.name,
+                key,
+                aad(CIRCLE_NAME_AAD_PREFIX, groupId, circleId),
+                CIRCLE_NAME_SIZE
             )
-        } catch (e: Exception) {
-            throw CryptoException()
-        }
+        )
+        return Circle(
+            id = circleId,
+            name = name.decodeToString(),
+            center = decodeCoordinates(coordinates),
+            radiusMeters = radius
+        )
     }
 
     companion object {
-        const val MEMBER_MESSAGE_SIZE = 512
-        private val ACTIVITY_NAMES = mapOf(
-            UserActivity.Still to "still",
-            UserActivity.OnFoot to "foot",
-            UserActivity.OnBicycle to "bike",
-            UserActivity.InVehicle to "vehicle"
+        private const val COORDINATES_BYTES = 8
+        private const val MICRODEGREES = 1_000_000.0
+        private const val RADIUS_BYTES = 8
+        // the index is the byte on the wire, so new activities go at the end
+        private val ACTIVITY_CODES = listOf(
+            UserActivity.Unknown,
+            UserActivity.Still,
+            UserActivity.OnFoot,
+            UserActivity.OnBicycle,
+            UserActivity.InVehicle
         )
-        const val CIRCLE_SIZE = 384
-        const val MAX_TRANSITIONS_PER_MESSAGE = 4
         const val MAX_CIRCLE_NAME_CHARS = 40
-        private const val MEMBER_MESSAGE_AAD_PREFIX = "lockate-member-msg-v1"
-        private const val CIRCLE_AAD_PREFIX = "lockate-circle-v1"
+        // a char takes at most 3 bytes in UTF-8, plus the padding marker
+        const val CIRCLE_NAME_SIZE = 128
+        private const val MEMBER_COORDINATES_AAD_PREFIX = "lockate-member-coords-v1"
+        private const val MEMBER_ACTIVITY_AAD_PREFIX = "lockate-member-activity-v1"
+        private const val CIRCLE_COORDINATES_AAD_PREFIX = "lockate-circle-coords-v1"
+        private const val CIRCLE_RADIUS_AAD_PREFIX = "lockate-circle-radius-v1"
+        private const val CIRCLE_NAME_AAD_PREFIX = "lockate-circle-name-v1"
     }
 }

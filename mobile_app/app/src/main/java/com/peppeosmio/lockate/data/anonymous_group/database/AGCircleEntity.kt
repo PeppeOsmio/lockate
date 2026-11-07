@@ -22,7 +22,5 @@ data class AGCircleEntity(
     val latitude: Double,
     val longitude: Double,
     val radiusMeters: Double,
-    // whether this device was last inside: kept so that a restart doesn't announce an arrival
-    val selfInside: Boolean?,
     val anonymousGroupInternalId: Long,
 )
