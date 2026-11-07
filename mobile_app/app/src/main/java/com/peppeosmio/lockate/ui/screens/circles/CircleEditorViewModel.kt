@@ -147,7 +147,7 @@ class CircleEditorViewModel(
     }
 
     fun setName(name: String) {
-        _state.update { it.copy(name = name.take(PayloadCodec.MAX_CIRCLE_NAME_CHARS)) }
+        _state.update { it.copy(name = name.take(PayloadCodec.MAX_NAME_CHARS)) }
     }
 
     fun setRadius(radiusMeters: Double) {
@@ -214,7 +214,7 @@ class CircleEditorViewModel(
         _state.update {
             it.copy(
                 center = place.coordinates,
-                name = it.name.ifBlank { place.name.take(PayloadCodec.MAX_CIRCLE_NAME_CHARS) }
+                name = it.name.ifBlank { place.name.take(PayloadCodec.MAX_NAME_CHARS) }
             )
         }
     }

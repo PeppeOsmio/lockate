@@ -14,11 +14,12 @@ import java.nio.ByteBuffer
 import kotlin.math.roundToInt
 
 /**
- * Member messages and circles are made of fields of a fixed length (a circle's name is padded to
- * one size), so the server learns nothing from the length of what it relays: not the hemisphere,
- * the activity or the radius, not the length of a circle's name. Every field is bound to the
- * ciphertext as associated data together with the ids of the group and of the author (or of the
- * circle), so the server can't hand one's data over as another's, nor one field as another.
+ * Member messages, circles and names are made of fields of a fixed length (every name, of a group,
+ * a member or a circle, is padded to one size), so the server learns nothing from the length of
+ * what it stores or relays: not the hemisphere, the activity or the radius, not the length of a
+ * name. Every field is bound to the ciphertext as associated data together with the ids of the
+ * group and of the author (or of the circle), so the server can't hand one's data over as
+ * another's, nor one field as another.
  */
 class PayloadCodec(private val cryptoService: CryptoService) {
 
@@ -30,6 +31,26 @@ class PayloadCodec(private val cryptoService: CryptoService) {
     ): ByteArray = cryptoService.decrypt(data, key, aad).also {
         if (it.size != size) throw CryptoException()
     }
+
+    private suspend fun encryptName(name: String, key: ByteArray, aad: ByteArray): EncryptedData =
+        cryptoService.encrypt(Padding.pad(name.toByteArray(), NAME_SIZE), key, aad)
+
+    private suspend fun decryptName(data: EncryptedData, key: ByteArray, aad: ByteArray): String =
+        Padding.unpad(decrypt(data, key, aad, NAME_SIZE)).decodeToString()
+
+    suspend fun encryptGroupName(name: String, key: ByteArray, groupId: String): EncryptedData =
+        encryptName(name, key, "$GROUP_NAME_AAD_PREFIX|$groupId".toByteArray())
+
+    suspend fun decryptGroupName(data: EncryptedData, key: ByteArray, groupId: String): String =
+        decryptName(data, key, "$GROUP_NAME_AAD_PREFIX|$groupId".toByteArray())
+
+    suspend fun encryptMemberName(
+        name: String, key: ByteArray, groupId: String, memberId: String
+    ): EncryptedData = encryptName(name, key, aad(MEMBER_NAME_AAD_PREFIX, groupId, memberId))
+
+    suspend fun decryptMemberName(
+        data: EncryptedData, key: ByteArray, groupId: String, memberId: String
+    ): String = decryptName(data, key, aad(MEMBER_NAME_AAD_PREFIX, groupId, memberId))
 
     private fun encodeCoordinates(coordinates: Coordinates): ByteArray =
         ByteBuffer.allocate(COORDINATES_BYTES)
@@ -91,11 +112,7 @@ class PayloadCodec(private val cryptoService: CryptoService) {
                 key,
                 aad(CIRCLE_RADIUS_AAD_PREFIX, groupId, circle.id)
             ),
-            name = cryptoService.encrypt(
-                Padding.pad(circle.name.toByteArray(), CIRCLE_NAME_SIZE),
-                key,
-                aad(CIRCLE_NAME_AAD_PREFIX, groupId, circle.id)
-            )
+            name = encryptName(circle.name, key, aad(CIRCLE_NAME_AAD_PREFIX, groupId, circle.id))
         )
 
     suspend fun decryptCircle(
@@ -111,17 +128,10 @@ class PayloadCodec(private val cryptoService: CryptoService) {
             decrypt(circle.radius, key, aad(CIRCLE_RADIUS_AAD_PREFIX, groupId, circleId), RADIUS_BYTES)
         ).getDouble()
         if (!radius.isFinite() || radius <= 0) throw CryptoException()
-        val name = Padding.unpad(
-            decrypt(
-                circle.name,
-                key,
-                aad(CIRCLE_NAME_AAD_PREFIX, groupId, circleId),
-                CIRCLE_NAME_SIZE
-            )
-        )
+        val name = decryptName(circle.name, key, aad(CIRCLE_NAME_AAD_PREFIX, groupId, circleId))
         return Circle(
             id = circleId,
-            name = name.decodeToString(),
+            name = name,
             center = decodeCoordinates(coordinates),
             radiusMeters = radius
         )
@@ -139,9 +149,11 @@ class PayloadCodec(private val cryptoService: CryptoService) {
             UserActivity.OnBicycle,
             UserActivity.InVehicle
         )
-        const val MAX_CIRCLE_NAME_CHARS = 40
+        const val MAX_NAME_CHARS = 40
         // a char takes at most 3 bytes in UTF-8, plus the padding marker
-        const val CIRCLE_NAME_SIZE = 128
+        const val NAME_SIZE = 128
+        private const val GROUP_NAME_AAD_PREFIX = "lockate-group-name-v1"
+        private const val MEMBER_NAME_AAD_PREFIX = "lockate-member-name-v1"
         private const val MEMBER_COORDINATES_AAD_PREFIX = "lockate-member-coords-v1"
         private const val MEMBER_ACTIVITY_AAD_PREFIX = "lockate-member-activity-v1"
         private const val CIRCLE_COORDINATES_AAD_PREFIX = "lockate-circle-coords-v1"

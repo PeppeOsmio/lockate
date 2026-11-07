@@ -3,6 +3,7 @@ package com.peppeosmio.lockate.ui.screens.create_anonymous_group
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
+import com.peppeosmio.lockate.service.anonymous_group.PayloadCodec
 import com.peppeosmio.lockate.utils.ErrorInfo
 import com.peppeosmio.lockate.utils.SnackbarErrorMessage
 import kotlinx.coroutines.channels.Channel
@@ -23,11 +24,11 @@ class CreateAnonymousGroupViewModel(
     val navigateBackEvents = _navigateBackEvents.receiveAsFlow()
 
     fun setGroupNameText(text: String) {
-        _state.update { it.copy(groupNameText = text) }
+        _state.update { it.copy(groupNameText = text.take(PayloadCodec.MAX_NAME_CHARS)) }
     }
 
     fun setUserNameText(text: String) {
-        _state.update { it.copy(userNameText = text) }
+        _state.update { it.copy(userNameText = text.take(PayloadCodec.MAX_NAME_CHARS)) }
     }
 
     private fun canConfirm(): Boolean {

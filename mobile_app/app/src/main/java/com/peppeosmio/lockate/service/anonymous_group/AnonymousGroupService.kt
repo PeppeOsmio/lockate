@@ -102,6 +102,7 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import org.koin.core.time.inMs
 import java.net.ConnectException
+import java.util.UUID
 import kotlin.io.encoding.Base64
 import kotlin.math.min
 import kotlin.time.Clock
@@ -324,15 +325,14 @@ class AnonymousGroupService(
         memberName: String,
     ): AnonymousGroup = withContext(Dispatchers.IO) {
         val key = cryptoService.generateGroupKey()
-        val encryptedMemberName = cryptoService.encrypt(
-            data = memberName.toByteArray(Charsets.UTF_8), key = key
+        val groupId = UUID.randomUUID().toString()
+        val memberId = UUID.randomUUID().toString()
+        val encryptedMemberNameDto = EncryptedDataMapper.toDto(
+            payloadCodec.encryptMemberName(memberName, key, groupId, memberId)
         )
-        val encryptedMemberNameDto = EncryptedDataMapper.toDto(encryptedMemberName)
         val connectionSettings = connectionService.getConnectionSettingsById(connectionId)
         val encryptedGroupNameDto = EncryptedDataMapper.toDto(
-            cryptoService.encrypt(
-                data = groupName.toByteArray(Charsets.UTF_8), key = key
-            )
+            payloadCodec.encryptGroupName(groupName, key, groupId)
         )
 
         val createResponse = httpClient.post {
@@ -343,6 +343,8 @@ class AnonymousGroupService(
             }
             setBody(
                 AGCreateReqDto(
+                    groupId = groupId,
+                    memberId = memberId,
                     encryptedMemberName = encryptedMemberNameDto,
                     encryptedGroupName = encryptedGroupNameDto,
                 )
@@ -358,7 +360,6 @@ class AnonymousGroupService(
         val createResponseBody = createResponse.body<AGCreateResDto>()
         val agMember = AGMemberMapper.dtoToDomain(
             encryptedAGMemberDto = createResponseBody.authenticatedMemberInfo.member,
-            cryptoService = cryptoService,
             payloadCodec = payloadCodec,
             key = key,
             groupId = createResponseBody.anonymousGroup.id
@@ -439,9 +440,9 @@ class AnonymousGroupService(
             throw LocalAGExistsException()
         }
         val connectionSettings = connectionService.getConnectionSettingsById(connectionId)
-        val encryptedMemberName = cryptoService.encrypt(
-            data = memberName.toByteArray(Charsets.UTF_8), key = groupKey
-        )
+        val memberId = UUID.randomUUID().toString()
+        val encryptedMemberName =
+            payloadCodec.encryptMemberName(memberName, groupKey, anonymousGroupId, memberId)
         val response = httpClient.post {
             url("${connectionSettings.url}/api/anonymous-groups/${anonymousGroupId}/members/join")
             headers {
@@ -451,6 +452,7 @@ class AnonymousGroupService(
             setBody(
                 AGJoinReqDto(
                     joinToken = Base64.encode(joinToken),
+                    memberId = memberId,
                     encryptedMemberName = EncryptedDataMapper.toDto(encryptedMemberName)
                 )
             )
@@ -462,13 +464,13 @@ class AnonymousGroupService(
             else -> ErrorHandler.handleGeneric(response)
         }
         val body = response.body<AGJoinResDto>()
-        val groupName = cryptoService.decrypt(
-            encryptedData = EncryptedDataMapper.toDomain(body.anonymousGroup.encryptedName),
-            key = groupKey
-        ).toString(Charsets.UTF_8)
+        val groupName = payloadCodec.decryptGroupName(
+            EncryptedDataMapper.toDomain(body.anonymousGroup.encryptedName),
+            groupKey,
+            body.anonymousGroup.id
+        )
         val agMember = AGMemberMapper.dtoToDomain(
             encryptedAGMemberDto = body.authenticatedMemberInfo.member,
-            cryptoService = cryptoService,
             payloadCodec = payloadCodec,
             key = groupKey,
             groupId = body.anonymousGroup.id
@@ -886,7 +888,6 @@ class AnonymousGroupService(
         anonymousGroup: AnonymousGroup, dto: EncryptedAGMemberDto
     ): AGMember = AGMemberMapper.dtoToDomain(
         encryptedAGMemberDto = dto,
-        cryptoService = cryptoService,
         payloadCodec = payloadCodec,
         key = anonymousGroup.key,
         groupId = anonymousGroup.id
