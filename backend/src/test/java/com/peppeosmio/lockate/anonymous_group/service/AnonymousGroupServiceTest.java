@@ -19,6 +19,7 @@ import com.peppeosmio.lockate.anonymous_group.entity.AGMemberEntity;
 import com.peppeosmio.lockate.anonymous_group.entity.AnonymousGroupEntity;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGCircleConflictException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGCircleNotFoundException;
+import com.peppeosmio.lockate.anonymous_group.exceptions.AGIdTakenException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotAdminException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
@@ -93,19 +94,18 @@ class AnonymousGroupServiceTest {
 
     groupEntity =
         new AnonymousGroupEntity(
-            new EncryptedString("group-name".getBytes(), "group-iv".getBytes()));
-    groupEntity.setId(groupId);
+            groupId, new EncryptedString("group-name".getBytes(), "group-iv".getBytes()));
   }
 
   private AGMemberEntity newMember(
       UUID id, byte[] rawToken, boolean isAdmin, AnonymousGroupEntity group) {
     var member =
         new AGMemberEntity(
+            id,
             new EncryptedString("member-name".getBytes(), "member-iv".getBytes()),
             rawToken,
             isAdmin,
             group);
-    member.setId(id);
     return member;
   }
 
@@ -167,8 +167,8 @@ class AnonymousGroupServiceTest {
   @Test
   void authenticateMember_memberBelongsToDifferentGroup_throwsUnauthorized() {
     var otherGroup =
-        new AnonymousGroupEntity(new EncryptedString("other".getBytes(), "other-iv".getBytes()));
-    otherGroup.setId(UUID.randomUUID());
+        new AnonymousGroupEntity(
+            UUID.randomUUID(), new EncryptedString("other".getBytes(), "other-iv".getBytes()));
     var memberId = UUID.randomUUID();
     var rawToken = "correct-token".getBytes();
     var member = newMember(memberId, rawToken, false, otherGroup);
@@ -184,19 +184,15 @@ class AnonymousGroupServiceTest {
 
   // ---------- createAnonymousGroup ----------
 
+  private static EncryptedDataDto validName() {
+    return blobOfSize(AnonymousGroupService.NAME_CIPHER_BYTES);
+  }
+
   @Test
   void createAnonymousGroup_returnsRawTokenButStoresHashedToken() throws Exception {
     when(anonymousGroupRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
     when(agMemberRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-    var encoder = Base64.getEncoder();
-    var dto =
-        new AGCreateReqDto(
-            new EncryptedDataDto(
-                encoder.encodeToString("member".getBytes()),
-                encoder.encodeToString("miv".getBytes())),
-            new EncryptedDataDto(
-                encoder.encodeToString("group".getBytes()),
-                encoder.encodeToString("giv".getBytes())));
+    var dto = new AGCreateReqDto(groupId, UUID.randomUUID(), validName(), validName());
 
     var result = service.createAnonymousGroup(dto);
 
@@ -210,14 +206,115 @@ class AnonymousGroupServiceTest {
     assertThat(BCrypt.checkpw(rawToken, savedMember.getTokenHash())).isTrue();
   }
 
+  @Test
+  void createAnonymousGroup_storesTheIdsTheClientChose() throws Exception {
+    when(anonymousGroupRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    when(agMemberRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    var memberId = UUID.randomUUID();
+
+    service.createAnonymousGroup(new AGCreateReqDto(groupId, memberId, validName(), validName()));
+
+    var groupCaptor = ArgumentCaptor.forClass(AnonymousGroupEntity.class);
+    verify(anonymousGroupRepository).save(groupCaptor.capture());
+    assertThat(groupCaptor.getValue().getId()).isEqualTo(groupId);
+    var memberCaptor = ArgumentCaptor.forClass(AGMemberEntity.class);
+    verify(agMemberRepository).save(memberCaptor.capture());
+    assertThat(memberCaptor.getValue().getId()).isEqualTo(memberId);
+    assertThat(memberCaptor.getValue().getAnonymousGroupId()).isEqualTo(groupId);
+  }
+
+  @Test
+  void createAnonymousGroup_groupIdTaken_throwsConflictAndSavesNothing() {
+    when(anonymousGroupRepository.existsById(groupId)).thenReturn(true);
+
+    assertThatThrownBy(
+            () ->
+                service.createAnonymousGroup(
+                    new AGCreateReqDto(groupId, UUID.randomUUID(), validName(), validName())))
+        .isInstanceOf(AGIdTakenException.class);
+    verify(anonymousGroupRepository, never()).save(any());
+    verify(agMemberRepository, never()).save(any());
+  }
+
+  @Test
+  void createAnonymousGroup_memberIdTaken_throwsConflictAndSavesNothing() {
+    var memberId = UUID.randomUUID();
+    when(agMemberRepository.existsById(memberId)).thenReturn(true);
+
+    assertThatThrownBy(
+            () ->
+                service.createAnonymousGroup(
+                    new AGCreateReqDto(groupId, memberId, validName(), validName())))
+        .isInstanceOf(AGIdTakenException.class);
+    verify(anonymousGroupRepository, never()).save(any());
+    verify(agMemberRepository, never()).save(any());
+  }
+
+  @Test
+  void createAnonymousGroup_unpaddedGroupName_throwsAndSavesNothing() {
+    assertThatThrownBy(
+            () ->
+                service.createAnonymousGroup(
+                    new AGCreateReqDto(groupId, UUID.randomUUID(), validName(), blobOfSize(20))))
+        .isInstanceOf(InvalidEncryptedDataException.class);
+    verify(anonymousGroupRepository, never()).save(any());
+  }
+
+  @Test
+  void createAnonymousGroup_memberNameOfTheWrongLength_throwsAndSavesNothing() {
+    assertThatThrownBy(
+            () ->
+                service.createAnonymousGroup(
+                    new AGCreateReqDto(
+                        groupId,
+                        UUID.randomUUID(),
+                        blobOfSize(AnonymousGroupService.NAME_CIPHER_BYTES + 1),
+                        validName())))
+        .isInstanceOf(InvalidEncryptedDataException.class);
+    verify(anonymousGroupRepository, never()).save(any());
+  }
+
   // ---------- joinWithInvite ----------
 
   private AGJoinReqDto joinReq(String joinToken) {
-    var encoder = Base64.getEncoder();
-    return new AGJoinReqDto(
-        joinToken,
-        new EncryptedDataDto(
-            encoder.encodeToString("member".getBytes()), encoder.encodeToString("miv".getBytes())));
+    return new AGJoinReqDto(joinToken, UUID.randomUUID(), validName());
+  }
+
+  @Test
+  void joinWithInvite_storesTheMemberIdTheClientChose() throws Exception {
+    when(anonymousGroupRepository.findById(groupId)).thenReturn(Optional.of(groupEntity));
+    when(agMemberRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    var memberId = UUID.randomUUID();
+
+    service.joinWithInvite(groupId, new AGJoinReqDto("token", memberId, validName()));
+
+    var memberCaptor = ArgumentCaptor.forClass(AGMemberEntity.class);
+    verify(agMemberRepository).save(memberCaptor.capture());
+    assertThat(memberCaptor.getValue().getId()).isEqualTo(memberId);
+  }
+
+  @Test
+  void joinWithInvite_memberIdTaken_throwsConflictWithoutConsumingTheToken() throws Exception {
+    var memberId = UUID.randomUUID();
+    when(anonymousGroupRepository.findById(groupId)).thenReturn(Optional.of(groupEntity));
+    when(agMemberRepository.existsById(memberId)).thenReturn(true);
+
+    assertThatThrownBy(
+            () -> service.joinWithInvite(groupId, new AGJoinReqDto("token", memberId, validName())))
+        .isInstanceOf(AGIdTakenException.class);
+    verify(inviteService, never()).consumeJoinToken(any(), any());
+    verify(agMemberRepository, never()).save(any());
+  }
+
+  @Test
+  void joinWithInvite_unpaddedMemberName_throwsWithoutConsumingTheToken() throws Exception {
+    assertThatThrownBy(
+            () ->
+                service.joinWithInvite(
+                    groupId, new AGJoinReqDto("token", UUID.randomUUID(), blobOfSize(20))))
+        .isInstanceOf(InvalidEncryptedDataException.class);
+    verify(inviteService, never()).consumeJoinToken(any(), any());
+    verify(agMemberRepository, never()).save(any());
   }
 
   @Test
@@ -272,8 +369,8 @@ class AnonymousGroupServiceTest {
   @Test
   void deleteMember_memberFromDifferentGroup_throwsUnauthorized() {
     var otherGroup =
-        new AnonymousGroupEntity(new EncryptedString("other".getBytes(), "other-iv".getBytes()));
-    otherGroup.setId(UUID.randomUUID());
+        new AnonymousGroupEntity(
+            UUID.randomUUID(), new EncryptedString("other".getBytes(), "other-iv".getBytes()));
     var memberId = UUID.randomUUID();
     var member = newMember(memberId, "token".getBytes(), false, otherGroup);
     when(agMemberRepository.findById(memberId)).thenReturn(Optional.of(member));
@@ -466,7 +563,7 @@ class AnonymousGroupServiceTest {
     return new CircleUpsertReqDto(
         blobOfSize(AnonymousGroupService.COORDINATES_CIPHER_BYTES),
         blobOfSize(AnonymousGroupService.CIRCLE_RADIUS_CIPHER_BYTES),
-        blobOfSize(AnonymousGroupService.CIRCLE_NAME_CIPHER_BYTES));
+        blobOfSize(AnonymousGroupService.NAME_CIPHER_BYTES));
   }
 
   private AGCircleEntity circleEntity(
@@ -562,7 +659,7 @@ class AnonymousGroupServiceTest {
     service.upsertCircle(groupId, circleId, circleReq());
 
     assertThat(existing.getEncryptedName().cipherText())
-        .hasSize(AnonymousGroupService.CIRCLE_NAME_CIPHER_BYTES);
+        .hasSize(AnonymousGroupService.NAME_CIPHER_BYTES);
     assertThat(existing.getEncryptedRadius().cipherText())
         .hasSize(AnonymousGroupService.CIRCLE_RADIUS_CIPHER_BYTES);
     assertThat(publishedFrame().type()).isEqualTo(AGFrameDto.CIRCLE_UPSERTED);
@@ -573,8 +670,8 @@ class AnonymousGroupServiceTest {
   void upsertCircle_idOfAnotherGroup_throwsConflictAndPublishesNothing() {
     var circleId = UUID.randomUUID();
     var otherGroup =
-        new AnonymousGroupEntity(new EncryptedString("other".getBytes(), "other-iv".getBytes()));
-    otherGroup.setId(UUID.randomUUID());
+        new AnonymousGroupEntity(
+            UUID.randomUUID(), new EncryptedString("other".getBytes(), "other-iv".getBytes()));
     var existing = circleEntity(circleId, otherGroup, LocalDateTime.now(ZoneOffset.UTC));
     when(anonymousGroupRepository.findByIdForUpdate(groupId)).thenReturn(Optional.of(groupEntity));
     when(agCircleRepository.findById(circleId)).thenReturn(Optional.of(existing));
@@ -705,10 +802,10 @@ class AnonymousGroupServiceTest {
 
   @Test
   void listGroupsForAdmin_groupWithMembers_returnsSummary() {
-    var otherGroup =
-        new AnonymousGroupEntity(new EncryptedString("other".getBytes(), "other-iv".getBytes()));
     var otherGroupId = UUID.randomUUID();
-    otherGroup.setId(otherGroupId);
+    var otherGroup =
+        new AnonymousGroupEntity(
+            otherGroupId, new EncryptedString("other".getBytes(), "other-iv".getBytes()));
     var pageable = PageRequest.of(0, 20, Sort.by("createdAt").descending());
     var pageResult = new PageImpl<>(List.of(groupEntity, otherGroup), pageable, 2);
     when(anonymousGroupRepository.findAll(pageable)).thenReturn(pageResult);

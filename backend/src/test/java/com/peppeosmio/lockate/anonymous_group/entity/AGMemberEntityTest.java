@@ -5,13 +5,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.peppeosmio.lockate.common.classes.EncryptedString;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.bcrypt.BCrypt;
 
 class AGMemberEntityTest {
 
   private final AnonymousGroupEntity anonymousGroupEntity =
-      new AnonymousGroupEntity(new EncryptedString("groupname".getBytes(), "groupiv".getBytes()));
+      new AnonymousGroupEntity(
+          UUID.randomUUID(), new EncryptedString("groupname".getBytes(), "groupiv".getBytes()));
 
   @Test
   void constructor_hashesTokenAndSetsUtcCreatedAt() {
@@ -19,6 +21,7 @@ class AGMemberEntityTest {
 
     var entity =
         new AGMemberEntity(
+            UUID.randomUUID(),
             new EncryptedString("name".getBytes(), "iv".getBytes()),
             "raw-token".getBytes(),
             true,

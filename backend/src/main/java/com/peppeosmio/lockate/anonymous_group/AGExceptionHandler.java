@@ -2,6 +2,7 @@ package com.peppeosmio.lockate.anonymous_group;
 
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGCircleConflictException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGCircleNotFoundException;
+import com.peppeosmio.lockate.anonymous_group.exceptions.AGIdTakenException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotAdminException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
@@ -47,6 +48,11 @@ public class AGExceptionHandler {
 
   @ExceptionHandler(AGCircleConflictException.class)
   public ResponseEntity<ErrorResponseDto> handleAGCircleConflict(AGCircleConflictException e) {
+    return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponseDto(e.getMessage()));
+  }
+
+  @ExceptionHandler(AGIdTakenException.class)
+  public ResponseEntity<ErrorResponseDto> handleAGIdTaken(AGIdTakenException e) {
     return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponseDto(e.getMessage()));
   }
 }

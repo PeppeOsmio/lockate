@@ -15,6 +15,7 @@ import com.peppeosmio.lockate.anonymous_group.repository.AGLocationRepository;
 import com.peppeosmio.lockate.anonymous_group.repository.AGMemberRepository;
 import com.peppeosmio.lockate.anonymous_group.repository.AnonymousGroupRepository;
 import com.peppeosmio.lockate.anonymous_group.security.AGMemberAuthentication;
+import com.peppeosmio.lockate.common.classes.EncryptedString;
 import com.peppeosmio.lockate.common.dto.EncryptedDataDto;
 import com.peppeosmio.lockate.common.dto.PageQueryDto;
 import com.peppeosmio.lockate.common.dto.PageResponseDto;
@@ -78,12 +79,13 @@ public class AnonymousGroupService {
   }
 
   public static final int MAX_CIRCLES_PER_GROUP = 50;
-  // Every encrypted field of a member message or a circle has one size, plus the 16-byte GCM tag:
-  // two big-endian Int32 microdegrees, one activity byte, a Float64 radius, a name padded to 128
+  // Every encrypted field has one size, plus the 16-byte GCM tag: two big-endian Int32
+  // microdegrees, one activity byte, a Float64 radius, a name (of a group, member or circle) padded
+  // to 128
   public static final int COORDINATES_CIPHER_BYTES = 24;
   public static final int MEMBER_ACTIVITY_CIPHER_BYTES = 17;
   public static final int CIRCLE_RADIUS_CIPHER_BYTES = 24;
-  public static final int CIRCLE_NAME_CIPHER_BYTES = 144;
+  public static final int NAME_CIPHER_BYTES = 144;
 
   public static String getRedisAGChannel(UUID anonymousGroupId) {
     return "ag-" + anonymousGroupId.toString();
@@ -134,7 +136,7 @@ public class AnonymousGroupService {
     var coordinates =
         dto.encryptedCoordinates().toEncryptedStringOfLength(COORDINATES_CIPHER_BYTES);
     var radius = dto.encryptedRadius().toEncryptedStringOfLength(CIRCLE_RADIUS_CIPHER_BYTES);
-    var name = dto.encryptedName().toEncryptedStringOfLength(CIRCLE_NAME_CIPHER_BYTES);
+    var name = dto.encryptedName().toEncryptedStringOfLength(NAME_CIPHER_BYTES);
     // locked, or two creations at once could both see room for one more circle
     var agEntity =
         anonymousGroupRepository
@@ -169,9 +171,16 @@ public class AnonymousGroupService {
     publishFrame(anonymousGroupId, AGFrameDto.circleDeleted(circleId));
   }
 
+  private void requireFreeMemberId(UUID memberId) throws AGIdTakenException {
+    if (agMemberRepository.existsById(memberId)) {
+      throw new AGIdTakenException("ag_member_id_taken");
+    }
+  }
+
   @Transactional
   private AGMemberWithTokenDto createMember(
-      EncryptedDataDto encryptedUserNameDto,
+      UUID memberId,
+      EncryptedString encryptedName,
       boolean isAGAdmin,
       AnonymousGroupEntity anonymousGroupEntity) {
     var secureRandom = new SecureRandom();
@@ -179,8 +188,7 @@ public class AnonymousGroupService {
     secureRandom.nextBytes(token);
     var agMemberEntity =
         agMemberRepository.save(
-            AGMemberEntity.fromBase64Fields(
-                encryptedUserNameDto, token, isAGAdmin, anonymousGroupEntity));
+            new AGMemberEntity(memberId, encryptedName, token, isAGAdmin, anonymousGroupEntity));
     var encoder = Base64.getEncoder();
     return new AGMemberWithTokenDto(
         agMemberMapper.toDto(agMemberEntity), encoder.encodeToString(token));
@@ -242,27 +250,38 @@ public class AnonymousGroupService {
   }
 
   @Transactional
-  public AGCreateResDto createAnonymousGroup(AGCreateReqDto dto) throws Base64Exception {
+  public AGCreateResDto createAnonymousGroup(AGCreateReqDto dto)
+      throws InvalidEncryptedDataException, AGIdTakenException {
+    var groupName = dto.encryptedGroupName().toEncryptedStringOfLength(NAME_CIPHER_BYTES);
+    var memberName = dto.encryptedMemberName().toEncryptedStringOfLength(NAME_CIPHER_BYTES);
+    if (anonymousGroupRepository.existsById(dto.groupId())) {
+      throw new AGIdTakenException("ag_id_taken");
+    }
+    requireFreeMemberId(dto.memberId());
     var agEntity =
-        anonymousGroupRepository.save(
-            AnonymousGroupEntity.fromBase64Fields(dto.encryptedGroupName()));
-    var agMemberWithTokenDto = createMember(dto.encryptedMemberName(), true, agEntity);
+        anonymousGroupRepository.save(new AnonymousGroupEntity(dto.groupId(), groupName));
+    var agMemberWithTokenDto = createMember(dto.memberId(), memberName, true, agEntity);
     return new AGCreateResDto(anonymousGroupMapper.toDto(agEntity), agMemberWithTokenDto);
   }
 
   /**
-   * Adds a member with the join token an existing member sent inside the invite payload. The group
-   * is looked up first so a typo in the group id doesn't burn the token.
+   * Adds a member with the join token an existing member sent inside the invite payload. Everything
+   * else is checked first so a typo in the group id or a bad request doesn't burn the token.
    */
   @Transactional
   public AGJoinResDto joinWithInvite(UUID anonymousGroupId, AGJoinReqDto dto)
-      throws AGNotFoundException, InvalidJoinTokenException {
+      throws AGNotFoundException,
+          InvalidJoinTokenException,
+          InvalidEncryptedDataException,
+          AGIdTakenException {
+    var memberName = dto.encryptedMemberName().toEncryptedStringOfLength(NAME_CIPHER_BYTES);
     var agEntity =
         anonymousGroupRepository
             .findById(anonymousGroupId)
             .orElseThrow(() -> new AGNotFoundException(anonymousGroupId));
+    requireFreeMemberId(dto.memberId());
     inviteService.consumeJoinToken(anonymousGroupId, dto.joinToken());
-    var agMemberWithTokenDto = createMember(dto.encryptedMemberName(), false, agEntity);
+    var agMemberWithTokenDto = createMember(dto.memberId(), memberName, false, agEntity);
     var agMembers = listMembers(agEntity);
     publishFrame(anonymousGroupId, AGFrameDto.memberJoined(agMemberWithTokenDto.member()));
     return new AGJoinResDto(anonymousGroupMapper.toDto(agEntity), agMemberWithTokenDto, agMembers);

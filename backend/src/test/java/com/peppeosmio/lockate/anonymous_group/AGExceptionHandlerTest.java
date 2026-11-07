@@ -2,6 +2,7 @@ package com.peppeosmio.lockate.anonymous_group;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.peppeosmio.lockate.anonymous_group.exceptions.AGIdTakenException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotAdminException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
@@ -20,6 +21,14 @@ class AGExceptionHandlerTest {
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     assertThat(response.getBody().error()).isEqualTo("invalid_base64");
+  }
+
+  @Test
+  void handleAGIdTaken_returns409() {
+    var response = handler.handleAGIdTaken(new AGIdTakenException("ag_member_id_taken"));
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    assertThat(response.getBody().error()).isEqualTo("ag_member_id_taken");
   }
 
   @Test
