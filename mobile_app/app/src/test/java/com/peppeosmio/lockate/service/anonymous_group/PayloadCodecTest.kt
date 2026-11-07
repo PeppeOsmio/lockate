@@ -3,15 +3,12 @@ package com.peppeosmio.lockate.service.anonymous_group
 import com.peppeosmio.lockate.domain.Coordinates
 import com.peppeosmio.lockate.domain.UserActivity
 import com.peppeosmio.lockate.domain.anonymous_group.Circle
-import com.peppeosmio.lockate.domain.anonymous_group.CircleTransition
+import com.peppeosmio.lockate.domain.anonymous_group.EncryptedMemberMessage
 import com.peppeosmio.lockate.domain.anonymous_group.MemberMessage
-import com.peppeosmio.lockate.domain.anonymous_group.TransitionKind
 import com.peppeosmio.lockate.service.crypto.CryptoException
 import com.peppeosmio.lockate.service.crypto.CryptoService
-import com.peppeosmio.lockate.service.crypto.Padding
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 import java.util.UUID
@@ -22,24 +19,35 @@ class PayloadCodecTest {
     private val key = cryptoService.generateGroupKey()
     private val coordinates = Coordinates(latitude = -33.868819712345, longitude = 151.209295512345)
 
-    private fun transition(kind: TransitionKind) =
-        CircleTransition(UUID.randomUUID().toString(), kind)
-
     private fun message(
-        transitions: List<CircleTransition> = emptyList(),
+        coordinates: Coordinates = this.coordinates,
         activity: UserActivity = UserActivity.Unknown
-    ) = MemberMessage(
-        coordinates, sentAtMillis = 1_780_000_000_123, transitions = transitions, activity = activity
-    )
+    ) = MemberMessage(coordinates, activity)
+
+    private suspend fun assertCryptoException(block: suspend () -> Unit) {
+        try {
+            block()
+            fail("Expected CryptoException")
+        } catch (e: CryptoException) {
+            // expected
+        }
+    }
 
     @Test
-    fun `a member message round trips`() = runTest {
-        val sent = message(listOf(transition(TransitionKind.Enter), transition(TransitionKind.Exit)))
+    fun `the coordinates round trip to the microdegree`() = runTest {
+        listOf(
+            coordinates,
+            Coordinates(90.0, 180.0),
+            Coordinates(-90.0, -180.0),
+            Coordinates(0.0, 0.0),
+            Coordinates(-0.0000004, 0.0000006)
+        ).forEach { sent ->
+            val encrypted = codec.encryptMemberMessage(message(sent), key, "group", "member")
+            val received = codec.decryptMemberMessage(encrypted, key, "group", "member").coordinates
 
-        val encrypted = codec.encryptMemberMessage(sent, key, "group", "member")
-        val received = codec.decryptMemberMessage(encrypted, key, "group", "member")
-
-        assertEquals(sent, received)
+            assertEquals(sent.latitude, received.latitude, 0.0000005)
+            assertEquals(sent.longitude, received.longitude, 0.0000005)
+        }
     }
 
     @Test
@@ -52,57 +60,59 @@ class PayloadCodecTest {
     }
 
     @Test
-    fun `messages with and without activity have the same size`() = runTest {
-        val sizes = UserActivity.entries.map {
-            codec.encryptMemberMessage(message(activity = it), key, "group", "member").cipherText.size
+    fun `every message has the same size whatever it says`() = runTest {
+        val messages = UserActivity.entries.flatMap { activity ->
+            listOf(Coordinates(0.0, 0.0), Coordinates(-89.123456, -179.654321), coordinates)
+                .map { message(it, activity) }
         }
 
-        assertEquals(1, sizes.distinct().size)
+        messages.forEach {
+            val encrypted = codec.encryptMemberMessage(it, key, "group", "member")
+            assertEquals(8 + CryptoService.AES_GCM_TAG_BYTES, encrypted.coordinates.cipherText.size)
+            assertEquals(1 + CryptoService.AES_GCM_TAG_BYTES, encrypted.activity.cipherText.size)
+        }
     }
 
     @Test
-    fun `messages with and without transitions have the same size`() = runTest {
-        val plain = codec.encryptMemberMessage(message(), key, "group", "member")
-        val full = codec.encryptMemberMessage(
-            message(
-                List(PayloadCodec.MAX_TRANSITIONS_PER_MESSAGE) { transition(TransitionKind.Enter) },
-                UserActivity.InVehicle
-            ),
-            key, "group", "member"
+    fun `an activity unknown to this version is read as unknown and the position is kept`() = runTest {
+        val sent = codec.encryptMemberMessage(message(), key, "group", "member")
+        val newer = cryptoService.encrypt(
+            byteArrayOf(42), key, "lockate-member-activity-v1|group|member".toByteArray()
         )
 
-        assertEquals(plain.cipherText.size, full.cipherText.size)
-        assertEquals(
-            PayloadCodec.MEMBER_MESSAGE_SIZE + CryptoService.AES_GCM_TAG_BYTES,
-            plain.cipherText.size
-        )
+        val received =
+            codec.decryptMemberMessage(sent.copy(activity = newer), key, "group", "member")
+
+        assertEquals(UserActivity.Unknown, received.activity)
+        assertEquals(coordinates.latitude, received.coordinates.latitude, 0.0000005)
     }
 
     @Test
-    fun `a transition of an unknown kind is skipped and the position is kept`() = runTest {
-        val payload = """{"lat":1.5,"lon":2.5,"ts":7,"transitions":[""" +
-            """{"circleId":"c1","kind":"dwell"},{"circleId":"c2","kind":"enter"}]}"""
-        val encrypted = cryptoService.encrypt(
-            Padding.pad(payload.toByteArray(), PayloadCodec.MEMBER_MESSAGE_SIZE),
-            key,
-            "lockate-member-msg-v1|group|member".toByteArray()
+    fun `fields of the wrong length are rejected`() = runTest {
+        val sent = codec.encryptMemberMessage(message(), key, "group", "member")
+        val longCoordinates = cryptoService.encrypt(
+            ByteArray(9), key, "lockate-member-coords-v1|group|member".toByteArray()
+        )
+        val emptyActivity = cryptoService.encrypt(
+            ByteArray(0), key, "lockate-member-activity-v1|group|member".toByteArray()
         )
 
-        val received = codec.decryptMemberMessage(encrypted, key, "group", "member")
-
-        assertEquals(Coordinates(1.5, 2.5), received.coordinates)
-        assertEquals(listOf(CircleTransition("c2", TransitionKind.Enter)), received.transitions)
+        assertCryptoException {
+            codec.decryptMemberMessage(sent.copy(coordinates = longCoordinates), key, "group", "member")
+        }
+        assertCryptoException {
+            codec.decryptMemberMessage(sent.copy(activity = emptyActivity), key, "group", "member")
+        }
     }
 
     @Test
     fun `a message can't be passed off as another member's`() = runTest {
         val encrypted = codec.encryptMemberMessage(message(), key, "group", "alice")
+        val bobs = codec.encryptMemberMessage(message(), key, "group", "bob")
 
-        try {
-            codec.decryptMemberMessage(encrypted, key, "group", "bob")
-            fail("Expected CryptoException")
-        } catch (e: CryptoException) {
-            // expected
+        assertCryptoException { codec.decryptMemberMessage(encrypted, key, "group", "bob") }
+        assertCryptoException {
+            codec.decryptMemberMessage(bobs.copy(activity = encrypted.activity), key, "group", "bob")
         }
     }
 
@@ -110,63 +120,95 @@ class PayloadCodecTest {
     fun `a message can't be passed off as another group's`() = runTest {
         val encrypted = codec.encryptMemberMessage(message(), key, "group-1", "alice")
 
-        try {
-            codec.decryptMemberMessage(encrypted, key, "group-2", "alice")
-            fail("Expected CryptoException")
-        } catch (e: CryptoException) {
-            // expected
-        }
+        assertCryptoException { codec.decryptMemberMessage(encrypted, key, "group-2", "alice") }
     }
+
+    @Test
+    fun `the coordinates and the activity can't be swapped`() = runTest {
+        val encrypted = codec.encryptMemberMessage(message(), key, "group", "member")
+        val swapped = EncryptedMemberMessage(
+            coordinates = encrypted.activity, activity = encrypted.coordinates
+        )
+
+        assertCryptoException { codec.decryptMemberMessage(swapped, key, "group", "member") }
+    }
+
+    private fun circle(
+        name: String = "Home", center: Coordinates = coordinates, radiusMeters: Double = 150.0
+    ) = Circle(UUID.randomUUID().toString(), name, center, radiusMeters)
 
     @Test
     fun `a circle round trips`() = runTest {
-        val circle = Circle(UUID.randomUUID().toString(), "Home", coordinates, 150.0)
+        val sent = circle(name = "Scuola 😀", radiusMeters = 1999.5)
 
-        val encrypted = codec.encryptCircle(circle, key, "group")
+        val received = codec.decryptCircle(codec.encryptCircle(sent, key, "group"), key, "group", sent.id)
 
-        assertEquals(circle, codec.decryptCircle(encrypted, key, "group", circle.id))
+        assertEquals(sent.name, received.name)
+        assertEquals(sent.radiusMeters, received.radiusMeters, 0.0)
+        assertEquals(sent.center.latitude, received.center.latitude, 0.0000005)
+        assertEquals(sent.center.longitude, received.center.longitude, 0.0000005)
     }
 
     @Test
-    fun `circles have the same size whatever the name`() = runTest {
-        val short = Circle(UUID.randomUUID().toString(), "A", coordinates, 100.0)
-        val long = Circle(
-            UUID.randomUUID().toString(),
-            "😀".repeat(PayloadCodec.MAX_CIRCLE_NAME_CHARS),
-            coordinates,
-            1999.5
+    fun `every circle has the same size whatever it says`() = runTest {
+        val circles = listOf(
+            circle(name = "A", center = Coordinates(0.0, 0.0), radiusMeters = 30.0),
+            circle(
+                name = "😀".repeat(PayloadCodec.MAX_CIRCLE_NAME_CHARS / 2),
+                center = Coordinates(-89.123456, -179.654321),
+                radiusMeters = 1999.5
+            ),
+            circle(name = "€".repeat(PayloadCodec.MAX_CIRCLE_NAME_CHARS))
         )
 
-        val a = codec.encryptCircle(short, key, "group")
-        val b = codec.encryptCircle(long, key, "group")
-
-        assertEquals(a.cipherText.size, b.cipherText.size)
-        assertTrue(a.cipherText.size == PayloadCodec.CIRCLE_SIZE + CryptoService.AES_GCM_TAG_BYTES)
+        circles.forEach {
+            val encrypted = codec.encryptCircle(it, key, "group")
+            assertEquals(8 + CryptoService.AES_GCM_TAG_BYTES, encrypted.coordinates.cipherText.size)
+            assertEquals(8 + CryptoService.AES_GCM_TAG_BYTES, encrypted.radius.cipherText.size)
+            assertEquals(
+                PayloadCodec.CIRCLE_NAME_SIZE + CryptoService.AES_GCM_TAG_BYTES,
+                encrypted.name.cipherText.size
+            )
+        }
     }
 
     @Test
     fun `a circle can't be passed off under another id`() = runTest {
-        val circle = Circle(UUID.randomUUID().toString(), "Home", coordinates, 150.0)
-        val encrypted = codec.encryptCircle(circle, key, "group")
+        val sent = circle()
+        val encrypted = codec.encryptCircle(sent, key, "group")
+        val other = codec.encryptCircle(circle(), key, "group")
 
-        try {
+        assertCryptoException {
             codec.decryptCircle(encrypted, key, "group", UUID.randomUUID().toString())
-            fail("Expected CryptoException")
-        } catch (e: CryptoException) {
-            // expected
+        }
+        assertCryptoException {
+            codec.decryptCircle(encrypted.copy(name = other.name), key, "group", sent.id)
         }
     }
 
     @Test
-    fun `a circle isn't a member message`() = runTest {
-        val circle = Circle("shared-id", "Home", coordinates, 150.0)
-        val encrypted = codec.encryptCircle(circle, key, "group")
+    fun `the centre and the radius of a circle can't be swapped`() = runTest {
+        val sent = circle()
+        val encrypted = codec.encryptCircle(sent, key, "group")
 
-        try {
-            codec.decryptMemberMessage(encrypted, key, "group", "shared-id")
-            fail("Expected CryptoException")
-        } catch (e: CryptoException) {
-            // expected
+        assertCryptoException {
+            codec.decryptCircle(
+                encrypted.copy(coordinates = encrypted.radius, radius = encrypted.coordinates),
+                key, "group", sent.id
+            )
+        }
+    }
+
+    @Test
+    fun `a circle's centre isn't a member's position`() = runTest {
+        val sent = circle().copy(id = "shared-id")
+        val encryptedCircle = codec.encryptCircle(sent, key, "group")
+        val message = codec.encryptMemberMessage(message(), key, "group", "shared-id")
+
+        assertCryptoException {
+            codec.decryptMemberMessage(
+                message.copy(coordinates = encryptedCircle.coordinates), key, "group", "shared-id"
+            )
         }
     }
 }

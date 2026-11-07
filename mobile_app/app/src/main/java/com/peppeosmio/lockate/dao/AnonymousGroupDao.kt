@@ -154,7 +154,7 @@ interface AnonymousGroupDao {
         """
         UPDATE ag_circle
         SET name = :name, latitude = :latitude, longitude = :longitude,
-        radiusMeters = :radiusMeters, selfInside = :selfInside
+        radiusMeters = :radiusMeters
         WHERE id = :id AND anonymousGroupInternalId = :agInternalId
         """
     )
@@ -164,17 +164,13 @@ interface AnonymousGroupDao {
         name: String,
         latitude: Double,
         longitude: Double,
-        radiusMeters: Double,
-        selfInside: Boolean?
+        radiusMeters: Double
     )
 
     @Query("DELETE FROM ag_circle WHERE id = :id AND anonymousGroupInternalId = :agInternalId")
     suspend fun deleteCircle(id: String, agInternalId: Long)
 
-    @Query("UPDATE ag_circle SET selfInside = :selfInside WHERE id = :id AND anonymousGroupInternalId = :agInternalId")
-    suspend fun setCircleSelfInside(id: String, agInternalId: Long, selfInside: Boolean)
-
-    /** Keeps what this device knows about circles that didn't change, and drops the others. */
+    /** Makes the circles of the group the ones given, dropping the others. */
     @Transaction
     suspend fun syncCircles(agInternalId: Long, circles: List<Circle>) {
         val existing = listCircles(agInternalId).associateBy { it.id }
@@ -192,23 +188,17 @@ interface AnonymousGroupDao {
      */
     @Transaction
     suspend fun upsertCircle(agInternalId: Long, circle: Circle) {
-        val existing = getCircle(circle.id, agInternalId)
-        if (existing == null) {
-            insertCircle(CircleMapper.domainToEntity(circle, agInternalId, selfInside = null))
+        if (getCircle(circle.id, agInternalId) == null) {
+            insertCircle(CircleMapper.domainToEntity(circle, agInternalId))
             return
         }
-        val unchanged = existing.name == circle.name &&
-                existing.latitude == circle.center.latitude &&
-                existing.longitude == circle.center.longitude &&
-                existing.radiusMeters == circle.radiusMeters
         updateCircle(
             id = circle.id,
             agInternalId = agInternalId,
             name = circle.name,
             latitude = circle.center.latitude,
             longitude = circle.center.longitude,
-            radiusMeters = circle.radiusMeters,
-            selfInside = if (unchanged) existing.selfInside else null
+            radiusMeters = circle.radiusMeters
         )
     }
 

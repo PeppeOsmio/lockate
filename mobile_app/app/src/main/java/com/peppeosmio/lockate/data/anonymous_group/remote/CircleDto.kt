@@ -6,9 +6,15 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class CircleDto(
     val id: String,
-    val encryptedData: EncryptedDataDto,
+    val encryptedCoordinates: EncryptedDataDto,
+    val encryptedRadius: EncryptedDataDto,
+    val encryptedName: EncryptedDataDto,
     val updatedAt: LocalDateTime,
 )
 
 @Serializable
-data class CircleUpsertReqDto(val encryptedData: EncryptedDataDto)
+data class CircleUpsertReqDto(
+    val encryptedCoordinates: EncryptedDataDto,
+    val encryptedRadius: EncryptedDataDto,
+    val encryptedName: EncryptedDataDto,
+)

@@ -11,7 +11,6 @@ import com.peppeosmio.lockate.data.anonymous_group.remote.CircleUpsertReqDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.EncryptedAGMemberDto
 import com.peppeosmio.lockate.domain.anonymous_group.AGChannelFrame
 import com.peppeosmio.lockate.domain.anonymous_group.Circle
-import com.peppeosmio.lockate.domain.anonymous_group.CircleTransition
 import com.peppeosmio.lockate.domain.anonymous_group.ChannelState
 import com.peppeosmio.lockate.domain.anonymous_group.ChannelStatus
 import com.peppeosmio.lockate.domain.anonymous_group.GroupFrame
@@ -30,7 +29,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -41,6 +39,7 @@ import java.io.IOException
 import com.peppeosmio.lockate.data.anonymous_group.mappers.AGMemberMapper
 import com.peppeosmio.lockate.data.anonymous_group.mappers.AnonymousGroupMapper
 import com.peppeosmio.lockate.data.anonymous_group.mappers.EncryptedDataMapper
+import com.peppeosmio.lockate.data.anonymous_group.mappers.LocationRecordMapper
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGCreateReqDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGCreateResDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGJoinReqDto
@@ -643,15 +642,8 @@ class AnonymousGroupService(
     private suspend fun runChannel(anonymousGroup: AnonymousGroup, channel: GroupChannel) {
         val connectionSettings =
             connectionService.getConnectionSettingsById(anonymousGroup.connectionId)
+        // outlives the connections, so a reconnect's snapshot can't rewind the members it knows
         val tracker = GeofenceTracker()
-        val localCircles = anonymousGroupDao.listCircles(anonymousGroup.internalId)
-        tracker.replaceCircles(localCircles.map { CircleMapper.entityToDomain(it) })
-        tracker.restoreStates(localCircles.mapNotNull { c -> c.selfInside?.let { c.id to it } }
-            .toMap())
-        // outlives the connections: the tracker already counts these transitions as done, so
-        // dropping them with a socket would lose them for good
-        val pendingTransitions = ArrayDeque<CircleTransition>()
-        val lastMessageTimestamps = mutableMapOf<String, Long>()
         val maxRetries = 10
         var retries = 0
         val tag = "channel ${anonymousGroup.id}"
@@ -675,15 +667,13 @@ class AnonymousGroupService(
                     retries = 0
                     channel.status.update { it.copy(state = ChannelState.Connected) }
                     sendLoopLog.log("$tag connected")
-                    val snapshotReceived = MutableStateFlow(false)
                     coroutineScope {
                         val sender = launch {
                             channel.sendLeases.map { it > 0 }.distinctUntilChanged()
                                 .collectLatest { sending ->
                                     if (sending) {
                                         sendLocationWhileEnabled(
-                                            anonymousGroup, channel, this@webSocket, tracker,
-                                            pendingTransitions, snapshotReceived
+                                            anonymousGroup, channel, this@webSocket
                                         )
                                     }
                                 }
@@ -693,9 +683,7 @@ class AnonymousGroupService(
                             handleFrame(
                                 anonymousGroup = anonymousGroup,
                                 dto = Json.decodeFromString<AGFrameDto>(frame.readText()),
-                                tracker = tracker,
-                                lastMessageTimestamps = lastMessageTimestamps,
-                                snapshotReceived = snapshotReceived
+                                tracker = tracker
                             )
                         }
                         sender.cancel()
@@ -779,19 +767,13 @@ class AnonymousGroupService(
         anonymousGroup: AnonymousGroup,
         channel: GroupChannel,
         session: DefaultClientWebSocketSession,
-        tracker: GeofenceTracker,
-        pendingTransitions: ArrayDeque<CircleTransition>,
-        snapshotReceived: StateFlow<Boolean>
     ) {
         try {
             while (true) {
                 try {
                     locationService.checkPermissionsAndLocationEnabled()
                     channel.status.update { it.copy(isLocationDisabled = false) }
-                    sendLocation(
-                        anonymousGroup, channel, session, tracker, pendingTransitions,
-                        snapshotReceived
-                    )
+                    sendLocation(anonymousGroup, channel, session)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -823,9 +805,6 @@ class AnonymousGroupService(
         anonymousGroup: AnonymousGroup,
         channel: GroupChannel,
         session: DefaultClientWebSocketSession,
-        tracker: GeofenceTracker,
-        pendingTransitions: ArrayDeque<CircleTransition>,
-        snapshotReceived: StateFlow<Boolean>
     ) = coroutineScope {
         Log.i(
             "",
@@ -859,20 +838,6 @@ class AnonymousGroupService(
                 sendLoopLog.log("channel ${anonymousGroup.id} activity=${mode.first} fresh=${mode.second}")
             }
 
-            // before the snapshot the circles may be outdated; the repeated fix of a still user
-            // can't change them
-            if (position.isFresh && snapshotReceived.value) {
-                val result = tracker.update(coordinates)
-                pendingTransitions += result.transitions
-                result.changedStates.forEach { (circleId, isInside) ->
-                    anonymousGroupDao.setCircleSelfInside(
-                        id = circleId,
-                        agInternalId = anonymousGroup.internalId,
-                        selfInside = isInside
-                    )
-                }
-            }
-
             lastSent?.let {
                 if ((now - it).inMs < 1500) {
                     return@collect
@@ -886,16 +851,8 @@ class AnonymousGroupService(
             timeoutJob = launch {
                 getTimeoutJob()
             }
-            // transitions go out with the scheduled message and never in an extra one, so the
-            // server can't tell the messages that have them
-            val transitions = pendingTransitions.take(PayloadCodec.MAX_TRANSITIONS_PER_MESSAGE)
-            val encryptedPayload = payloadCodec.encryptMemberMessage(
-                message = MemberMessage(
-                    coordinates = coordinates,
-                    sentAtMillis = now.toEpochMilliseconds(),
-                    transitions = transitions,
-                    activity = position.activity
-                ),
+            val encrypted = payloadCodec.encryptMemberMessage(
+                message = MemberMessage(coordinates = coordinates, activity = position.activity),
                 key = anonymousGroup.key,
                 groupId = anonymousGroup.id,
                 memberId = anonymousGroup.memberId
@@ -904,12 +861,12 @@ class AnonymousGroupService(
                 Frame.Text(
                     text = Json.encodeToString(
                         AGMemberMessageReqDto(
-                            encryptedPayload = EncryptedDataMapper.toDto(encryptedPayload)
+                            encryptedCoordinates = EncryptedDataMapper.toDto(encrypted.coordinates),
+                            encryptedActivity = EncryptedDataMapper.toDto(encrypted.activity)
                         )
                     )
                 )
             )
-            repeat(transitions.size) { pendingTransitions.removeFirst() }
             _events.tryEmit(
                 AnonymousGroupEvent.AGLocationSentEvent(
                     anonymousGroupInternalId = anonymousGroup.internalId,
@@ -939,8 +896,6 @@ class AnonymousGroupService(
         anonymousGroup: AnonymousGroup,
         dto: AGFrameDto,
         tracker: GeofenceTracker,
-        lastMessageTimestamps: MutableMap<String, Long>,
-        snapshotReceived: MutableStateFlow<Boolean>
     ) {
         val internalId = anonymousGroup.internalId
         val frame: AGChannelFrame = try {
@@ -966,7 +921,13 @@ class AnonymousGroupService(
                         })
                     anonymousGroupDao.syncCircles(internalId, circles)
                     tracker.replaceCircles(circles)
-                    snapshotReceived.value = true
+                    val others = members.filter { it.id != anonymousGroup.memberId }
+                    tracker.retainMembers(others.map { it.id }.toSet())
+                    others.forEach { member ->
+                        member.lastLocationRecord?.let {
+                            tracker.seedMember(member.id, it.coordinates, it.timestamp)
+                        }
+                    }
                     AGChannelFrame.Snapshot(members, circles)
                 }
 
@@ -977,11 +938,17 @@ class AnonymousGroupService(
                             AGMemberMapper.domainToEntity(member, anonymousGroupInternalId = internalId)
                         )
                     }
+                    if (member.id != anonymousGroup.memberId) {
+                        member.lastLocationRecord?.let {
+                            tracker.seedMember(member.id, it.coordinates, it.timestamp)
+                        }
+                    }
                     AGChannelFrame.MemberJoined(member)
                 }
 
                 AGFrameDto.MEMBER_LEFT -> {
                     anonymousGroupDao.deleteAGMemberById(dto.memberId!!, internalId)
+                    tracker.removeMember(dto.memberId)
                     AGChannelFrame.MemberLeft(dto.memberId)
                 }
 
@@ -995,20 +962,13 @@ class AnonymousGroupService(
 
                 AGFrameDto.MEMBER_MESSAGE -> {
                     val memberId = dto.memberId!!
-                    val record = dto.record!!
-                    val message = payloadCodec.decryptMemberMessage(
-                        data = EncryptedDataMapper.toDomain(record.encryptedPayload),
+                    val locationRecord = LocationRecordMapper.toDomain(
+                        encryptedLocationRecordDto = dto.record!!,
+                        payloadCodec = payloadCodec,
                         key = anonymousGroup.key,
                         groupId = anonymousGroup.id,
                         memberId = memberId
                     )
-                    val last = lastMessageTimestamps[memberId]
-                    if (last != null && message.sentAtMillis <= last) {
-                        Log.w("", "Dropped a replayed or reordered message of $memberId")
-                        return
-                    }
-                    lastMessageTimestamps[memberId] = message.sentAtMillis
-                    val locationRecord = LocationRecord(message.coordinates, record.timestamp, message.activity)
                     // a member unknown locally joined after our last snapshot: its joined frame
                     // brings it in
                     anonymousGroupDao.getAGMemberByIdAndAGInternalId(memberId, internalId)
@@ -1022,9 +982,14 @@ class AnonymousGroupService(
                                 lastActivity = locationRecord.activity.name
                             )
                         }
-                    AGChannelFrame.LiveLocation(
-                        AGLocationUpdate(locationRecord, memberId, message.transitions)
-                    )
+                    // the server never relays our own messages, but if it did they mustn't tell us
+                    // about ourselves
+                    val transitions = if (memberId == anonymousGroup.memberId) {
+                        emptyList()
+                    } else {
+                        tracker.update(memberId, locationRecord.coordinates, locationRecord.timestamp)
+                    }
+                    AGChannelFrame.LiveLocation(AGLocationUpdate(locationRecord, memberId, transitions))
                 }
 
                 AGFrameDto.CIRCLE_UPSERTED -> {
@@ -1191,7 +1156,11 @@ class AnonymousGroupService(
             anonymousGroupInternalId = anonymousGroup.internalId,
             circleId = circle.id,
             method = HttpMethod.Put,
-            body = CircleUpsertReqDto(EncryptedDataMapper.toDto(encrypted))
+            body = CircleUpsertReqDto(
+                encryptedCoordinates = EncryptedDataMapper.toDto(encrypted.coordinates),
+                encryptedRadius = EncryptedDataMapper.toDto(encrypted.radius),
+                encryptedName = EncryptedDataMapper.toDto(encrypted.name)
+            )
         )
         anonymousGroupDao.upsertCircle(anonymousGroup.internalId, circle)
         _groupFrames.emit(
