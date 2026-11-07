@@ -5,5 +5,4 @@ import com.peppeosmio.lockate.domain.LocationRecord
 data class AGLocationUpdate(
     val locationRecord: LocationRecord,
     val agMemberId: String,
-    val transitions: List<CircleTransition>
 )

@@ -3,23 +3,26 @@ package com.peppeosmio.lockate.service.anonymous_group
 import com.peppeosmio.lockate.domain.Coordinates
 import com.peppeosmio.lockate.domain.UserActivity
 import com.peppeosmio.lockate.domain.anonymous_group.Circle
+import com.peppeosmio.lockate.domain.anonymous_group.CircleTransition
 import com.peppeosmio.lockate.domain.anonymous_group.EncryptedCircle
 import com.peppeosmio.lockate.domain.anonymous_group.EncryptedMemberMessage
 import com.peppeosmio.lockate.domain.anonymous_group.MemberMessage
+import com.peppeosmio.lockate.domain.anonymous_group.TransitionKind
 import com.peppeosmio.lockate.domain.crypto.EncryptedData
 import com.peppeosmio.lockate.service.crypto.CryptoException
 import com.peppeosmio.lockate.service.crypto.CryptoService
 import com.peppeosmio.lockate.service.crypto.Padding
 import java.nio.ByteBuffer
+import java.util.UUID
 import kotlin.math.roundToInt
 
 /**
- * Member messages, circles and names are made of fields of a fixed length (every name, of a group,
- * a member or a circle, is padded to one size), so the server learns nothing from the length of
- * what it stores or relays: not the hemisphere, the activity or the radius, not the length of a
- * name. Every field is bound to the ciphertext as associated data together with the ids of the
- * group and of the author (or of the circle), so the server can't hand one's data over as
- * another's, nor one field as another.
+ * Member messages, circle events, circles and names are made of fields of a fixed length (every
+ * name, of a group, a member or a circle, is padded to one size), so the server learns nothing from
+ * the length of what it stores or relays: not the hemisphere, the activity or the radius, not the
+ * length of a name, not whether a circle event is an arrival or a departure. Every field is bound
+ * to the ciphertext as associated data together with the ids of the group and of the author (or of
+ * the circle), so the server can't hand one's data over as another's, nor one field as another.
  */
 class PayloadCodec(private val cryptoService: CryptoService) {
 
@@ -137,6 +140,29 @@ class PayloadCodec(private val cryptoService: CryptoService) {
         )
     }
 
+    suspend fun encryptCircleEvent(
+        event: CircleTransition, key: ByteArray, groupId: String, memberId: String
+    ): EncryptedData {
+        val circleId = UUID.fromString(event.circleId)
+        val plaintext = ByteBuffer.allocate(CIRCLE_EVENT_BYTES)
+            .putLong(circleId.mostSignificantBits)
+            .putLong(circleId.leastSignificantBits)
+            .put(TRANSITION_CODES.indexOf(event.kind).toByte())
+            .array()
+        return cryptoService.encrypt(plaintext, key, aad(CIRCLE_EVENT_AAD_PREFIX, groupId, memberId))
+    }
+
+    suspend fun decryptCircleEvent(
+        data: EncryptedData, key: ByteArray, groupId: String, memberId: String
+    ): CircleTransition {
+        val buffer = ByteBuffer.wrap(
+            decrypt(data, key, aad(CIRCLE_EVENT_AAD_PREFIX, groupId, memberId), CIRCLE_EVENT_BYTES)
+        )
+        val circleId = UUID(buffer.getLong(), buffer.getLong()).toString()
+        val kind = TRANSITION_CODES.getOrNull(buffer.get().toInt()) ?: throw CryptoException()
+        return CircleTransition(circleId, kind)
+    }
+
     companion object {
         private const val COORDINATES_BYTES = 8
         private const val MICRODEGREES = 1_000_000.0
@@ -149,6 +175,8 @@ class PayloadCodec(private val cryptoService: CryptoService) {
             UserActivity.OnBicycle,
             UserActivity.InVehicle
         )
+        private const val CIRCLE_EVENT_BYTES = 17
+        private val TRANSITION_CODES = listOf(TransitionKind.Enter, TransitionKind.Exit)
         const val MAX_NAME_CHARS = 40
         // a char takes at most 3 bytes in UTF-8, plus the padding marker
         const val NAME_SIZE = 128
@@ -159,5 +187,6 @@ class PayloadCodec(private val cryptoService: CryptoService) {
         private const val CIRCLE_COORDINATES_AAD_PREFIX = "lockate-circle-coords-v1"
         private const val CIRCLE_RADIUS_AAD_PREFIX = "lockate-circle-radius-v1"
         private const val CIRCLE_NAME_AAD_PREFIX = "lockate-circle-name-v1"
+        private const val CIRCLE_EVENT_AAD_PREFIX = "lockate-circle-event-v1"
     }
 }

@@ -28,6 +28,7 @@ import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.logging.Logger
 import io.ktor.client.plugins.logging.Logging
+import io.ktor.client.plugins.sse.SSE
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.serialization.kotlinx.json.json
 import org.koin.android.ext.koin.androidContext
@@ -65,6 +66,7 @@ val appModule = module {
                 }
             }
             install(WebSockets)
+            install(SSE)
 
             install(ContentNegotiation) {
                 json()

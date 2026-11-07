@@ -253,7 +253,11 @@ fun MapScreen(
 
     LifecycleStartEffect(detailsViewModel) {
         detailsViewModel.resumeMyLocation()
-        onStopOrDispose { detailsViewModel.pauseMyLocation() }
+        detailsViewModel.startLocationStream()
+        onStopOrDispose {
+            detailsViewModel.pauseMyLocation()
+            detailsViewModel.stopLocationStream()
+        }
     }
 
     val multiplePermissionsLauncher = rememberLauncherForActivityResult(

@@ -1,10 +1,10 @@
 package com.peppeosmio.lockate.service.geofence
 
 import com.peppeosmio.lockate.domain.Coordinates
+import com.peppeosmio.lockate.domain.LocationFix
 import com.peppeosmio.lockate.domain.anonymous_group.Circle
 import com.peppeosmio.lockate.domain.anonymous_group.CircleTransition
 import com.peppeosmio.lockate.domain.anonymous_group.TransitionKind
-import kotlinx.datetime.LocalDateTime
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -19,20 +19,12 @@ class GeofenceTrackerTest {
     private fun north(meters: Double) =
         Coordinates(home.center.latitude + meters / 111_195.0, home.center.longitude)
 
-    private var clock = 0
-
-    // every call is a second later than the previous one
-    private fun next() = at(++clock)
-
-    private fun at(second: Int) =
-        LocalDateTime(2026, 1, 1, 0, second / 60, second % 60)
-
     private fun tracker(vararg circles: Circle) = GeofenceTracker().also {
         it.replaceCircles(circles.toList())
     }
 
-    private fun GeofenceTracker.update(position: Coordinates, member: String = "alice") =
-        update(member, position, next())
+    private fun GeofenceTracker.update(position: Coordinates, accuracy: Float = 10f) =
+        update(LocationFix(position, accuracy, 0))
 
     private fun enter(circle: String) = CircleTransition(circle, TransitionKind.Enter)
     private fun exit(circle: String) = CircleTransition(circle, TransitionKind.Exit)
@@ -92,57 +84,6 @@ class GeofenceTrackerTest {
     }
 
     @Test
-    fun `members are tracked apart`() {
-        val tracker = tracker(home)
-        tracker.update(north(10.0), member = "alice")
-        tracker.update(north(500.0), member = "bob")
-
-        assertEquals(listOf(enter("home")), tracker.update(north(10.0), member = "bob"))
-        assertTrue(tracker.update(north(10.0), member = "alice").isEmpty())
-    }
-
-    @Test
-    fun `a seed is silent and the next position is compared to it`() {
-        val tracker = tracker(home)
-
-        tracker.seedMember("alice", north(10.0), next())
-
-        assertEquals(listOf(exit("home")), tracker.update(north(300.0)))
-    }
-
-    @Test
-    fun `a seed older than what is known is ignored`() {
-        val tracker = tracker(home)
-        tracker.seedMember("alice", north(500.0), at(10))
-        tracker.update("alice", north(10.0), at(100))
-
-        // a reconnect brings back the stored record from before the arrival
-        tracker.seedMember("alice", north(500.0), at(50))
-
-        assertTrue(tracker.update("alice", north(20.0), at(110)).isEmpty())
-    }
-
-    @Test
-    fun `a newer seed replaces the state silently`() {
-        val tracker = tracker(home)
-        tracker.seedMember("alice", north(500.0), at(10))
-
-        tracker.seedMember("alice", north(10.0), at(20))
-
-        assertTrue(tracker.update("alice", north(20.0), at(30)).isEmpty())
-        assertEquals(listOf(exit("home")), tracker.update("alice", north(300.0), at(40)))
-    }
-
-    @Test
-    fun `a position older than what is known is ignored`() {
-        val tracker = tracker(home)
-        tracker.update("alice", north(10.0), at(100))
-
-        assertTrue(tracker.update("alice", north(300.0), at(50)).isEmpty())
-        assertTrue(tracker.update("alice", north(20.0), at(110)).isEmpty())
-    }
-
-    @Test
     fun `a circle created while inside doesn't announce an arrival`() {
         val tracker = tracker()
         tracker.update(north(10.0))
@@ -154,7 +95,7 @@ class GeofenceTrackerTest {
     }
 
     @Test
-    fun `a circle moved onto a member takes the member as inside silently`() {
+    fun `a circle moved onto us takes us as inside silently`() {
         val tracker = tracker(home)
         tracker.update(north(1_000.0))
 
@@ -199,33 +140,40 @@ class GeofenceTrackerTest {
     }
 
     @Test
-    fun `a removed member starts over silently`() {
-        val tracker = tracker(home)
-        tracker.update(north(10.0))
-
-        tracker.removeMember("alice")
-
-        assertTrue(tracker.update(north(300.0)).isEmpty())
-    }
-
-    @Test
-    fun `members missing from the list are forgotten`() {
-        val tracker = tracker(home)
-        tracker.update(north(10.0), member = "alice")
-        tracker.update(north(10.0), member = "bob")
-
-        tracker.retainMembers(setOf("bob"))
-
-        assertTrue(tracker.update(north(300.0), member = "alice").isEmpty())
-        assertEquals(listOf(exit("home")), tracker.update(north(300.0), member = "bob"))
-    }
-
-    @Test
     fun `several circles report their own transitions`() {
         val work = home.copy(id = "work", center = north(1_000.0))
         val tracker = tracker(home, work)
         tracker.update(north(10.0))
 
         assertEquals(setOf(exit("home"), enter("work")), tracker.update(work.center).toSet())
+    }
+
+    @Test
+    fun `inaccurate fixes are ignored`() {
+        val tracker = tracker(home)
+        tracker.update(north(10.0))
+
+        assertTrue(tracker.update(north(300.0), accuracy = 80f).isEmpty())
+        assertEquals(listOf(exit("home")), tracker.update(north(300.0)))
+    }
+
+    @Test
+    fun `an inaccurate first fix doesn't seed the state`() {
+        val tracker = tracker(home)
+        tracker.update(north(10.0), accuracy = 80f)
+
+        assertTrue(tracker.update(north(300.0)).isEmpty())
+        assertEquals(listOf(enter("home")), tracker.update(north(10.0)))
+    }
+
+    @Test
+    fun `after forgetting the position the next fix seeds silently`() {
+        val tracker = tracker(home)
+        tracker.update(north(10.0))
+
+        tracker.forgetPosition()
+
+        assertTrue(tracker.update(north(300.0)).isEmpty())
+        assertEquals(listOf(enter("home")), tracker.update(north(10.0)))
     }
 }

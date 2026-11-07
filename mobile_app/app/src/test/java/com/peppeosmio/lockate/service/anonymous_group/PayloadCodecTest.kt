@@ -3,8 +3,10 @@ package com.peppeosmio.lockate.service.anonymous_group
 import com.peppeosmio.lockate.domain.Coordinates
 import com.peppeosmio.lockate.domain.UserActivity
 import com.peppeosmio.lockate.domain.anonymous_group.Circle
+import com.peppeosmio.lockate.domain.anonymous_group.CircleTransition
 import com.peppeosmio.lockate.domain.anonymous_group.EncryptedMemberMessage
 import com.peppeosmio.lockate.domain.anonymous_group.MemberMessage
+import com.peppeosmio.lockate.domain.anonymous_group.TransitionKind
 import com.peppeosmio.lockate.service.crypto.CryptoException
 import com.peppeosmio.lockate.service.crypto.CryptoService
 import kotlinx.coroutines.test.runTest
@@ -255,5 +257,39 @@ class PayloadCodecTest {
         )
 
         assertCryptoException { codec.decryptGroupName(unpadded, key, "group") }
+    }
+
+    @Test
+    fun `a circle event round trips`() = runTest {
+        val circleId = UUID.randomUUID().toString()
+        TransitionKind.entries.forEach { kind ->
+            val encrypted =
+                codec.encryptCircleEvent(CircleTransition(circleId, kind), key, "group", "member")
+
+            assertEquals(
+                CircleTransition(circleId, kind),
+                codec.decryptCircleEvent(encrypted, key, "group", "member")
+            )
+            assertEquals(17 + CryptoService.AES_GCM_TAG_BYTES, encrypted.cipherText.size)
+        }
+    }
+
+    @Test
+    fun `a circle event can't be passed off as another member's or another group's`() = runTest {
+        val event = codec.encryptCircleEvent(
+            CircleTransition(UUID.randomUUID().toString(), TransitionKind.Enter), key, "group", "member"
+        )
+
+        assertCryptoException { codec.decryptCircleEvent(event, key, "group", "other-member") }
+        assertCryptoException { codec.decryptCircleEvent(event, key, "other-group", "member") }
+    }
+
+    @Test
+    fun `a circle event with an unknown kind is rejected`() = runTest {
+        val unknownKind = cryptoService.encrypt(
+            ByteArray(17).also { it[16] = 2 }, key, "lockate-circle-event-v1|group|member".toByteArray()
+        )
+
+        assertCryptoException { codec.decryptCircleEvent(unknownKind, key, "group", "member") }
     }
 }
