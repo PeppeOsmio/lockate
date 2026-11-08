@@ -58,26 +58,26 @@ export class AdminAPIClient {
 
   async checkApiKey(key: string): Promise<boolean> {
     const baseUrl = await this.getBaseUrl()
-    const response = await fetch(`${baseUrl}/api/admin/api-keys`, {
+    const response = await fetch(`${baseUrl}/api/v1/admin/api-keys`, {
       headers: { 'X-API-KEY': key },
     })
     return response.ok
   }
 
   listAnonymousGroups(page = 0, size = 20): Promise<Page<AnonymousGroupSummary>> {
-    return this.apiFetch(`/api/admin/anonymous-groups?page=${page}&size=${size}`)
+    return this.apiFetch(`/api/v1/admin/anonymous-groups?page=${page}&size=${size}`)
   }
 
   listGroupMembers(anonymousGroupId: string): Promise<AGMember[]> {
-    return this.apiFetch(`/api/admin/anonymous-groups/${anonymousGroupId}/members`)
+    return this.apiFetch(`/api/v1/admin/anonymous-groups/${anonymousGroupId}/members`)
   }
 
   deleteAnonymousGroup(anonymousGroupId: string): Promise<void> {
-    return this.apiFetch(`/api/admin/anonymous-groups/${anonymousGroupId}`, { method: 'DELETE' })
+    return this.apiFetch(`/api/v1/admin/anonymous-groups/${anonymousGroupId}`, { method: 'DELETE' })
   }
 
   deleteGroupMember(anonymousGroupId: string, memberId: string): Promise<void> {
-    return this.apiFetch(`/api/admin/anonymous-groups/${anonymousGroupId}/members/${memberId}`, {
+    return this.apiFetch(`/api/v1/admin/anonymous-groups/${anonymousGroupId}/members/${memberId}`, {
       method: 'DELETE',
     })
   }
@@ -87,21 +87,21 @@ export class AdminAPIClient {
     memberId: string,
     isAGAdmin: boolean,
   ): Promise<void> {
-    return this.apiFetch(`/api/admin/anonymous-groups/${anonymousGroupId}/members/${memberId}`, {
+    return this.apiFetch(`/api/v1/admin/anonymous-groups/${anonymousGroupId}/members/${memberId}`, {
       method: 'PATCH',
       body: JSON.stringify({ isAGAdmin }),
     })
   }
 
   listApiKeys(page = 0, size = 20): Promise<Page<ApiKey>> {
-    return this.apiFetch(`/api/admin/api-keys?page=${page}&size=${size}`)
+    return this.apiFetch(`/api/v1/admin/api-keys?page=${page}&size=${size}`)
   }
 
   createApiKey(): Promise<ApiKeyCreated> {
-    return this.apiFetch('/api/admin/api-keys', { method: 'POST' })
+    return this.apiFetch('/api/v1/admin/api-keys', { method: 'POST' })
   }
 
   revokeApiKey(id: string): Promise<void> {
-    return this.apiFetch(`/api/admin/api-keys/${id}`, { method: 'DELETE' })
+    return this.apiFetch(`/api/v1/admin/api-keys/${id}`, { method: 'DELETE' })
   }
 }
