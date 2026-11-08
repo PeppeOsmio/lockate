@@ -55,6 +55,7 @@ import com.peppeosmio.lockate.service.geofence.CircleEventQueue
 import com.peppeosmio.lockate.service.geofence.CircleEvents
 import com.peppeosmio.lockate.service.geofence.GeofenceTracker
 import com.peppeosmio.lockate.service.geofence.circleEventTexts
+import com.peppeosmio.lockate.service.geofence.presenceText
 import com.peppeosmio.lockate.service.location.PositionProvider
 import com.peppeosmio.lockate.utils.ErrorHandler
 import com.peppeosmio.lockate.utils.SendLoopLog
@@ -958,6 +959,12 @@ class AnonymousGroupService(
             channel.status.update {
                 it.copy(isLocationDisabled = false, isLocationUnavailable = false)
             }
+            // The sending stops only when we stop sharing (or the group is gone), so the others
+            // learn it now instead of after the server's timeout. It's the last frame of this loop
+            // on the socket, so no location can follow it. If it fails, the timeout tells them.
+            withContext(NonCancellable) {
+                session.value?.let { trySend(it, AGMemberMessageReqDto.Paused) }
+            }
         }
     }
 
@@ -1248,6 +1255,11 @@ class AnonymousGroupService(
                                 ),
                             timestamp = circleEvent.timestamp,
                         )
+                    }
+
+                    AGFrameDto.MEMBER_PRESENCE -> {
+                        if (dto.memberId == anonymousGroup.memberId) return
+                        AGChannelFrame.MemberPresence(dto.memberId!!, dto.online!!, dto.lastSeen)
                     }
 
                     AGFrameDto.CIRCLE_UPSERTED -> {
@@ -1624,26 +1636,53 @@ class AnonymousGroupService(
             )
         }
 
-    /** The event to notify for a live frame, with the group and the member. */
-    suspend fun describeCircleEvents(groupFrame: GroupFrame): CircleEvents? =
+    /**
+     * What to notify for a live frame, with the group and the member: a circle event or a member
+     * that stopped or started sharing. Both go in the member's one notification.
+     */
+    suspend fun describeNotification(groupFrame: GroupFrame): CircleEvents? =
         withContext(Dispatchers.IO) {
-            val event = groupFrame.frame as? AGChannelFrame.CircleEvent ?: return@withContext null
+            val memberId =
+                when (val frame = groupFrame.frame) {
+                    is AGChannelFrame.CircleEvent -> frame.memberId
+                    is AGChannelFrame.MemberPresence -> frame.memberId
+                    else -> return@withContext null
+                }
             val group =
                 anonymousGroupDao.getAGByInternalId(groupFrame.anonymousGroupInternalId)
                     ?: return@withContext null
             val member =
                 anonymousGroupDao.getAGMemberByIdAndAGInternalId(
-                    event.memberId,
+                    memberId,
                     groupFrame.anonymousGroupInternalId,
                 ) ?: return@withContext null
+            val mutedTargets = listMutedTargets(group.internalId)
             val texts =
-                circleEventTexts(
-                    memberId = member.id,
-                    memberName = member.name,
-                    transitions = listOf(event.transition),
-                    circles = listCircles(group.internalId).associateBy { it.id },
-                    mutedTargets = listMutedTargets(group.internalId),
-                )
+                when (val frame = groupFrame.frame) {
+                    is AGChannelFrame.CircleEvent ->
+                        circleEventTexts(
+                            memberId = member.id,
+                            memberName = member.name,
+                            transitions = listOf(frame.transition),
+                            circles = listCircles(group.internalId).associateBy { it.id },
+                            mutedTargets = mutedTargets,
+                        )
+
+                    is AGChannelFrame.MemberPresence ->
+                        if (member.id in mutedTargets) emptyList()
+                        else {
+                            listOf(
+                                presenceText(
+                                    member.name,
+                                    frame.online,
+                                    frame.lastSeen,
+                                    TimeZone.currentSystemDefault(),
+                                )
+                            )
+                        }
+
+                    else -> return@withContext null
+                }
             if (texts.isEmpty()) null else CircleEvents(group.id, group.name, member.id, texts)
         }
 

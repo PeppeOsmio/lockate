@@ -94,7 +94,7 @@ class AndroidSendLocationService : Service() {
             // only the live frames notify, never the ones read back from the server
             anonymousGroupService.groupFrames.collect { groupFrame ->
                 val events =
-                    anonymousGroupService.describeCircleEvents(groupFrame) ?: return@collect
+                    anonymousGroupService.describeNotification(groupFrame) ?: return@collect
                 mainHandler.post {
                     if (isRunning) showCircleNotifications(circleNotificationBook.record(events))
                 }

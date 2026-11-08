@@ -14,6 +14,13 @@ sealed interface AGChannelFrame {
 
     data class MemberJoined(val member: AGMember) : AGChannelFrame
 
+    /** The member stopped or started sending its location; [lastSeen] only when it stopped. */
+    data class MemberPresence(
+        val memberId: String,
+        val online: Boolean,
+        val lastSeen: LocalDateTime?,
+    ) : AGChannelFrame
+
     data class MemberLeft(val memberId: String) : AGChannelFrame
 
     data class MemberUpdated(val memberId: String, val isAGAdmin: Boolean) : AGChannelFrame

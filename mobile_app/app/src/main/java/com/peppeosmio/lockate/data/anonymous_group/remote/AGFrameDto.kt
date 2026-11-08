@@ -1,5 +1,6 @@
 package com.peppeosmio.lockate.data.anonymous_group.remote
 
+import kotlinx.datetime.LocalDateTime
 import kotlinx.serialization.Serializable
 
 /** Mirrors the backend's AGFrameDto: only the fields of the frame's [type] are set. */
@@ -14,6 +15,8 @@ data class AGFrameDto(
     val isAGAdmin: Boolean? = null,
     val circle: CircleDto? = null,
     val circleId: String? = null,
+    val online: Boolean? = null,
+    val lastSeen: LocalDateTime? = null,
 ) {
     companion object {
         const val SNAPSHOT = "snapshot"
@@ -23,5 +26,6 @@ data class AGFrameDto(
         const val CIRCLE_UPSERTED = "circle.upserted"
         const val CIRCLE_DELETED = "circle.deleted"
         const val CIRCLE_EVENT = "circle.event"
+        const val MEMBER_PRESENCE = "member.presence"
     }
 }

@@ -112,7 +112,8 @@ class CirclesViewModel(private val anonymousGroupService: AnonymousGroupService)
                 }
 
             is AGChannelFrame.CircleEvent,
-            is AGChannelFrame.MemberUpdated -> Unit
+            is AGChannelFrame.MemberUpdated,
+            is AGChannelFrame.MemberPresence -> Unit
         }
     }
 

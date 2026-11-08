@@ -306,7 +306,8 @@ class AGDetailsViewModel(
                 }
             }
 
-            is AGChannelFrame.CircleEvent -> Unit
+            is AGChannelFrame.CircleEvent,
+            is AGChannelFrame.MemberPresence -> Unit
 
             is AGChannelFrame.MemberJoined ->
                 _state.update {
