@@ -20,7 +20,7 @@ class SettingsViewModel(
 
     private val _state = MutableStateFlow(SettingsState())
     val state: StateFlow<SettingsState> = _state.asStateFlow()
-    private val _navigateBackEvents = Channel<Unit>()
+    private val _navigateBackEvents = Channel<Unit>(Channel.BUFFERED)
     val navigateBackEvents = _navigateBackEvents.receiveAsFlow()
 
     init {

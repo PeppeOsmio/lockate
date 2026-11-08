@@ -22,10 +22,10 @@ class ConnectionSettingsViewModel(
 
     private val _state = MutableStateFlow(ConnectionSettingsState())
     val state: StateFlow<ConnectionSettingsState> = _state
-    private val _snackbarEvents = Channel<SnackbarErrorMessage>()
+    private val _snackbarEvents = Channel<SnackbarErrorMessage>(Channel.BUFFERED)
     val snackbarEvents = _snackbarEvents.receiveAsFlow()
 
-    private val _navigateHomeEvents = Channel<Unit>()
+    private val _navigateHomeEvents = Channel<Unit>(Channel.BUFFERED)
     val navigateHomeEvents = _navigateHomeEvents.receiveAsFlow()
 
     fun getInitialData(initialConnectionSettingsId: Long?) {

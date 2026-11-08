@@ -27,9 +27,9 @@ class JoinAnonymousGroupViewModel(
 ) : ViewModel() {
     private val _state = MutableStateFlow(JoinAnonymousGroupState())
     val state = _state.asStateFlow()
-    private val _snackbarEvents = Channel<SnackbarErrorMessage>()
+    private val _snackbarEvents = Channel<SnackbarErrorMessage>(Channel.BUFFERED)
     val snackbarEvents = _snackbarEvents.receiveAsFlow()
-    private val _navigateBackEvents = Channel<Unit>()
+    private val _navigateBackEvents = Channel<Unit>(Channel.BUFFERED)
     val navigateBackEvents = _navigateBackEvents.receiveAsFlow()
     private var joinJob: Job? = null
 

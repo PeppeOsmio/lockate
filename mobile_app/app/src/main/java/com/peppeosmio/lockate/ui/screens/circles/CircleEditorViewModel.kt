@@ -81,9 +81,9 @@ class CircleEditorViewModel(
 ) : ViewModel() {
     private val _state = MutableStateFlow(CircleEditorState())
     val state = _state.asStateFlow()
-    private val _snackbarEvents = Channel<SnackbarErrorMessage>()
+    private val _snackbarEvents = Channel<SnackbarErrorMessage>(Channel.BUFFERED)
     val snackbarEvents = _snackbarEvents.receiveAsFlow()
-    private val _navigateBackEvents = Channel<Unit>()
+    private val _navigateBackEvents = Channel<Unit>(Channel.BUFFERED)
     val navigateBackEvents = _navigateBackEvents.receiveAsFlow()
     // conflated so that a tap made before the map starts collecting isn't lost
     private val _cameraEvents = Channel<Coordinates>(Channel.CONFLATED)

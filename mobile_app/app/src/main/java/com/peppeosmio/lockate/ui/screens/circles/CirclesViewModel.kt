@@ -33,7 +33,7 @@ data class CirclesScreenState(
 class CirclesViewModel(private val anonymousGroupService: AnonymousGroupService) : ViewModel() {
     private val _state = MutableStateFlow(CirclesScreenState())
     val state = _state.asStateFlow()
-    private val _snackbarEvents = Channel<SnackbarErrorMessage>()
+    private val _snackbarEvents = Channel<SnackbarErrorMessage>(Channel.BUFFERED)
     val snackbarEvents = _snackbarEvents.receiveAsFlow()
 
     private var group: AnonymousGroup? = null

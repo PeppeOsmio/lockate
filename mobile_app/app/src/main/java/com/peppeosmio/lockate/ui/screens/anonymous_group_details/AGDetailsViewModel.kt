@@ -52,7 +52,7 @@ class AGDetailsViewModel(
 
     private val _state = MutableStateFlow(AGDetailsState())
     val state = _state.asStateFlow()
-    private val _snackbarEvents = Channel<SnackbarErrorMessage>()
+    private val _snackbarEvents = Channel<SnackbarErrorMessage>(Channel.BUFFERED)
     val snackbarEvents = _snackbarEvents.receiveAsFlow()
 
     // conflated so that a camera move requested before the map starts collecting isn't lost
