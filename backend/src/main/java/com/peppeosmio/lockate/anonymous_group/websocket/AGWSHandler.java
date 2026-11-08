@@ -4,6 +4,7 @@ import com.peppeosmio.lockate.anonymous_group.dto.AGCircleEventReqDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGFrameDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGMemberMessageReqDto;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
+import com.peppeosmio.lockate.anonymous_group.presence.AGPresenceService;
 import com.peppeosmio.lockate.anonymous_group.security.AGMemberAuthentication;
 import com.peppeosmio.lockate.anonymous_group.service.AnonymousGroupService;
 import com.peppeosmio.lockate.common.exceptions.InvalidEncryptedDataException;
@@ -42,12 +43,14 @@ public class AGWSHandler extends TextWebSocketHandler {
   public static final CloseStatus GROUP_DELETED = new CloseStatus(4404, "group_deleted");
   public static final String MEMBER_LOCATION = "member.location";
   public static final String CIRCLE_EVENT = "circle.event";
+  public static final String MEMBER_PAUSED = "member.paused";
   private static final int SEND_TIME_LIMIT_MS = 10_000;
   private static final int SEND_BUFFER_LIMIT_BYTES = 512 * 1024;
 
   private final ObjectMapper objectMapper;
   private final AnonymousGroupService anonymousGroupService;
   private final RedisService redisService;
+  private final AGPresenceService presenceService;
   private final TTLMap<UUID, LocalDateTime> lastSavedLocationsCache =
       new TTLMap<>(Duration.ofMinutes(5));
   private final Map<String, Connection> connections = new ConcurrentHashMap<>();
@@ -55,10 +58,12 @@ public class AGWSHandler extends TextWebSocketHandler {
   public AGWSHandler(
       ObjectMapper objectMapper,
       AnonymousGroupService anonymousGroupService,
-      RedisService redisService) {
+      RedisService redisService,
+      AGPresenceService presenceService) {
     this.objectMapper = objectMapper;
     this.anonymousGroupService = anonymousGroupService;
     this.redisService = redisService;
+    this.presenceService = presenceService;
   }
 
   /**
@@ -137,7 +142,7 @@ public class AGWSHandler extends TextWebSocketHandler {
             session.sendMessage(new TextMessage(message));
           }
         }
-        case AGFrameDto.CIRCLE_EVENT -> {
+        case AGFrameDto.CIRCLE_EVENT, AGFrameDto.MEMBER_PRESENCE -> {
           if (!ownMemberId.equals(frame.memberId())) {
             session.sendMessage(new TextMessage(message));
           }
@@ -190,7 +195,9 @@ public class AGWSHandler extends TextWebSocketHandler {
           if (timestampSaved != null) {
             lastSavedLocationsCache.put(agMemberAuthentication.getId(), timestampSaved);
           }
+          presenceService.onLocation(anonymousGroupId, agMemberAuthentication.getId());
         }
+        case MEMBER_PAUSED -> presenceService.pause(anonymousGroupId, agMemberAuthentication.getId());
         case CIRCLE_EVENT ->
             anonymousGroupService.relayCircleEvent(
                 anonymousGroupId,

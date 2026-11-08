@@ -25,6 +25,7 @@ import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotFoundExcepti
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.mapper.AGMemberMapper;
 import com.peppeosmio.lockate.anonymous_group.mapper.AnonymousGroupMapper;
+import com.peppeosmio.lockate.anonymous_group.presence.AGPresenceService;
 import com.peppeosmio.lockate.anonymous_group.repository.AGCircleRepository;
 import com.peppeosmio.lockate.anonymous_group.repository.AGLocationRepository;
 import com.peppeosmio.lockate.anonymous_group.repository.AGMemberRepository;
@@ -71,6 +72,7 @@ class AnonymousGroupServiceTest {
   @Mock private ObjectMapper objectMapper;
   @Mock private AnonymousGroupMapper anonymousGroupMapper;
   @Mock private AGMemberMapper agMemberMapper;
+  @Mock private AGPresenceService presenceService;
 
   private AnonymousGroupService service;
 
@@ -90,7 +92,8 @@ class AnonymousGroupServiceTest {
             inviteService,
             objectMapper,
             anonymousGroupMapper,
-            agMemberMapper);
+            agMemberMapper,
+            presenceService);
 
     groupEntity =
         new AnonymousGroupEntity(
@@ -377,6 +380,7 @@ class AnonymousGroupServiceTest {
     service.deleteMember(groupId, authentication);
 
     verify(agMemberRepository).deleteById(memberId);
+    verify(presenceService).forget(groupId, memberId);
   }
 
   @Test
@@ -1111,6 +1115,7 @@ class AnonymousGroupServiceTest {
     service.deleteMemberForAdmin(groupId, memberId);
 
     verify(agMemberRepository).deleteById(memberId);
+    verify(presenceService).forget(groupId, memberId);
   }
 
   @Test

@@ -19,6 +19,7 @@ import com.peppeosmio.lockate.anonymous_group.dto.AGFrameDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGMemberMessageReqDto;
 import com.peppeosmio.lockate.anonymous_group.dto.CircleEventDto;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
+import com.peppeosmio.lockate.anonymous_group.presence.AGPresenceService;
 import com.peppeosmio.lockate.anonymous_group.security.AGMemberAuthentication;
 import com.peppeosmio.lockate.anonymous_group.service.AnonymousGroupService;
 import com.peppeosmio.lockate.common.dto.EncryptedDataDto;
@@ -48,6 +49,7 @@ class AGWSHandlerTest {
 
   @Mock private AnonymousGroupService anonymousGroupService;
   @Mock private RedisService redisService;
+  @Mock private AGPresenceService presenceService;
   @Mock private WebSocketSession session;
   @Mock private MessageListener redisListener;
 
@@ -59,7 +61,7 @@ class AGWSHandlerTest {
 
   @BeforeEach
   void setUp() {
-    handler = new AGWSHandler(objectMapper, anonymousGroupService, redisService);
+    handler = new AGWSHandler(objectMapper, anonymousGroupService, redisService, presenceService);
     sessionAttributes = new HashMap<>();
     sessionAttributes.put("anonymousGroupId", groupId);
     sessionAttributes.put("authentication", new AGMemberAuthentication(memberId));
@@ -235,6 +237,25 @@ class AGWSHandlerTest {
   }
 
   @Test
+  void redisFrame_ownPresence_isNotSentBack() throws Exception {
+    var consumer = connect();
+
+    consumer.accept(json(AGFrameDto.memberPresence(memberId, true, null)));
+
+    assertThat(sentPayloads()).hasSize(1);
+  }
+
+  @Test
+  void redisFrame_otherPresence_isRelayedUnchanged() throws Exception {
+    var consumer = connect();
+    var frame = json(AGFrameDto.memberPresence(UUID.randomUUID(), false, LocalDateTime.now()));
+
+    consumer.accept(frame);
+
+    assertThat(sentPayloads()).containsExactly(sentPayloads().get(0), frame);
+  }
+
+  @Test
   void redisFrame_otherCircleEvent_isRelayedUnchanged() throws Exception {
     var consumer = connect();
     var frame = json(circleEventFrom(UUID.randomUUID()));
@@ -379,6 +400,26 @@ class AGWSHandlerTest {
     verify(anonymousGroupService).relayMemberMessage(eq(groupId), any(), captor.capture(), any());
     assertThat(captor.getValue())
         .isEqualTo(new AGMemberMessageReqDto(blob("coord"), blob("activity")));
+    verify(presenceService).onLocation(groupId, memberId);
+  }
+
+  @Test
+  void handleTextMessage_memberPaused_pausesThePresence() throws Exception {
+    handler.handleTextMessage(
+        session, new TextMessage(objectMapper.writeValueAsString(Map.of("type", "member.paused"))));
+
+    verify(presenceService).pause(groupId, memberId);
+    verify(session, never()).close(any());
+  }
+
+  @Test
+  void handleTextMessage_invalidLocation_doesntTouchThePresence() throws Exception {
+    when(anonymousGroupService.relayMemberMessage(eq(groupId), any(), any(), any()))
+        .thenThrow(new InvalidEncryptedDataException());
+
+    handler.handleTextMessage(session, locationMessage());
+
+    verifyNoInteractions(presenceService);
   }
 
   @Test

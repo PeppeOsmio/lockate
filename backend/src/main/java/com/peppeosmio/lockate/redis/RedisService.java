@@ -3,20 +3,28 @@ package com.peppeosmio.lockate.redis;
 import jakarta.annotation.PreDestroy;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.task.SimpleAsyncTaskExecutor;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.connection.MessageListener;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.listener.ChannelTopic;
+import org.springframework.data.redis.listener.PatternTopic;
 import org.springframework.data.redis.listener.RedisMessageListenerContainer;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 
+@Slf4j
 @Service
 public class RedisService {
+  private static final String NOTIFY_KEYSPACE_EVENTS = "notify-keyspace-events";
 
   private final RedisTemplate<String, String> redisTemplate;
   private final RedisMessageListenerContainer container;
@@ -65,6 +73,16 @@ public class RedisService {
     return Boolean.TRUE.equals(redisTemplate.opsForValue().setIfAbsent(key, value, ttl));
   }
 
+  /** Sets the value and returns the one it replaced, empty when the key didn't exist */
+  public Optional<String> setAndGet(String key, String value, Duration ttl) {
+    return Optional.ofNullable(redisTemplate.opsForValue().setGet(key, value, ttl));
+  }
+
+  /** Runs a Lua script atomically; empty when it returns nil */
+  public Optional<String> runScript(String script, List<String> keys) {
+    return Optional.ofNullable(redisTemplate.execute(RedisScript.of(script, String.class), keys));
+  }
+
   /** Atomically reads and deletes the key, so only one caller can ever get the value */
   public Optional<String> getAndDelete(String key) {
     return Optional.ofNullable(redisTemplate.opsForValue().getAndDelete(key));
@@ -95,6 +113,43 @@ public class RedisService {
         };
     container.addMessageListener(listener, new ChannelTopic(channel));
     return listener;
+  }
+
+  public void subscribePattern(String pattern, Consumer<String> onMessage) {
+    container.addMessageListener(
+        (message, p) -> onMessage.accept(new String(message.getBody(), StandardCharsets.UTF_8)),
+        new PatternTopic(pattern));
+  }
+
+  /**
+   * Turns on the events of expired keys, keeping the other events already enabled. Done here
+   * rather than in the Valkey config, so a deployment that only updates the backend still gets
+   * them.
+   */
+  public void enableExpiredEvents() {
+    try {
+      redisTemplate.execute(
+          (RedisCallback<Void>)
+              connection -> {
+                var current =
+                    connection
+                        .serverCommands()
+                        .getConfig(NOTIFY_KEYSPACE_EVENTS)
+                        .getProperty(NOTIFY_KEYSPACE_EVENTS, "");
+                var flags = new StringBuilder(current);
+                if (!current.contains("E")) {
+                  flags.append('E');
+                }
+                // "A" is every event class, expired included
+                if (!current.contains("x") && !current.contains("A")) {
+                  flags.append('x');
+                }
+                connection.serverCommands().setConfig(NOTIFY_KEYSPACE_EVENTS, flags.toString());
+                return null;
+              });
+    } catch (DataAccessException e) {
+      log.warn("[Redis] Can't enable the expired keys events: " + e.getMessage());
+    }
   }
 
   public void unsubscribe(String channel, MessageListener listener) {
