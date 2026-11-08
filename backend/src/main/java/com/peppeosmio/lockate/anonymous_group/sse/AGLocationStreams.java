@@ -23,8 +23,9 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * The other members' locations, streamed to a member only while it looks at the map: a {@code
- * snapshot} event, the same as the socket's (members with their last saved record, circles), then
- * a {@code location} event for each message. The stream ends when the member is removed or the group deleted.
+ * snapshot} event, the same as the socket's (members with their last saved record, circles), then a
+ * {@code location} event for each message. The stream ends when the member is removed or the group
+ * deleted.
  */
 @Slf4j
 @Component
