@@ -7,4 +7,5 @@ data class AGJoinResDto(
     val anonymousGroup: EncryptedAGDto,
     val authenticatedMemberInfo: AGMemberWithTokenDto,
     val members: List<EncryptedAGMemberDto>,
+    val circles: List<CircleDto>,
 )

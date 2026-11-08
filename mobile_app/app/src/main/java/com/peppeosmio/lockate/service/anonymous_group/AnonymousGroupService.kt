@@ -15,6 +15,7 @@ import com.peppeosmio.lockate.data.anonymous_group.remote.AGFrameDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGJoinReqDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGJoinResDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGMemberMessageReqDto
+import com.peppeosmio.lockate.data.anonymous_group.remote.CircleDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.CircleUpsertReqDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.EncryptedAGMemberDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.MemberLocationDto
@@ -534,25 +535,8 @@ class AnonymousGroupService(
                     agMember = agMember,
                     anonymousGroupInternalId = 0,
                 )
-            // the members already in the group, so we see them before the socket's snapshot
-            val otherMembers =
-                body.members
-                    .filter { it.id != agMember.id }
-                    .mapDecryptable(
-                        onUndecryptable = {
-                            Log.e(
-                                "",
-                                "Skipped member ${it.id} of ${body.anonymousGroup.id}: can't decrypt it",
-                            )
-                        }
-                    ) {
-                        AGMemberMapper.dtoToDomain(
-                            it,
-                            payloadCodec,
-                            groupKey,
-                            body.anonymousGroup.id,
-                        )
-                    }
+            val snapshot =
+                decryptSnapshot(body.anonymousGroup.id, groupKey, body.members, body.circles)
             val anonymousGroup =
                 AnonymousGroup(
                     internalId = 0,
@@ -579,9 +563,12 @@ class AnonymousGroupService(
                         ),
                     agMemberEntities =
                         listOf(agMemberEntity) +
-                            otherMembers.map {
-                                AGMemberMapper.domainToEntity(it, anonymousGroupInternalId = 0)
-                            },
+                            snapshot.members
+                                .filter { it.id != agMember.id }
+                                .map {
+                                    AGMemberMapper.domainToEntity(it, anonymousGroupInternalId = 0)
+                                },
+                    circles = snapshot.circles,
                 )
             _events.tryEmit(
                 AnonymousGroupEvent.NewAnonymousGroupEvent(
@@ -700,8 +687,8 @@ class AnonymousGroupService(
     private val groupLocks = ConcurrentHashMap<String, Mutex>()
 
     /**
-     * The socket's frames are applied and emitted under it, so a replayed snapshot can't overtake
-     * one of them.
+     * What the server sends about a group is applied and emitted under it, so a snapshot from the
+     * locations stream or a replayed one can't overtake a frame of the socket.
      */
     private fun groupLock(anonymousGroupId: String) =
         groupLocks.getOrPut(anonymousGroupId) { Mutex() }
@@ -1113,6 +1100,76 @@ class AnonymousGroupService(
         }
     }
 
+    private suspend fun decryptSnapshot(
+        anonymousGroupId: String,
+        key: ByteArray,
+        members: List<EncryptedAGMemberDto>,
+        circles: List<CircleDto>,
+    ) =
+        AGChannelFrame.Snapshot(
+            members =
+                members.mapDecryptable(
+                    onUndecryptable = {
+                        Log.e("", "Skipped member ${it.id} of $anonymousGroupId: can't decrypt it")
+                    }
+                ) {
+                    AGMemberMapper.dtoToDomain(it, payloadCodec, key, anonymousGroupId)
+                },
+            circles =
+                circles.mapDecryptable(
+                    onUndecryptable = {
+                        Log.e("", "Skipped circle ${it.id} of $anonymousGroupId: can't decrypt it")
+                    }
+                ) {
+                    CircleMapper.dtoToDomain(it, payloadCodec, key, anonymousGroupId)
+                },
+        )
+
+    /**
+     * Makes a snapshot, of the socket or of the locations stream, what the database holds of the
+     * group. A member's position saved since is newer than the server's last saved one, so it
+     * stays.
+     */
+    private suspend fun saveSnapshot(
+        anonymousGroup: AnonymousGroup,
+        members: List<EncryptedAGMemberDto>,
+        circles: List<CircleDto>,
+    ): AGChannelFrame.Snapshot {
+        val internalId = anonymousGroup.internalId
+        val decrypted = decryptSnapshot(anonymousGroup.id, anonymousGroup.key, members, circles)
+        val knownLocations =
+            anonymousGroupDao.listAGMembers(internalId).associate {
+                it.id to AGMemberMapper.entityToDomain(it).lastLocationRecord
+            }
+        val snapshot =
+            decrypted.copy(
+                members =
+                    decrypted.members.map { member ->
+                        val known = knownLocations[member.id] ?: return@map member
+                        val record = member.lastLocationRecord
+                        if (record == null || known.timestamp > record.timestamp) {
+                            member.copy(lastLocationRecord = known)
+                        } else member
+                    }
+            )
+        snapshot.members
+            .firstOrNull { it.id == anonymousGroup.memberId }
+            ?.let { me ->
+                if (me.isAGAdmin != anonymousGroup.memberIsAGAdmin) {
+                    anonymousGroupDao.setAGMemberIsAGAdminSelf(internalId, me.isAGAdmin)
+                }
+            }
+        anonymousGroupDao.setAGMembers(
+            anonymousGroupInternalId = internalId,
+            agMemberEntities =
+                snapshot.members.map {
+                    AGMemberMapper.domainToEntity(it, anonymousGroupInternalId = internalId)
+                },
+        )
+        anonymousGroupDao.syncCircles(internalId, snapshot.circles)
+        return snapshot
+    }
+
     private suspend fun decryptMember(
         anonymousGroup: AnonymousGroup,
         dto: EncryptedAGMemberDto,
@@ -1133,70 +1190,10 @@ class AnonymousGroupService(
         val frame: AGChannelFrame =
             try {
                 when (dto.type) {
-                    AGFrameDto.SNAPSHOT -> {
-                        // the socket carries no positions: keep those the locations stream saved
-                        val knownLocations =
-                            anonymousGroupDao.listAGMembers(internalId).associate {
-                                it.id to AGMemberMapper.entityToDomain(it).lastLocationRecord
-                            }
-                        val members =
-                            dto.members!!
-                                .mapDecryptable(
-                                    onUndecryptable = {
-                                        Log.e(
-                                            "",
-                                            "Skipped member ${it.id} of ${anonymousGroup.id}: can't decrypt it",
-                                        )
-                                    }
-                                ) {
-                                    decryptMember(anonymousGroup, it)
-                                }
-                                .map {
-                                    it.copy(
-                                        lastLocationRecord =
-                                            it.lastLocationRecord ?: knownLocations[it.id]
-                                    )
-                                }
-                        val circles =
-                            dto.circles!!.mapDecryptable(
-                                onUndecryptable = {
-                                    Log.e(
-                                        "",
-                                        "Skipped circle ${it.id} of ${anonymousGroup.id}: can't decrypt it",
-                                    )
-                                }
-                            ) {
-                                CircleMapper.dtoToDomain(
-                                    it,
-                                    payloadCodec,
-                                    anonymousGroup.key,
-                                    anonymousGroup.id,
-                                )
-                            }
-                        members
-                            .firstOrNull { it.id == anonymousGroup.memberId }
-                            ?.let { me ->
-                                if (me.isAGAdmin != anonymousGroup.memberIsAGAdmin) {
-                                    anonymousGroupDao.setAGMemberIsAGAdminSelf(
-                                        internalId,
-                                        me.isAGAdmin,
-                                    )
-                                }
-                            }
-                        anonymousGroupDao.setAGMembers(
-                            anonymousGroupInternalId = internalId,
-                            agMemberEntities =
-                                members.map {
-                                    AGMemberMapper.domainToEntity(
-                                        it,
-                                        anonymousGroupInternalId = internalId,
-                                    )
-                                },
-                        )
-                        anonymousGroupDao.syncCircles(internalId, circles)
-                        tracker.replaceCircles(circles)
-                        AGChannelFrame.Snapshot(members, circles)
-                    }
+                    AGFrameDto.SNAPSHOT ->
+                        saveSnapshot(anonymousGroup, dto.members!!, dto.circles!!).also {
+                            tracker.replaceCircles(it.circles)
+                        }
 
                     AGFrameDto.MEMBER_JOINED -> {
                         val member = decryptMember(anonymousGroup, dto.member!!)
@@ -1283,9 +1280,9 @@ class AnonymousGroupService(
 
     /**
      * Streams the positions of the group's members for as long as the caller is suspended here:
-     * first the last saved one of each, then the live ones. Only the open map holds it, so the
-     * phone receives the others' positions only while someone looks at them. The positions are
-     * saved locally before [onLocations] gets them.
+     * first a snapshot of the group, emitted on [groupFrames] like the socket's, then the live
+     * positions. Only the open map holds it, so the phone receives the others' live positions only
+     * while someone looks at them. Everything is saved locally before it is handed over.
      */
     suspend fun holdLocationStream(
         anonymousGroup: AnonymousGroup,
@@ -1316,21 +1313,38 @@ class AnonymousGroupService(
                         retries = 0
                         onState(ChannelState.Connected)
                         incoming.collect { event ->
-                            val locations =
-                                when (event.event) {
-                                    "snapshot" ->
-                                        apiJson.decodeFromString<List<MemberLocationDto>>(
-                                            event.data!!
-                                        )
-                                    "location" ->
-                                        listOf(
-                                            apiJson.decodeFromString<MemberLocationDto>(
-                                                event.data!!
+                            when (event.event) {
+                                "snapshot" -> {
+                                    val dto = apiJson.decodeFromString<AGFrameDto>(event.data!!)
+                                    groupLock(anonymousGroup.id).withLock {
+                                        val snapshot =
+                                            saveSnapshot(
+                                                anonymousGroup,
+                                                dto.members!!,
+                                                dto.circles!!,
+                                            )
+                                        _groupFrames.emit(
+                                            GroupFrame(
+                                                anonymousGroup.internalId,
+                                                anonymousGroup.id,
+                                                snapshot,
                                             )
                                         )
-                                    else -> return@collect
+                                    }
                                 }
-                            onLocations(saveLocations(anonymousGroup, locations))
+
+                                "location" ->
+                                    onLocations(
+                                        saveLocations(
+                                            anonymousGroup,
+                                            listOf(
+                                                apiJson.decodeFromString<MemberLocationDto>(
+                                                    event.data!!
+                                                )
+                                            ),
+                                        )
+                                    )
+                            }
                         }
                     }
                     throw IOException("Locations stream closed by the server")

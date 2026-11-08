@@ -23,12 +23,14 @@ interface AnonymousGroupDao {
     suspend fun createAGWithMembers(
         agEntity: AnonymousGroupEntity,
         agMemberEntities: List<AGMemberEntity>,
+        circles: List<Circle> = emptyList(),
     ): Long {
         val anonymousGroupInternalId = insertAnonymousGroup(agEntity)
         val agMembersWithAGId = agMemberEntities.map {
             it.copy(anonymousGroupInternalId = anonymousGroupInternalId)
         }
         insertAGMembers(agMembersWithAGId)
+        circles.forEach { upsertCircle(anonymousGroupInternalId, it) }
         return anonymousGroupInternalId
     }
 
