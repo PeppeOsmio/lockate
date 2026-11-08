@@ -39,7 +39,7 @@ public class AGWSHandshakeInterceptor implements HandshakeInterceptor {
     UUID anonymousGroupId;
 
     try {
-      anonymousGroupId = UUID.fromString(segments[4]);
+      anonymousGroupId = UUID.fromString(segments[segments.length - 1]);
       attributes.put("anonymousGroupId", anonymousGroupId);
     } catch (Exception e) {
       response.setStatusCode(HttpStatus.BAD_REQUEST);

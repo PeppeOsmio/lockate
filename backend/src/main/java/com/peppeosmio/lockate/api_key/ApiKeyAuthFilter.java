@@ -30,7 +30,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
       HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
       throws ServletException, IOException {
     var path = request.getRequestURI();
-    var whitelistPaths = List.of("/api/api-key/required", "/api/health");
+    var whitelistPaths = List.of("/api/v1/api-key/required", "/api/v1/health");
     if (whitelistPaths.contains(path)) {
       filterChain.doFilter(request, response);
       return;

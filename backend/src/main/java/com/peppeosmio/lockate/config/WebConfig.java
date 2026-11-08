@@ -27,14 +27,14 @@ public class WebConfig implements WebMvcConfigurer {
   public void addInterceptors(InterceptorRegistry registry) {
     registry
         .addInterceptor(agMemberAuthInterceptor)
-        .addPathPatterns("/api/anonymous-groups/**"); // or restrict paths
-    registry.addInterceptor(adminAuthInterceptor).addPathPatterns("/api/admin/**");
+        .addPathPatterns("/api/v1/anonymous-groups/**"); // or restrict paths
+    registry.addInterceptor(adminAuthInterceptor).addPathPatterns("/api/v1/admin/**");
   }
 
   @Override
   public void addCorsMappings(CorsRegistry registry) {
     registry
-        .addMapping("/api/admin/**")
+        .addMapping("/api/v1/admin/**")
         .allowedOrigins(adminUiOrigin)
         .allowedMethods("GET", "POST", "PATCH", "DELETE")
         .allowedHeaders("X-API-KEY", "Content-Type");

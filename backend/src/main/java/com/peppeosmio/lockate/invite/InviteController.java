@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.*;
  * proves it is the one who answered the invite with the claim token it got back.
  */
 @RestController
-@RequestMapping("/api/invites/{nameplate}")
+@RequestMapping("/api/v1/invites/{nameplate}")
 @Validated
 public class InviteController {
   private static final String CLAIM_TOKEN_HEADER = "X-Invite-Claim";

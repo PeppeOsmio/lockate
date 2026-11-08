@@ -55,7 +55,7 @@ class AGWSHandshakeInterceptorTest {
     var memberId = UUID.randomUUID();
     var authentication =
         new com.peppeosmio.lockate.anonymous_group.security.AGMemberAuthentication(memberId);
-    withPath("/api/ws/anonymous-groups/" + groupId + "", "AGMember " + memberId + " token");
+    withPath("/api/v1/ws/anonymous-groups/" + groupId + "", "AGMember " + memberId + " token");
     when(agMemberAuthenticator.authenticate(groupId, "AGMember " + memberId + " token"))
         .thenReturn(authentication);
 
@@ -68,7 +68,7 @@ class AGWSHandshakeInterceptorTest {
 
   @Test
   void beforeHandshake_malformedGroupIdSegment_returns400() throws Exception {
-    withPath("/api/ws/anonymous-groups/not-a-uuid", "AGMember token");
+    withPath("/api/v1/ws/anonymous-groups/not-a-uuid", "AGMember token");
 
     var result = interceptor.beforeHandshake(request, response, wsHandler, attributes);
 
@@ -78,7 +78,7 @@ class AGWSHandshakeInterceptorTest {
 
   @Test
   void beforeHandshake_tooShortPath_returns400() throws Exception {
-    when(request.getURI()).thenReturn(URI.create("http://localhost/api/ws"));
+    when(request.getURI()).thenReturn(URI.create("http://localhost/api/v1/ws"));
 
     var result = interceptor.beforeHandshake(request, response, wsHandler, attributes);
 
@@ -89,7 +89,7 @@ class AGWSHandshakeInterceptorTest {
   @Test
   void beforeHandshake_agNotFoundException_returns404() throws Exception {
     var groupId = UUID.randomUUID();
-    withPath("/api/ws/anonymous-groups/" + groupId + "", "AGMember token");
+    withPath("/api/v1/ws/anonymous-groups/" + groupId + "", "AGMember token");
     when(agMemberAuthenticator.authenticate(any(), any()))
         .thenThrow(new AGNotFoundException(groupId));
 
@@ -102,7 +102,7 @@ class AGWSHandshakeInterceptorTest {
   @Test
   void beforeHandshake_unauthorizedException_returns401() throws Exception {
     var groupId = UUID.randomUUID();
-    withPath("/api/ws/anonymous-groups/" + groupId + "", "AGMember token");
+    withPath("/api/v1/ws/anonymous-groups/" + groupId + "", "AGMember token");
     when(agMemberAuthenticator.authenticate(any(), any())).thenThrow(new UnauthorizedException());
 
     var result = interceptor.beforeHandshake(request, response, wsHandler, attributes);
@@ -114,7 +114,7 @@ class AGWSHandshakeInterceptorTest {
   @Test
   void beforeHandshake_unexpectedException_returns500() throws Exception {
     var groupId = UUID.randomUUID();
-    withPath("/api/ws/anonymous-groups/" + groupId + "", "AGMember token");
+    withPath("/api/v1/ws/anonymous-groups/" + groupId + "", "AGMember token");
     when(agMemberAuthenticator.authenticate(any(), any())).thenThrow(new RuntimeException("boom"));
 
     var result = interceptor.beforeHandshake(request, response, wsHandler, attributes);

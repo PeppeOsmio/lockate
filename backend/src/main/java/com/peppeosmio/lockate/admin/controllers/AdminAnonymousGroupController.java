@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.*;
 
 @SecuredAdmin
 @RestController
-@RequestMapping("/api/admin/anonymous-groups")
+@RequestMapping("/api/v1/admin/anonymous-groups")
 public class AdminAnonymousGroupController {
 
   private final AnonymousGroupService anonymousGroupService;

@@ -454,6 +454,75 @@ class AGWSHandlerTest {
     verifyNoInteractions(anonymousGroupService);
   }
 
+  private TextMessage pingMessage() throws Exception {
+    return new TextMessage(objectMapper.writeValueAsString(Map.of("type", "ping")));
+  }
+
+  @Test
+  void handleTextMessage_ping_answersPongAndLeavesThePresenceAlone() throws Exception {
+    connect();
+
+    handler.handleTextMessage(session, pingMessage());
+
+    var sent = sentPayloads();
+    assertThat(sent).hasSize(2);
+    assertThat(objectMapper.readValue(sent.get(1), AGFrameDto.class).type())
+        .isEqualTo(AGFrameDto.PONG);
+    verifyNoInteractions(presenceService);
+    verify(session, never()).close(any());
+  }
+
+  @Test
+  void closeIdleConnections_silentPastTheTimeout_closesAndUnsubscribes() throws Exception {
+    handler.now = () -> 0L;
+    connect();
+
+    handler.now = () -> AGWSHandler.IDLE_TIMEOUT_MILLIS + 1;
+    handler.closeIdleConnections();
+
+    verify(session).close(CloseStatus.SESSION_NOT_RELIABLE);
+    verify(redisService).unsubscribe("ag-" + groupId + "-events", redisListener);
+  }
+
+  @Test
+  void closeIdleConnections_withinTheTimeout_keepsTheConnection() throws Exception {
+    handler.now = () -> 0L;
+    connect();
+
+    handler.now = () -> AGWSHandler.IDLE_TIMEOUT_MILLIS;
+    handler.closeIdleConnections();
+
+    verify(session, never()).close(any());
+    verify(redisService, never()).unsubscribe(any(), any());
+  }
+
+  @Test
+  void closeIdleConnections_anyFrameRefreshesTheDeadline() throws Exception {
+    handler.now = () -> 0L;
+    connect();
+    handler.now = () -> 100_000L;
+    handler.handleTextMessage(
+        session, new TextMessage(objectMapper.writeValueAsString(Map.of("type", "member.paused"))));
+
+    handler.now = () -> AGWSHandler.IDLE_TIMEOUT_MILLIS + 1;
+    handler.closeIdleConnections();
+
+    verify(session, never()).close(any());
+  }
+
+  @Test
+  void closeIdleConnections_closeFails_stillUnsubscribes() throws Exception {
+    handler.now = () -> 0L;
+    connect();
+    doThrow(new java.io.IOException("dead")).when(session).close(any());
+
+    handler.now = () -> AGWSHandler.IDLE_TIMEOUT_MILLIS + 1;
+    handler.closeIdleConnections();
+    handler.closeIdleConnections();
+
+    verify(redisService, times(1)).unsubscribe("ag-" + groupId + "-events", redisListener);
+  }
+
   @Test
   void handleTextMessage_missingType_closesWithBadData() throws Exception {
     handler.handleTextMessage(

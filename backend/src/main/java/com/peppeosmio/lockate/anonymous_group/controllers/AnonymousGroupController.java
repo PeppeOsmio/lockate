@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.*;
 
 @Slf4j
 @RestController
-@RequestMapping("/api/anonymous-groups")
+@RequestMapping("/api/v1/anonymous-groups")
 @Validated
 public class AnonymousGroupController {
 

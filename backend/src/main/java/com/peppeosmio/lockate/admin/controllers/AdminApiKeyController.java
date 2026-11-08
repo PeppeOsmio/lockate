@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.*;
 
 @SecuredAdmin
 @RestController
-@RequestMapping("/api/admin/api-keys")
+@RequestMapping("/api/v1/admin/api-keys")
 public class AdminApiKeyController {
 
   private final ApiKeyService apiKeyService;
