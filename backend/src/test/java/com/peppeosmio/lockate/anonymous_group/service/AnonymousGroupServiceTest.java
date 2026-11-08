@@ -334,6 +334,19 @@ class AnonymousGroupServiceTest {
   }
 
   @Test
+  void joinWithInvite_returnsTheGroupsCircles() throws Exception {
+    var circle = circleEntity(UUID.randomUUID(), groupEntity, LocalDateTime.now(ZoneOffset.UTC));
+    when(anonymousGroupRepository.findById(groupId)).thenReturn(Optional.of(groupEntity));
+    when(agMemberRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    when(agCircleRepository.findByAnonymousGroupIdOrderByCreatedAtAscIdAsc(groupId))
+        .thenReturn(List.of(circle));
+
+    var result = service.joinWithInvite(groupId, joinReq("token"));
+
+    assertThat(result.circles()).extracting(CircleDto::id).containsExactly(circle.getId());
+  }
+
+  @Test
   void joinWithInvite_invalidToken_createsNoMember() throws Exception {
     when(anonymousGroupRepository.findById(groupId)).thenReturn(Optional.of(groupEntity));
     doThrow(new InvalidJoinTokenException()).when(inviteService).consumeJoinToken(groupId, "bad");
@@ -761,7 +774,7 @@ class AnonymousGroupServiceTest {
   }
 
   @Test
-  void getSnapshot_returnsMembersWithoutLocationsAndCircles() throws Exception {
+  void getSnapshot_returnsMembersWithTheirLastLocationAndCircles() throws Exception {
     var circle = circleEntity(UUID.randomUUID(), groupEntity, LocalDateTime.now(ZoneOffset.UTC));
     var memberDto =
         new AGMemberDto(
@@ -776,43 +789,8 @@ class AnonymousGroupServiceTest {
     var snapshot = service.getSnapshot(groupId);
 
     assertThat(snapshot.type()).isEqualTo(AGFrameDto.SNAPSHOT);
-    assertThat(snapshot.members())
-        .containsExactly(
-            new AGMemberDto(
-                memberDto.id(),
-                memberDto.encryptedName(),
-                memberDto.createdAt(),
-                memberDto.isAGAdmin(),
-                Optional.empty()));
+    assertThat(snapshot.members()).containsExactly(memberDto);
     assertThat(snapshot.circles()).extracting(CircleDto::id).containsExactly(circle.getId());
-  }
-
-  @Test
-  void getLocationSnapshot_returnsTheLastRecordOfTheMembersThatHaveOne() throws Exception {
-    var record = locationRecord();
-    var located =
-        new AGMemberDto(UUID.randomUUID(), encryptedData(), null, false, Optional.of(record));
-    var unlocated =
-        new AGMemberDto(UUID.randomUUID(), encryptedData(), null, false, Optional.empty());
-    var locatedEntity = newMember(located.id(), "t".getBytes(), false, groupEntity);
-    var unlocatedEntity = newMember(unlocated.id(), "t".getBytes(), false, groupEntity);
-    when(anonymousGroupRepository.findById(groupId)).thenReturn(Optional.of(groupEntity));
-    when(agMemberRepository.findMembersWithLastLocation(groupId))
-        .thenReturn(List.of(locatedEntity, unlocatedEntity));
-    when(agMemberMapper.toDto(locatedEntity)).thenReturn(located);
-    when(agMemberMapper.toDto(unlocatedEntity)).thenReturn(unlocated);
-
-    var snapshot = service.getLocationSnapshot(groupId);
-
-    assertThat(snapshot).containsExactly(new MemberLocationDto(located.id(), record));
-  }
-
-  @Test
-  void getLocationSnapshot_missingGroup_throwsAGNotFound() {
-    when(anonymousGroupRepository.findById(groupId)).thenReturn(Optional.empty());
-
-    assertThatThrownBy(() -> service.getLocationSnapshot(groupId))
-        .isInstanceOf(AGNotFoundException.class);
   }
 
   // ---------- relayCircleEvent ----------

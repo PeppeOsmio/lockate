@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.peppeosmio.lockate.anonymous_group.dto.AGFrameDto;
+import com.peppeosmio.lockate.anonymous_group.dto.AGMemberDto;
 import com.peppeosmio.lockate.anonymous_group.dto.LocationRecordDto;
 import com.peppeosmio.lockate.anonymous_group.dto.MemberLocationDto;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
@@ -18,6 +19,7 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -100,20 +102,31 @@ class AGLocationStreamsTest {
     return objectMapper.writeValueAsString(value);
   }
 
-  private RecordingEmitter open(List<MemberLocationDto> snapshot) throws Exception {
+  private RecordingEmitter open(AGFrameDto snapshot) throws Exception {
     when(redisService.subscribe(eq("ag-" + groupId + "-locations"), locations.capture()))
         .thenReturn(locationsListener);
     when(redisService.subscribe(eq("ag-" + groupId + "-events"), events.capture()))
         .thenReturn(eventsListener);
-    when(anonymousGroupService.getLocationSnapshot(groupId)).thenReturn(snapshot);
+    when(anonymousGroupService.getSnapshot(groupId)).thenReturn(snapshot);
     var emitter = new RecordingEmitter();
     streams.open(groupId, memberId, emitter);
     return emitter;
   }
 
+  private static AGFrameDto emptySnapshot() {
+    return AGFrameDto.snapshot(List.of(), List.of());
+  }
+
   @Test
   void open_sendsTheSnapshotFirst() throws Exception {
-    var snapshot = List.of(location(UUID.randomUUID()));
+    var member =
+        new AGMemberDto(
+            UUID.randomUUID(),
+            blob("n"),
+            LocalDateTime.now(),
+            false,
+            Optional.of(new LocationRecordDto(blob("c"), blob("a"), LocalDateTime.now())));
+    var snapshot = AGFrameDto.snapshot(List.of(member), List.of());
 
     var emitter = open(snapshot);
 
@@ -128,11 +141,11 @@ class AGLocationStreamsTest {
         .thenReturn(locationsListener);
     when(redisService.subscribe(eq("ag-" + groupId + "-events"), events.capture()))
         .thenReturn(eventsListener);
-    when(anonymousGroupService.getLocationSnapshot(groupId))
+    when(anonymousGroupService.getSnapshot(groupId))
         .thenAnswer(
             i -> {
               locations.getValue().accept(early);
-              return List.of();
+              return emptySnapshot();
             });
     var emitter = new RecordingEmitter();
 
@@ -145,7 +158,7 @@ class AGLocationStreamsTest {
 
   @Test
   void location_isSentUnchanged() throws Exception {
-    var emitter = open(List.of());
+    var emitter = open(emptySnapshot());
     var message = json(location(UUID.randomUUID()));
 
     locations.getValue().accept(message);
@@ -155,7 +168,7 @@ class AGLocationStreamsTest {
 
   @Test
   void ownMemberLeft_endsTheStream() throws Exception {
-    var emitter = open(List.of());
+    var emitter = open(emptySnapshot());
 
     events.getValue().accept(json(AGFrameDto.memberLeft(memberId)));
 
@@ -164,7 +177,7 @@ class AGLocationStreamsTest {
 
   @Test
   void otherMemberLeft_keepsTheStream() throws Exception {
-    var emitter = open(List.of());
+    var emitter = open(emptySnapshot());
 
     events.getValue().accept(json(AGFrameDto.memberLeft(UUID.randomUUID())));
 
@@ -174,7 +187,7 @@ class AGLocationStreamsTest {
 
   @Test
   void groupDeleted_endsTheStream() throws Exception {
-    var emitter = open(List.of());
+    var emitter = open(emptySnapshot());
 
     events.getValue().accept(json(AGFrameDto.groupDeleted()));
 
@@ -183,7 +196,7 @@ class AGLocationStreamsTest {
 
   @Test
   void otherEvents_areNotSent() throws Exception {
-    var emitter = open(List.of());
+    var emitter = open(emptySnapshot());
 
     events.getValue().accept(json(AGFrameDto.circleDeleted(UUID.randomUUID())));
 
@@ -196,8 +209,7 @@ class AGLocationStreamsTest {
     when(redisService.subscribe(eq("ag-" + groupId + "-locations"), any()))
         .thenReturn(locationsListener);
     when(redisService.subscribe(eq("ag-" + groupId + "-events"), any())).thenReturn(eventsListener);
-    when(anonymousGroupService.getLocationSnapshot(groupId))
-        .thenThrow(new AGNotFoundException(groupId));
+    when(anonymousGroupService.getSnapshot(groupId)).thenThrow(new AGNotFoundException(groupId));
 
     assertThatThrownBy(() -> streams.open(groupId, memberId, new RecordingEmitter()))
         .isInstanceOf(AGNotFoundException.class);
@@ -207,7 +219,7 @@ class AGLocationStreamsTest {
 
   @Test
   void close_unsubscribesFromBothChannels() throws Exception {
-    open(List.of());
+    open(emptySnapshot());
 
     streams.closeAll();
 
@@ -217,7 +229,7 @@ class AGLocationStreamsTest {
 
   @Test
   void sendHeartbeats_sendsACommentToEveryStream() throws Exception {
-    var emitter = open(List.of());
+    var emitter = open(emptySnapshot());
 
     streams.sendHeartbeats();
 
@@ -227,7 +239,7 @@ class AGLocationStreamsTest {
 
   @Test
   void sendHeartbeats_brokenStream_isEnded() throws Exception {
-    var emitter = open(List.of());
+    var emitter = open(emptySnapshot());
     emitter.failing = true;
 
     streams.sendHeartbeats();

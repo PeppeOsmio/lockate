@@ -127,39 +127,22 @@ public class AnonymousGroupService {
         entity.getUpdatedAt());
   }
 
+  /** The group as a member first sees it: on the socket, on the locations stream and on join. */
   @Transactional
   public AGFrameDto getSnapshot(UUID anonymousGroupId) throws AGNotFoundException {
     var agEntity =
         anonymousGroupRepository
             .findById(anonymousGroupId)
             .orElseThrow(() -> new AGNotFoundException(anonymousGroupId));
-    var circles =
-        agCircleRepository.findByAnonymousGroupIdOrderByCreatedAtAscIdAsc(anonymousGroupId).stream()
-            .map(this::toCircleDto)
-            .toList();
-    var members =
-        listMembers(agEntity).stream()
-            .map(
-                m ->
-                    new AGMemberDto(
-                        m.id(), m.encryptedName(), m.createdAt(), m.isAGAdmin(), Optional.empty()))
-            .toList();
-    return AGFrameDto.snapshot(members, circles);
+    return snapshotOf(agEntity);
   }
 
-  @Transactional
-  public List<MemberLocationDto> getLocationSnapshot(UUID anonymousGroupId)
-      throws AGNotFoundException {
-    var agEntity =
-        anonymousGroupRepository
-            .findById(anonymousGroupId)
-            .orElseThrow(() -> new AGNotFoundException(anonymousGroupId));
-    return listMembers(agEntity).stream()
-        .flatMap(
-            m ->
-                m.encryptedLastLocationRecord().stream()
-                    .map(record -> new MemberLocationDto(m.id(), record)))
-        .toList();
+  private AGFrameDto snapshotOf(AnonymousGroupEntity agEntity) {
+    var circles =
+        agCircleRepository.findByAnonymousGroupIdOrderByCreatedAtAscIdAsc(agEntity.getId()).stream()
+            .map(this::toCircleDto)
+            .toList();
+    return AGFrameDto.snapshot(listMembers(agEntity), circles);
   }
 
   @Transactional
@@ -314,9 +297,13 @@ public class AnonymousGroupService {
     requireFreeMemberId(dto.memberId());
     inviteService.consumeJoinToken(anonymousGroupId, dto.joinToken());
     var agMemberWithTokenDto = createMember(dto.memberId(), memberName, false, agEntity);
-    var agMembers = listMembers(agEntity);
+    var snapshot = snapshotOf(agEntity);
     publishFrame(anonymousGroupId, AGFrameDto.memberJoined(agMemberWithTokenDto.member()));
-    return new AGJoinResDto(anonymousGroupMapper.toDto(agEntity), agMemberWithTokenDto, agMembers);
+    return new AGJoinResDto(
+        anonymousGroupMapper.toDto(agEntity),
+        agMemberWithTokenDto,
+        snapshot.members(),
+        snapshot.circles());
   }
 
   @Transactional

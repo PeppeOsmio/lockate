@@ -23,8 +23,8 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * The other members' locations, streamed to a member only while it looks at the map: a {@code
- * snapshot} event with every member's last saved record, then a {@code location} event for each
- * message. The stream ends when the member is removed or the group deleted.
+ * snapshot} event, the same as the socket's (members with their last saved record, circles), then
+ * a {@code location} event for each message. The stream ends when the member is removed or the group deleted.
  */
 @Slf4j
 @Component
@@ -131,7 +131,7 @@ public class AGLocationStreams {
     stream.locationsListener = redisService.subscribe(stream.locationsChannel, stream::onLocation);
     stream.eventsListener = redisService.subscribe(stream.eventsChannel, stream::onEvent);
     try {
-      var snapshot = anonymousGroupService.getLocationSnapshot(anonymousGroupId);
+      var snapshot = anonymousGroupService.getSnapshot(anonymousGroupId);
       stream.onSnapshot(objectMapper.writeValueAsString(snapshot));
     } catch (AGNotFoundException e) {
       stream.close();
