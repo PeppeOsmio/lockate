@@ -134,6 +134,14 @@ fun MapScreen(
         state.selectedConnectionId?.let { detailsViewModel.selectGroup(it, activeGroupInternalId) }
     }
 
+    // The check at launch may have run while the server was down: the group's channel connecting
+    // means it's back, so check again rather than keep the banner until Retry is tapped
+    LaunchedEffect(details.remoteDataLoadingState) {
+        if (state.isServerUnreachable && details.remoteDataLoadingState == LoadingState.Success) {
+            viewModel.retryServer()
+        }
+    }
+
     LaunchedEffect(drawerState.currentValue) {
         if (drawerState.currentValue == DrawerValue.Open) {
             viewModel.refreshServersReachability()
