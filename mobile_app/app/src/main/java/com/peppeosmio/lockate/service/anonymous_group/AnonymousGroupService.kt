@@ -648,12 +648,14 @@ class AnonymousGroupService(
     ): Nothing {
         var isOpen = true
         val channel = channelsMutex.withLock {
-            val channel = channels.getOrPut(anonymousGroup.id) {
-                isOpen = false
-                GroupChannel().also { c ->
+            // A channel that stopped for good (removed, group gone) stays until its holders let go:
+            // a new holder gets a fresh one, which finds out again whether the group is back
+            val channel = channels[anonymousGroup.id]?.takeIf { it.job.isActive }
+                ?: GroupChannel().also { c ->
+                    isOpen = false
                     c.job = channelScope.launch { runChannel(anonymousGroup, c) }
+                    channels[anonymousGroup.id] = c
                 }
-            }
             channel.leases++
             if (send) channel.sendLeases.update { it + 1 }
             channel
@@ -668,7 +670,8 @@ class AnonymousGroupService(
                     if (send) channel.sendLeases.update { it - 1 }
                     if (--channel.leases == 0) {
                         channel.job.cancel()
-                        channels.remove(anonymousGroup.id)
+                        // a stopped channel may have been replaced meanwhile
+                        channels.remove(anonymousGroup.id, channel)
                     }
                 }
             }
