@@ -24,6 +24,8 @@ navigationCompose = "2.10.2"
 composeBom = "2026.09.00"
 playServicesLocation = "21.4.0"
 roomRuntime = "2.8.5"
+spotless = "8.10.0"
+ktfmt = "0.64"
 
 
 [libraries]
@@ -77,4 +79,5 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 android-kotlin-multiplatform-library = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
+spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
 

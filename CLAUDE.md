@@ -40,6 +40,7 @@ Three core domain entities:
 - No unused code, dead branches, or backwards-compatibility shims
 - No error handling for scenarios that cannot happen; trust framework guarantees
 - Validate only at system boundaries (user input, external APIs)
+- Before committing, run `make all` in each module you changed (`backend`, `mobile_app`, `admin_ui`): it formats the code, then checks formatting, lints and tests. CI runs `make ci`, the same without formatting
 
 ### Backend (Java / Spring Boot)
 - Follow existing package structure: one package per domain concern under `com.peppeosmio.lockate`
@@ -64,6 +65,9 @@ Three core domain entities:
 
 ```bash
 cd backend
+
+# Format, check formatting, lint and test (CI runs `make ci`: the same without formatting)
+make all
 
 # Run all tests
 ./mvnw clean test -Pdev
@@ -97,6 +101,9 @@ Member messages are always relayed, but saved only if the member's last saved re
 
 ```bash
 cd mobile_app
+
+# Format (ktfmt), check formatting, Android lint and test (CI runs `make ci`: the same without formatting)
+make all
 
 # Debug build
 ./gradlew assembleDebug

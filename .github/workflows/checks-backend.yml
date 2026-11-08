@@ -27,7 +27,7 @@ jobs:
           distribution: temurin
           java-version: 25
           cache: maven
-      - run: make all
+      - run: make ci
         env:
           MAVEN_ARGS: -B
       - uses: actions/upload-artifact@v7

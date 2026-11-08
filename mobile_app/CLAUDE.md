@@ -5,6 +5,9 @@ Build/test rules specific to this module. See the repo-root `CLAUDE.md` for arch
 ## Commands
 
 ```bash
+# Format (ktfmt), check formatting, Android lint and test (CI runs `make ci`: the same without formatting)
+make all
+
 # Debug build
 ./gradlew assembleDebug
 

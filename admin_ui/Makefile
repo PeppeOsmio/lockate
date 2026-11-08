@@ -1,6 +1,6 @@
 .PHONY: all test format format-check lint check ci build
 
-all: ci
+all: format format-check lint test
 
 test:
 	yarn tsc --noEmit

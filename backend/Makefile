@@ -1,4 +1,4 @@
-.PHONY: all test format format-check lint check
+.PHONY: all ci test format format-check lint check
 
 test:
 	./mvnw clean test -Pdev
@@ -14,4 +14,6 @@ lint:
 
 check: format-check lint
 
-all: format-check lint test
+all: format format-check lint test
+
+ci: format-check lint test
