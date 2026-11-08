@@ -1,12 +1,12 @@
 package com.peppeosmio.jpake
 
-import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlinx.coroutines.test.runTest
 
 class JPakeFlowTest {
 
@@ -58,7 +58,8 @@ class JPakeFlowTest {
     @Test
     fun aDifferentConfigOnOneSideFailsTheConfirmation() = runTest {
         val server = JPakeServer.start(password, JPakeConfig(context = byteArrayOf(1)))
-        val client = JPakeClient.respond(password, server.hello, JPakeConfig(context = byteArrayOf(2)))
+        val client =
+            JPakeClient.respond(password, server.hello, JPakeConfig(context = byteArrayOf(2)))
         val clientResult = client.confirm(server.respond(client.reply))
 
         assertFalse(clientResult.serverVerified)
@@ -72,7 +73,8 @@ class JPakeFlowTest {
         assertFailsWith<JPakeException> {
             server.respond(
                 ClientReply(
-                    JPakeRound1(client.reply.round1.bytes.flipMiddleBit()), client.reply.round2
+                    JPakeRound1(client.reply.round1.bytes.flipMiddleBit()),
+                    client.reply.round2,
                 )
             )
         }
@@ -82,7 +84,10 @@ class JPakeFlowTest {
         val serverConfirm = server2.respond(client2.reply)
         assertFailsWith<JPakeException> {
             client2.confirm(
-                ServerConfirm(JPakeRound2(serverConfirm.round2.bytes.flipMiddleBit()), serverConfirm.tag)
+                ServerConfirm(
+                    JPakeRound2(serverConfirm.round2.bytes.flipMiddleBit()),
+                    serverConfirm.tag,
+                )
             )
         }
     }
@@ -92,7 +97,8 @@ class JPakeFlowTest {
         val server = JPakeServer.start(password)
         val client = JPakeClient.respond(password, server.hello)
         val serverConfirm = server.respond(client.reply)
-        val tampered = client.confirm(ServerConfirm(serverConfirm.round2, serverConfirm.tag.flipFirstBit()))
+        val tampered =
+            client.confirm(ServerConfirm(serverConfirm.round2, serverConfirm.tag.flipFirstBit()))
         assertFalse(tampered.serverVerified)
 
         val server2 = JPakeServer.start(password)
@@ -151,6 +157,8 @@ class JPakeFlowTest {
         val client = JPakeClient.respond(password, server.hello)
         val serverSession = server.finish(client.confirm(server.respond(client.reply)).confirm)
 
-        assertFalse(serverSession.seal(message, info).iv.contentEquals(serverSession.seal(message, info).iv))
+        assertFalse(
+            serverSession.seal(message, info).iv.contentEquals(serverSession.seal(message, info).iv)
+        )
     }
 }

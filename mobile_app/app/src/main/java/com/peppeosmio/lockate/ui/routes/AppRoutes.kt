@@ -2,35 +2,29 @@ package com.peppeosmio.lockate.ui.routes
 
 import kotlinx.serialization.Serializable
 
-@Serializable
-sealed interface Route
+@Serializable sealed interface Route
+
+@Serializable data object LoadingRoute : Route
 
 @Serializable
-data object LoadingRoute : Route
+data class ConnectionSettingsRoute(
+    val initialConnectionSettingsId: Long?,
+    val showBackButton: Boolean,
+) : Route
 
-@Serializable
-data class ConnectionSettingsRoute(val initialConnectionSettingsId: Long?, val showBackButton: Boolean) : Route
+@Serializable data object HomeRoute : Route
 
-@Serializable
-data object HomeRoute : Route
+@Serializable data object ManageConnectionsRoute : Route
 
-@Serializable
-data object ManageConnectionsRoute : Route
+@Serializable data object SettingsRoute : Route
 
-@Serializable
-data object SettingsRoute : Route
+@Serializable data class CreateAnonymousGroupRoute(val connectionSettingsId: Long) : Route
 
-@Serializable
-data class CreateAnonymousGroupRoute(val connectionSettingsId: Long) : Route
+@Serializable data class JoinAnonymousGroupRoute(val connectionSettingsId: Long) : Route
 
-@Serializable
-data class JoinAnonymousGroupRoute(val connectionSettingsId: Long) : Route
+@Serializable data class InviteRoute(val anonymousGroupInternalId: Long) : Route
 
-@Serializable
-data class InviteRoute(val anonymousGroupInternalId: Long) : Route
-
-@Serializable
-data class CirclesRoute(val anonymousGroupInternalId: Long) : Route
+@Serializable data class CirclesRoute(val anonymousGroupInternalId: Long) : Route
 
 @Serializable
 data class CircleEditorRoute(

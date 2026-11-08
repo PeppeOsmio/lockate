@@ -1,15 +1,19 @@
 package com.peppeosmio.lockate.ui.screens.anonymous_group_details
 
-import com.peppeosmio.lockate.utils.SnackbarErrorMessage
 import com.peppeosmio.lockate.domain.Coordinates
 import com.peppeosmio.lockate.domain.LocationRecord
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
-import com.peppeosmio.lockate.domain.anonymous_group.Circle
 import com.peppeosmio.lockate.domain.anonymous_group.AnonymousGroup
+import com.peppeosmio.lockate.domain.anonymous_group.Circle
 import com.peppeosmio.lockate.utils.LoadingState
+import com.peppeosmio.lockate.utils.SnackbarErrorMessage
 
-
-enum class LocationStreamState { Connecting, Connected, Reconnecting, Stopped }
+enum class LocationStreamState {
+    Connecting,
+    Connected,
+    Reconnecting,
+    Stopped,
+}
 
 data class AGDetailsState(
     val anonymousGroup: AnonymousGroup? = null,

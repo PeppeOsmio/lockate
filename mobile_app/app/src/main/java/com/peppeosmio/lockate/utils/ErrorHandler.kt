@@ -11,18 +11,23 @@ import com.peppeosmio.lockate.exceptions.UnauthorizedException
 import io.ktor.client.call.body
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
-import kotlinx.serialization.SerializationException
 import java.net.ConnectException
 import java.net.NoRouteToHostException
+import kotlinx.serialization.SerializationException
 
 object ErrorHandler {
     @Throws(
-        InvalidApiKeyException::class, AGMemberNotAdminException::class, UnauthorizedException::class
+        InvalidApiKeyException::class,
+        AGMemberNotAdminException::class,
+        UnauthorizedException::class,
     )
     suspend fun handleUnauthorized(response: HttpResponse) {
         try {
             val errorResponseBody = response.body<ErrorResponseDto>()
-            if (errorResponseBody.error == "invalid_api_key" || errorResponseBody.error == "missing_api_key") {
+            if (
+                errorResponseBody.error == "invalid_api_key" ||
+                    errorResponseBody.error == "missing_api_key"
+            ) {
                 throw InvalidApiKeyException()
             } else if (errorResponseBody.error == "ag_member_not_admin") {
                 throw AGMemberNotAdminException()
@@ -30,7 +35,7 @@ object ErrorHandler {
                 throw UnauthorizedException()
             }
         } catch (e: SerializationException) {
-            throw UnauthorizedException();
+            throw UnauthorizedException()
         }
     }
 
@@ -44,16 +49,18 @@ object ErrorHandler {
             body = response.bodyAsText()
         }
         throw APIException(
-            statusCode = response.status.value, body = body
+            statusCode = response.status.value,
+            body = body,
         )
     }
 
     /**
-     * @param customHandler: a function that returns an `ErrorInfo` for the exceptions it must handle
-     * and re-throws `e` to let it propagate and be handled by the other default handlers
+     * @param customHandler: a function that returns an `ErrorInfo` for the exceptions it must
+     *   handle and re-throws `e` to let it propagate and be handled by the other default handlers
      */
     suspend fun <T> runAndHandleException(
-        customHandler: ((e: Throwable) -> ErrorInfo?)? = null, callback: suspend () -> T
+        customHandler: ((e: Throwable) -> ErrorInfo?)? = null,
+        callback: suspend () -> T,
     ): ResultWithError<T> {
         try {
             try {
@@ -65,19 +72,21 @@ object ErrorHandler {
                 throw e
             }
         } catch (e: Throwable) {
-            val errorInfo = when (e) {
-                is RemoteAGNotFoundException -> ErrorInfo.remoteAGNotFoundException(e)
-                is LocalAGNotFoundException -> ErrorInfo.localAGNotFoundException(e)
-                is ConnectException, is NoRouteToHostException -> ErrorInfo.connectException(e)
-                is SerializationException -> ErrorInfo.serializationException(e)
-                is InvalidApiKeyException -> ErrorInfo.invalidApiKeyException(e)
-                is AGMemberUnauthorizedException -> ErrorInfo.notMemberOfAGException(e)
-                is APIException -> ErrorInfo.apiException(e)
-                else -> {
-                    e.printStackTrace()
-                    ErrorInfo.exception(e)
+            val errorInfo =
+                when (e) {
+                    is RemoteAGNotFoundException -> ErrorInfo.remoteAGNotFoundException(e)
+                    is LocalAGNotFoundException -> ErrorInfo.localAGNotFoundException(e)
+                    is ConnectException,
+                    is NoRouteToHostException -> ErrorInfo.connectException(e)
+                    is SerializationException -> ErrorInfo.serializationException(e)
+                    is InvalidApiKeyException -> ErrorInfo.invalidApiKeyException(e)
+                    is AGMemberUnauthorizedException -> ErrorInfo.notMemberOfAGException(e)
+                    is APIException -> ErrorInfo.apiException(e)
+                    else -> {
+                        e.printStackTrace()
+                        ErrorInfo.exception(e)
+                    }
                 }
-            }
             return ResultWithError(value = null, errorInfo = errorInfo)
         }
     }

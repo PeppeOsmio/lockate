@@ -1,11 +1,11 @@
 package com.peppeosmio.lockate.utils
 
 import com.peppeosmio.lockate.exceptions.RemoteAGNotFoundException
+import java.net.ConnectException
+import java.net.NoRouteToHostException
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.net.ConnectException
-import java.net.NoRouteToHostException
 
 class ErrorInfoTest {
 

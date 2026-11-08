@@ -11,21 +11,29 @@ object LocationRecordMapper {
         payloadCodec: PayloadCodec,
         key: ByteArray,
         groupId: String,
-        memberId: String
+        memberId: String,
     ): LocationRecord {
-        val message = payloadCodec.decryptMemberMessage(
-            message = EncryptedMemberMessage(
-                coordinates = EncryptedDataMapper.toDomain(encryptedLocationRecordDto.encryptedCoordinates),
-                activity = EncryptedDataMapper.toDomain(encryptedLocationRecordDto.encryptedActivity)
-            ),
-            key = key,
-            groupId = groupId,
-            memberId = memberId
-        )
+        val message =
+            payloadCodec.decryptMemberMessage(
+                message =
+                    EncryptedMemberMessage(
+                        coordinates =
+                            EncryptedDataMapper.toDomain(
+                                encryptedLocationRecordDto.encryptedCoordinates
+                            ),
+                        activity =
+                            EncryptedDataMapper.toDomain(
+                                encryptedLocationRecordDto.encryptedActivity
+                            ),
+                    ),
+                key = key,
+                groupId = groupId,
+                memberId = memberId,
+            )
         return LocationRecord(
             coordinates = message.coordinates,
             timestamp = encryptedLocationRecordDto.timestamp,
-            activity = message.activity
+            activity = message.activity,
         )
     }
 }

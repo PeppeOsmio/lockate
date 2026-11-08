@@ -29,14 +29,15 @@ class MapViewModel(
     private val connectionService: ConnectionService,
     private val anonymousGroupService: AnonymousGroupService,
     private val permissionsService: PermissionsService,
-    private val mapStyleService: MapStyleService
+    private val mapStyleService: MapStyleService,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(MapState())
     val state: StateFlow<MapState> = _state.asStateFlow()
     private val _snackbarEvents = Channel<SnackbarErrorMessage>(Channel.BUFFERED)
     val snackbarEvents = _snackbarEvents.receiveAsFlow()
-    private val _navigateToConnectionSettingsEvents = Channel<ConnectionSettingsRoute>(Channel.BUFFERED)
+    private val _navigateToConnectionSettingsEvents =
+        Channel<ConnectionSettingsRoute>(Channel.BUFFERED)
     val navigateToConnectionSettingsEvents = _navigateToConnectionSettingsEvents.receiveAsFlow()
     private var loadGroupsJob: Job? = null
     private var verifyJob: Job? = null
@@ -48,7 +49,9 @@ class MapViewModel(
         viewModelScope.launch { collectConnectionEvents() }
         viewModelScope.launch { collectAGEvents() }
         viewModelScope.launch {
-            mapStyleService.mapStyleUrls.collect { urls -> _state.update { it.copy(mapStyleUrls = urls) } }
+            mapStyleService.mapStyleUrls.collect { urls ->
+                _state.update { it.copy(mapStyleUrls = urls) }
+            }
         }
     }
 
@@ -58,16 +61,19 @@ class MapViewModel(
             _navigateToConnectionSettingsEvents.send(noConnectionsRoute)
             return
         }
-        val selectedConnectionId = try {
-            connectionService.getSelectedConnectionSettings().id
-        } catch (e: ConnectionSettingsNotFoundException) {
-            _snackbarEvents.trySend(SnackbarErrorMessage(text = "No connection settings found!"))
-            return
-        }
+        val selectedConnectionId =
+            try {
+                connectionService.getSelectedConnectionSettings().id
+            } catch (e: ConnectionSettingsNotFoundException) {
+                _snackbarEvents.trySend(
+                    SnackbarErrorMessage(text = "No connection settings found!")
+                )
+                return
+            }
         _state.update {
             it.copy(
                 connections = connections.associateBy { connection -> connection.id!! },
-                selectedConnectionId = selectedConnectionId
+                selectedConnectionId = selectedConnectionId,
             )
         }
         selectedConnectionId?.let { loadGroups(it) }
@@ -86,7 +92,8 @@ class MapViewModel(
                     _state.update {
                         it.copy(
                             connections = newConnections,
-                            unreachableConnectionIds = it.unreachableConnectionIds - event.connectionId
+                            unreachableConnectionIds =
+                                it.unreachableConnectionIds - event.connectionId,
                         )
                     }
                     if (newConnections.isEmpty()) {
@@ -103,10 +110,14 @@ class MapViewModel(
         anonymousGroupService.events.collect { event ->
             when (event) {
                 is AnonymousGroupEvent.NewAnonymousGroupEvent -> {
-                    if (event.connectionId != state.value.selectedConnectionId || state.value.groups == null) {
+                    if (
+                        event.connectionId != state.value.selectedConnectionId ||
+                            state.value.groups == null
+                    ) {
                         return@collect
                     }
-                    val created = anonymousGroupService.getAGByInternalId(event.anonymousGroupInternalId)
+                    val created =
+                        anonymousGroupService.getAGByInternalId(event.anonymousGroupInternalId)
                     _state.update { it.copy(groups = (it.groups ?: emptyList()) + created) }
                     selectGroup(created.internalId)
                 }
@@ -142,10 +153,13 @@ class MapViewModel(
 
     private fun updateGroup(
         anonymousGroupId: String,
-        transform: (AnonymousGroup) -> AnonymousGroup
+        transform: (AnonymousGroup) -> AnonymousGroup,
     ) {
         _state.update { current ->
-            current.copy(groups = current.groups?.map { if (it.id == anonymousGroupId) transform(it) else it })
+            current.copy(
+                groups =
+                    current.groups?.map { if (it.id == anonymousGroupId) transform(it) else it }
+            )
         }
     }
 
@@ -154,20 +168,25 @@ class MapViewModel(
         verifyJob?.cancel()
         loadGroupsJob = viewModelScope.launch {
             _state.update { it.copy(isServerUnreachable = false) }
-            val groups = try {
-                anonymousGroupService.listLocalAnonymousGroups(connectionId)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _snackbarEvents.trySend(
-                    SnackbarErrorMessage(
-                        text = "Can't get local anonymous groups", errorInfo = ErrorInfo.fromException(e)
+            val groups =
+                try {
+                    anonymousGroupService.listLocalAnonymousGroups(connectionId)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    _snackbarEvents.trySend(
+                        SnackbarErrorMessage(
+                            text = "Can't get local anonymous groups",
+                            errorInfo = ErrorInfo.fromException(e),
+                        )
                     )
-                )
-                emptyList()
+                    emptyList()
+                }
+            val initial =
+                pickInitialGroup(groups, connectionService.getLastAGInternalId(connectionId))
+            _state.update {
+                it.copy(groups = groups, selectedGroupInternalId = initial?.internalId)
             }
-            val initial = pickInitialGroup(groups, connectionService.getLastAGInternalId(connectionId))
-            _state.update { it.copy(groups = groups, selectedGroupInternalId = initial?.internalId) }
             verifyGroups(connectionId)
         }
     }
@@ -176,20 +195,25 @@ class MapViewModel(
         for (group in state.value.groups ?: return) {
             try {
                 anonymousGroupService.verifyMemberAuth(
-                    connectionSettingsId = connectionId, anonymousGroupInternalId = group.internalId
+                    connectionSettingsId = connectionId,
+                    anonymousGroupInternalId = group.internalId,
                 )
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 when (e) {
-                    is UnauthorizedException, is RemoteAGNotFoundException -> Unit
+                    is UnauthorizedException,
+                    is RemoteAGNotFoundException -> Unit
                     else -> {
                         val errorInfo = ErrorInfo.fromException(e)
                         if (errorInfo.isConnectionError) {
                             _state.update { it.copy(isServerUnreachable = true) }
                         } else {
                             _snackbarEvents.trySend(
-                                SnackbarErrorMessage(text = "Connection error", errorInfo = errorInfo)
+                                SnackbarErrorMessage(
+                                    text = "Connection error",
+                                    errorInfo = errorInfo,
+                                )
                             )
                         }
                         return
@@ -218,7 +242,7 @@ class MapViewModel(
                 groups = null,
                 selectedGroupInternalId = null,
                 isGroupPickerOpen = false,
-                groupQuery = ""
+                groupQuery = "",
             )
         }
         viewModelScope.launch { connectionService.saveSelectedConnectionSettingsId(connectionId) }
@@ -231,7 +255,7 @@ class MapViewModel(
             it.copy(
                 selectedGroupInternalId = anonymousGroupInternalId,
                 isGroupPickerOpen = false,
-                groupQuery = ""
+                groupQuery = "",
             )
         }
         if (anonymousGroupInternalId != null) {
@@ -250,7 +274,8 @@ class MapViewModel(
             } catch (e: Exception) {
                 _snackbarEvents.trySend(
                     SnackbarErrorMessage(
-                        text = "Can't remove anonymous group", errorInfo = ErrorInfo.fromException(e)
+                        text = "Can't remove anonymous group",
+                        errorInfo = ErrorInfo.fromException(e),
                     )
                 )
             }
@@ -268,7 +293,11 @@ class MapViewModel(
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    _state.update { it.copy(unreachableConnectionIds = it.unreachableConnectionIds + connection.id!!) }
+                    _state.update {
+                        it.copy(
+                            unreachableConnectionIds = it.unreachableConnectionIds + connection.id!!
+                        )
+                    }
                 }
             }
         }

@@ -42,17 +42,18 @@ class CirclesViewModel(private val anonymousGroupService: AnonymousGroupService)
     fun load(anonymousGroupInternalId: Long) {
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
-            val anonymousGroup = try {
-                anonymousGroupService.getAGByInternalId(anonymousGroupInternalId)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _state.update { it.copy(isLoading = false) }
-                _snackbarEvents.trySend(
-                    SnackbarErrorMessage("Can't load the circles", ErrorInfo.fromException(e))
-                )
-                return@launch
-            }
+            val anonymousGroup =
+                try {
+                    anonymousGroupService.getAGByInternalId(anonymousGroupInternalId)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    _state.update { it.copy(isLoading = false) }
+                    _snackbarEvents.trySend(
+                        SnackbarErrorMessage("Can't load the circles", ErrorInfo.fromException(e))
+                    )
+                    return@launch
+                }
             group = anonymousGroup
             _state.update {
                 it.copy(
@@ -60,10 +61,11 @@ class CirclesViewModel(private val anonymousGroupService: AnonymousGroupService)
                     groupName = anonymousGroup.name,
                     circles = anonymousGroupService.listCircles(anonymousGroupInternalId),
                     members = others(anonymousGroupService.getLocalAGMembers(anonymousGroup)),
-                    mutedTargets = anonymousGroupService.listMutedTargets(anonymousGroupInternalId)
+                    mutedTargets = anonymousGroupService.listMutedTargets(anonymousGroupInternalId),
                 )
             }
-            // subscribed before the channel is held, so the snapshot of a new connection isn't missed
+            // subscribed before the channel is held, so the snapshot of a new connection isn't
+            // missed
             launch(start = CoroutineStart.UNDISPATCHED) {
                 anonymousGroupService.groupFrames
                     .filter { it.anonymousGroupInternalId == anonymousGroupInternalId }
@@ -78,30 +80,39 @@ class CirclesViewModel(private val anonymousGroupService: AnonymousGroupService)
 
     private fun applyFrame(frame: AGChannelFrame) {
         when (frame) {
-            is AGChannelFrame.Snapshot -> _state.update {
-                it.copy(circles = frame.circles, members = others(frame.members))
-            }
+            is AGChannelFrame.Snapshot ->
+                _state.update {
+                    it.copy(circles = frame.circles, members = others(frame.members))
+                }
 
-            is AGChannelFrame.CircleUpserted -> _state.update {
-                it.copy(
-                    circles = if (it.circles.any { c -> c.id == frame.circle.id }) it.circles.map { c ->
-                        if (c.id == frame.circle.id) frame.circle else c
-                    } else it.circles + frame.circle
-                )
-            }
+            is AGChannelFrame.CircleUpserted ->
+                _state.update {
+                    it.copy(
+                        circles =
+                            if (it.circles.any { c -> c.id == frame.circle.id })
+                                it.circles.map { c ->
+                                    if (c.id == frame.circle.id) frame.circle else c
+                                }
+                            else it.circles + frame.circle
+                    )
+                }
 
-            is AGChannelFrame.CircleDeleted -> _state.update {
-                it.copy(circles = it.circles.filter { c -> c.id != frame.circleId })
-            }
+            is AGChannelFrame.CircleDeleted ->
+                _state.update {
+                    it.copy(circles = it.circles.filter { c -> c.id != frame.circleId })
+                }
 
-            is AGChannelFrame.MemberJoined -> _state.update {
-                it.copy(members = others(it.members + frame.member))
-            }
-            is AGChannelFrame.MemberLeft -> _state.update {
-                it.copy(members = it.members.filter { m -> m.id != frame.memberId })
-            }
+            is AGChannelFrame.MemberJoined ->
+                _state.update {
+                    it.copy(members = others(it.members + frame.member))
+                }
+            is AGChannelFrame.MemberLeft ->
+                _state.update {
+                    it.copy(members = it.members.filter { m -> m.id != frame.memberId })
+                }
 
-            is AGChannelFrame.CircleEvent, is AGChannelFrame.MemberUpdated -> Unit
+            is AGChannelFrame.CircleEvent,
+            is AGChannelFrame.MemberUpdated -> Unit
         }
     }
 
@@ -110,7 +121,10 @@ class CirclesViewModel(private val anonymousGroupService: AnonymousGroupService)
         viewModelScope.launch {
             anonymousGroupService.setTargetMuted(internalId, targetId, muted)
             _state.update {
-                it.copy(mutedTargets = if (muted) it.mutedTargets + targetId else it.mutedTargets - targetId)
+                it.copy(
+                    mutedTargets =
+                        if (muted) it.mutedTargets + targetId else it.mutedTargets - targetId
+                )
             }
         }
     }
@@ -133,7 +147,11 @@ class CirclesViewModel(private val anonymousGroupService: AnonymousGroupService)
         viewModelScope.launch {
             _state.update { it.copy(isDeleting = true) }
             try {
-                anonymousGroupService.deleteCircle(anonymousGroup.connectionId, anonymousGroup, circle.id)
+                anonymousGroupService.deleteCircle(
+                    anonymousGroup.connectionId,
+                    anonymousGroup,
+                    circle.id,
+                )
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

@@ -3,7 +3,9 @@ package com.peppeosmio.lockate.data.anonymous_group.remote
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-/** A message sent on the group's websocket, encoded as `AGMemberMessageReqDto` to get its `type`. */
+/**
+ * A message sent on the group's websocket, encoded as `AGMemberMessageReqDto` to get its `type`.
+ */
 @Serializable
 sealed interface AGMemberMessageReqDto {
     @Serializable

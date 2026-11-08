@@ -5,25 +5,28 @@ import dev.whyoleg.cryptography.CryptographyProvider
 import dev.whyoleg.cryptography.algorithms.HKDF
 import dev.whyoleg.cryptography.algorithms.HMAC
 import dev.whyoleg.cryptography.algorithms.SHA256
-import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlinx.coroutines.test.runTest
 
 class KeyConfirmationTest {
 
     private class Parties(
-        val server: ConfirmedKeys, val client: ConfirmedKeys,
-        val serverRound1: JPakeRound1, val clientRound1: JPakeRound1, val secret: ByteArray
+        val server: ConfirmedKeys,
+        val client: ConfirmedKeys,
+        val serverRound1: JPakeRound1,
+        val clientRound1: JPakeRound1,
+        val secret: ByteArray,
     )
 
     private fun parties(
         serverPassword: String = "pw",
         clientPassword: String = "pw",
         serverConfig: JPakeConfig = JPakeConfig(),
-        clientConfig: JPakeConfig = serverConfig
+        clientConfig: JPakeConfig = serverConfig,
     ): Parties {
         val server = JPake(JPakeRole.SERVER, serverPassword.encodeToByteArray())
         val client = JPake(JPakeRole.CLIENT, clientPassword.encodeToByteArray())
@@ -40,33 +43,50 @@ class KeyConfirmationTest {
         return Parties(
             ConfirmedKeys(serverSecret, JPakeRole.SERVER, serverConfig, serverRound1, clientRound1),
             ConfirmedKeys(clientSecret, JPakeRole.CLIENT, clientConfig, clientRound1, serverRound1),
-            serverRound1, clientRound1, serverSecret
+            serverRound1,
+            clientRound1,
+            serverSecret,
         )
     }
 
     private suspend fun hmacSha256(key: ByteArray, data: ByteArray): ByteArray {
         val provider = CryptographyProvider.Default
-        return provider.get(HMAC).keyDecoder(provider.get(SHA256).id)
+        return provider
+            .get(HMAC)
+            .keyDecoder(provider.get(SHA256).id)
             .decodeFromByteArray(HMAC.Key.Format.RAW, key)
-            .signatureGenerator().generateSignature(data)
+            .signatureGenerator()
+            .generateSignature(data)
     }
 
     @Test
     fun theServerTagIsTheRfc8236MacTag() = runTest {
         val p = parties()
         val config = JPakeConfig()
-        val kcKey = CryptographyProvider.Default.get(HKDF).secretDerivation(
-            digest = CryptographyProvider.Default.get(SHA256).id,
-            outputSize = 256.bits, salt = config.context, info = config.confirmationLabel
-        ).deriveSecret(p.secret).toByteArray()
+        val kcKey =
+            CryptographyProvider.Default.get(HKDF)
+                .secretDerivation(
+                    digest = CryptographyProvider.Default.get(SHA256).id,
+                    outputSize = 256.bits,
+                    salt = config.context,
+                    info = config.confirmationLabel,
+                )
+                .deriveSecret(p.secret)
+                .toByteArray()
         val (g1, g2) = p.serverRound1.keyShares()
         val (g3, g4) = p.clientRound1.keyShares()
 
-        val expected = hmacSha256(
-            kcKey,
-            "KC_1_U".encodeToByteArray() + "server".encodeToByteArray() +
-                "client".encodeToByteArray() + g1 + g2 + g3 + g4
-        )
+        val expected =
+            hmacSha256(
+                kcKey,
+                "KC_1_U".encodeToByteArray() +
+                    "server".encodeToByteArray() +
+                    "client".encodeToByteArray() +
+                    g1 +
+                    g2 +
+                    g3 +
+                    g4,
+            )
 
         assertContentEquals(expected, p.server.localTag())
     }
@@ -74,18 +94,30 @@ class KeyConfirmationTest {
     @Test
     fun theClientTagMirrorsTheServerOne() = runTest {
         val p = parties()
-        val kcKey = CryptographyProvider.Default.get(HKDF).secretDerivation(
-            digest = CryptographyProvider.Default.get(SHA256).id,
-            outputSize = 256.bits, salt = ByteArray(0), info = "JPAKE_KC".encodeToByteArray()
-        ).deriveSecret(p.secret).toByteArray()
+        val kcKey =
+            CryptographyProvider.Default.get(HKDF)
+                .secretDerivation(
+                    digest = CryptographyProvider.Default.get(SHA256).id,
+                    outputSize = 256.bits,
+                    salt = ByteArray(0),
+                    info = "JPAKE_KC".encodeToByteArray(),
+                )
+                .deriveSecret(p.secret)
+                .toByteArray()
         val (g1, g2) = p.serverRound1.keyShares()
         val (g3, g4) = p.clientRound1.keyShares()
 
-        val expected = hmacSha256(
-            kcKey,
-            "KC_1_U".encodeToByteArray() + "client".encodeToByteArray() +
-                "server".encodeToByteArray() + g3 + g4 + g1 + g2
-        )
+        val expected =
+            hmacSha256(
+                kcKey,
+                "KC_1_U".encodeToByteArray() +
+                    "client".encodeToByteArray() +
+                    "server".encodeToByteArray() +
+                    g3 +
+                    g4 +
+                    g1 +
+                    g2,
+            )
 
         assertContentEquals(expected, p.client.localTag())
     }
@@ -109,14 +141,15 @@ class KeyConfirmationTest {
     @Test
     fun aTagDoesNotVerifyWhenAConfigValueDiffers() = runTest {
         val base = JPakeConfig()
-        val variants = listOf(
-            JPakeConfig(context = byteArrayOf(1)),
-            JPakeConfig(serverId = "other".encodeToByteArray()),
-            JPakeConfig(clientId = "other".encodeToByteArray()),
-            JPakeConfig(confirmationLabel = "other".encodeToByteArray()),
-            JPakeConfig(tagLabel = "other".encodeToByteArray()),
-            JPakeConfig(hash = KdfHash.SHA512),
-        )
+        val variants =
+            listOf(
+                JPakeConfig(context = byteArrayOf(1)),
+                JPakeConfig(serverId = "other".encodeToByteArray()),
+                JPakeConfig(clientId = "other".encodeToByteArray()),
+                JPakeConfig(confirmationLabel = "other".encodeToByteArray()),
+                JPakeConfig(tagLabel = "other".encodeToByteArray()),
+                JPakeConfig(hash = KdfHash.SHA512),
+            )
         for (variant in variants) {
             val p = parties(serverConfig = base, clientConfig = variant)
             assertFalse(p.server.verifyPeerTag(p.client.localTag()))
@@ -127,7 +160,9 @@ class KeyConfirmationTest {
     fun aTamperedOrWrongSizedTagIsRejected() = runTest {
         val p = parties()
         val tag = p.client.localTag()
-        assertFalse(p.server.verifyPeerTag(tag.copyOf().also { it[0] = (it[0].toInt() xor 1).toByte() }))
+        assertFalse(
+            p.server.verifyPeerTag(tag.copyOf().also { it[0] = (it[0].toInt() xor 1).toByte() })
+        )
         assertFalse(p.server.verifyPeerTag(tag.copyOf(31)))
         assertFalse(p.server.verifyPeerTag(ByteArray(0)))
     }

@@ -17,16 +17,16 @@ fun ServerUnreachableBanner(onRetry: () -> Unit, modifier: Modifier = Modifier) 
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.errorContainer,
-        contentColor = MaterialTheme.colorScheme.onErrorContainer
+        contentColor = MaterialTheme.colorScheme.onErrorContainer,
     ) {
         Row(
             modifier = Modifier.padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
                 text = "Can't reach the server. Showing saved data.",
                 style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             )
             TextButton(onClick = onRetry) { Text("Retry") }
         }

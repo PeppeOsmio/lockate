@@ -6,8 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.peppeosmio.lockate.domain.Connection
 import com.peppeosmio.lockate.exceptions.InvalidApiKeyException
 import com.peppeosmio.lockate.service.ConnectionService
-import com.peppeosmio.lockate.utils.ErrorInfo
 import com.peppeosmio.lockate.utils.ErrorHandler
+import com.peppeosmio.lockate.utils.ErrorInfo
 import com.peppeosmio.lockate.utils.SnackbarErrorMessage
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,9 +16,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class ConnectionSettingsViewModel(
-    private val connectionService: ConnectionService
-) : ViewModel() {
+class ConnectionSettingsViewModel(private val connectionService: ConnectionService) : ViewModel() {
 
     private val _state = MutableStateFlow(ConnectionSettingsState())
     val state: StateFlow<ConnectionSettingsState> = _state
@@ -29,20 +27,24 @@ class ConnectionSettingsViewModel(
     val navigateHomeEvents = _navigateHomeEvents.receiveAsFlow()
 
     fun getInitialData(initialConnectionSettingsId: Long?) {
-        Log.d("ConnectionSettingsViewModel", "initialConnectionSettingsId: $initialConnectionSettingsId")
+        Log.d(
+            "ConnectionSettingsViewModel",
+            "initialConnectionSettingsId: $initialConnectionSettingsId",
+        )
         if (initialConnectionSettingsId == null) {
             _state.update { it.copy(showLoadingOverlay = false) }
             return
         }
         viewModelScope.launch {
             try {
-                val connectionSettings = connectionService.getConnectionSettingsById(initialConnectionSettingsId)
+                val connectionSettings =
+                    connectionService.getConnectionSettingsById(initialConnectionSettingsId)
                 _state.update {
                     it.copy(
                         showLoadingOverlay = false,
                         name = connectionSettings.name,
                         apiKey = connectionSettings.apiKey ?: "",
-                        url = connectionSettings.url
+                        url = connectionSettings.url,
                     )
                 }
             } catch (e: Exception) {
@@ -85,7 +87,8 @@ class ConnectionSettingsViewModel(
                 if (result.errorInfo != null) {
                     _snackbarEvents.trySend(
                         SnackbarErrorMessage(
-                            "Connection error", errorInfo = result.errorInfo
+                            "Connection error",
+                            errorInfo = result.errorInfo,
                         )
                     )
                     result.errorInfo.exception?.printStackTrace()
@@ -100,50 +103,49 @@ class ConnectionSettingsViewModel(
                     _state.update { it.copy(showLoadingOverlay = false) }
                 }
             }
-            val connection = Connection(
-                id = initialConnectionId,
-                name = _state.value.name,
-                url = _state.value.url,
-                apiKey = if(state.value.requireApiKey) state.value.apiKey else null ,
-                username = null,
-                authToken = null
-            )
+            val connection =
+                Connection(
+                    id = initialConnectionId,
+                    name = _state.value.name,
+                    url = _state.value.url,
+                    apiKey = if (state.value.requireApiKey) state.value.apiKey else null,
+                    username = null,
+                    authToken = null,
+                )
             try {
                 connectionService.testConnectionSettings(connection)
             } catch (e: InvalidApiKeyException) {
                 val errorInfo = ErrorInfo.fromException(e)
                 _snackbarEvents.trySend(
                     SnackbarErrorMessage(
-                        text = "Invalid api key", errorInfo = errorInfo
+                        text = "Invalid api key",
+                        errorInfo = errorInfo,
                     )
                 )
                 _state.update { it.copy(showLoadingOverlay = false) }
                 return@launch
-            }
-            catch (e: Exception) {
+            } catch (e: Exception) {
                 val errorInfo = ErrorInfo.fromException(e)
                 _snackbarEvents.trySend(
                     SnackbarErrorMessage(
-                        text = "Connection error", errorInfo = errorInfo
+                        text = "Connection error",
+                        errorInfo = errorInfo,
                     )
                 )
                 _state.update { it.copy(showLoadingOverlay = false) }
                 return@launch
             }
             try {
-               if(initialConnectionId != null) {
-                   connectionService.updateConnection(
-                       connection
-                   )
-               } else {
-                   connectionService.saveConnectionSettings(
-                       connection
-                   )
-               }
+                if (initialConnectionId != null) {
+                    connectionService.updateConnection(connection)
+                } else {
+                    connectionService.saveConnectionSettings(connection)
+                }
             } catch (e: Exception) {
                 _snackbarEvents.trySend(
                     SnackbarErrorMessage(
-                        text = "Connection error", errorInfo = ErrorInfo.fromException(e)
+                        text = "Connection error",
+                        errorInfo = ErrorInfo.fromException(e),
                     )
                 )
                 _state.update { it.copy(showLoadingOverlay = false) }

@@ -5,9 +5,9 @@ import com.peppeosmio.lockate.exceptions.APIException
 import com.peppeosmio.lockate.exceptions.InvalidApiKeyException
 import com.peppeosmio.lockate.exceptions.LocalAGNotFoundException
 import com.peppeosmio.lockate.exceptions.RemoteAGNotFoundException
-import kotlinx.serialization.SerializationException
 import java.net.ConnectException
 import java.net.NoRouteToHostException
+import kotlinx.serialization.SerializationException
 
 data class ErrorInfo(val title: String, val body: String, val exception: Throwable?) {
 
@@ -21,49 +21,61 @@ data class ErrorInfo(val title: String, val body: String, val exception: Throwab
     companion object {
         fun fromException(e: Throwable): ErrorInfo {
             when (e) {
-                is RemoteAGNotFoundException -> return ErrorInfo(
-                    title = "Anonymous group not found",
-                    body = "This anonymous group doesn't exist.",
-                    exception = e
-                )
+                is RemoteAGNotFoundException ->
+                    return ErrorInfo(
+                        title = "Anonymous group not found",
+                        body = "This anonymous group doesn't exist.",
+                        exception = e,
+                    )
 
-                is LocalAGNotFoundException -> return ErrorInfo(
-                    title = "Local AG not found",
-                    body = "The anonymous group was not found in the local database.",
-                    exception = e
-                )
+                is LocalAGNotFoundException ->
+                    return ErrorInfo(
+                        title = "Local AG not found",
+                        body = "The anonymous group was not found in the local database.",
+                        exception = e,
+                    )
 
-                is ConnectException, is NoRouteToHostException -> return ErrorInfo(
-                    title = "Connection error",
-                    body = "The server is unreachable. Maybe check your Internet connection?",
-                    exception = e
-                )
+                is ConnectException,
+                is NoRouteToHostException ->
+                    return ErrorInfo(
+                        title = "Connection error",
+                        body = "The server is unreachable. Maybe check your Internet connection?",
+                        exception = e,
+                    )
 
-                is SerializationException -> return ErrorInfo(
-                    title = "Invalid JSON response", body = e.message ?: "", exception = e
-                )
+                is SerializationException ->
+                    return ErrorInfo(
+                        title = "Invalid JSON response",
+                        body = e.message ?: "",
+                        exception = e,
+                    )
 
-                is InvalidApiKeyException -> return ErrorInfo(
-                    title = "Invalid API key",
-                    body = "The API key you entered before is invalid or expired.",
-                    exception = e
-                )
+                is InvalidApiKeyException ->
+                    return ErrorInfo(
+                        title = "Invalid API key",
+                        body = "The API key you entered before is invalid or expired.",
+                        exception = e,
+                    )
 
-                is AGMemberUnauthorizedException -> return ErrorInfo(
-                    title = "You're not a member of the group",
-                    body = "You were removed from this anonymous group by an admin.",
-                    exception = e
-                )
+                is AGMemberUnauthorizedException ->
+                    return ErrorInfo(
+                        title = "You're not a member of the group",
+                        body = "You were removed from this anonymous group by an admin.",
+                        exception = e,
+                    )
 
-                is APIException -> return ErrorInfo(
-                    title = "Server error", body = "${e.statusCode}: \"${e.body}\"", exception = e
-                )
+                is APIException ->
+                    return ErrorInfo(
+                        title = "Server error",
+                        body = "${e.statusCode}: \"${e.body}\"",
+                        exception = e,
+                    )
 
                 else -> {
                     return ErrorInfo(
                         title = e::class.simpleName ?: "Unknown error",
                         body = e.message ?: "no details",
-                        exception = e
+                        exception = e,
                     )
                 }
             }
@@ -73,13 +85,15 @@ data class ErrorInfo(val title: String, val body: String, val exception: Throwab
             return ErrorInfo(
                 title = "Connection error",
                 body = "The server is unreachable. Maybe check your Internet connection?",
-                exception = e
+                exception = e,
             )
         }
 
         fun serializationException(e: SerializationException): ErrorInfo {
             return ErrorInfo(
-                title = "Invalid JSON response", body = e.message ?: "", exception = e
+                title = "Invalid JSON response",
+                body = e.message ?: "",
+                exception = e,
             )
         }
 
@@ -87,13 +101,15 @@ data class ErrorInfo(val title: String, val body: String, val exception: Throwab
             return ErrorInfo(
                 title = "Invalid API key",
                 body = "The API key you entered before is invalid or expired.",
-                exception = e
+                exception = e,
             )
         }
 
         fun apiException(e: APIException): ErrorInfo {
             return ErrorInfo(
-                title = "Server error", body = "${e.statusCode}: \"${e.body}\"", exception = e
+                title = "Server error",
+                body = "${e.statusCode}: \"${e.body}\"",
+                exception = e,
             )
         }
 
@@ -101,7 +117,7 @@ data class ErrorInfo(val title: String, val body: String, val exception: Throwab
             return ErrorInfo(
                 title = e::class.simpleName ?: "Unknown error",
                 body = e.message ?: "no details",
-                exception = e
+                exception = e,
             )
         }
 
@@ -109,7 +125,7 @@ data class ErrorInfo(val title: String, val body: String, val exception: Throwab
             return ErrorInfo(
                 title = "Anonymous group not found",
                 body = "This anonymous group doesn't exist.",
-                exception = e
+                exception = e,
             )
         }
 
@@ -117,7 +133,7 @@ data class ErrorInfo(val title: String, val body: String, val exception: Throwab
             return ErrorInfo(
                 title = "You're not a member of the group",
                 body = "You were removed from this anonymous group by an admin.",
-                exception = e
+                exception = e,
             )
         }
 
@@ -125,7 +141,7 @@ data class ErrorInfo(val title: String, val body: String, val exception: Throwab
             return ErrorInfo(
                 title = "Local AG not found",
                 body = "The anonymous group was not found in the local database.",
-                exception = e
+                exception = e,
             )
         }
     }

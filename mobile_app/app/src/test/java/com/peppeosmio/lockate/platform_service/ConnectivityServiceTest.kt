@@ -26,9 +26,10 @@ import org.junit.Test
 class ConnectivityServiceTest {
 
     private val connectivityManager = mockk<ConnectivityManager>()
-    private val context = mockk<Context> {
-        every { getSystemService(ConnectivityManager::class.java) } returns connectivityManager
-    }
+    private val context =
+        mockk<Context> {
+            every { getSystemService(ConnectivityManager::class.java) } returns connectivityManager
+        }
     private val service = ConnectivityService(context)
 
     @After
@@ -36,10 +37,11 @@ class ConnectivityServiceTest {
         unmockkAll()
     }
 
-    private fun capabilities(internet: Boolean, validated: Boolean) = mockk<NetworkCapabilities> {
-        every { hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) } returns internet
-        every { hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) } returns validated
-    }
+    private fun capabilities(internet: Boolean, validated: Boolean) =
+        mockk<NetworkCapabilities> {
+            every { hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) } returns internet
+            every { hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) } returns validated
+        }
 
     // isNetworkAvailable
 
@@ -101,7 +103,12 @@ class ConnectivityServiceTest {
 
             service.awaitNetworkAvailable()
 
-            verify(exactly = 0) { connectivityManager.registerNetworkCallback(any(), any<ConnectivityManager.NetworkCallback>()) }
+            verify(exactly = 0) {
+                connectivityManager.registerNetworkCallback(
+                    any(),
+                    any<ConnectivityManager.NetworkCallback>(),
+                )
+            }
         }
 
     @Test
@@ -112,14 +119,20 @@ class ConnectivityServiceTest {
 
             mockkConstructor(NetworkRequest.Builder::class)
             every { anyConstructed<NetworkRequest.Builder>().addCapability(any()) } answers
-                { self as NetworkRequest.Builder }
+                {
+                    self as NetworkRequest.Builder
+                }
             every { anyConstructed<NetworkRequest.Builder>().build() } returns mockk()
 
             val callbackSlot = slot<ConnectivityManager.NetworkCallback>()
             every {
                 connectivityManager.registerNetworkCallback(any(), capture(callbackSlot))
             } just Runs
-            every { connectivityManager.unregisterNetworkCallback(any<ConnectivityManager.NetworkCallback>()) } just Runs
+            every {
+                connectivityManager.unregisterNetworkCallback(
+                    any<ConnectivityManager.NetworkCallback>()
+                )
+            } just Runs
 
             val job = launch { service.awaitNetworkAvailable() }
             runCurrent()

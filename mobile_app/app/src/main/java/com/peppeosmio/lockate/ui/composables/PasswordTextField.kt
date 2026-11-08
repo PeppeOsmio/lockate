@@ -24,7 +24,7 @@ fun PasswordTextField(
     onValueChange: (String) -> Unit,
     label: String,
     isError: Boolean = false,
-    supportingText: @Composable (() -> Unit)? = null
+    supportingText: @Composable (() -> Unit)? = null,
 ) {
     var visible by rememberSaveable { mutableStateOf(false) }
     OutlinedTextField(
@@ -36,13 +36,19 @@ fun PasswordTextField(
         supportingText = supportingText,
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-        visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
+        visualTransformation =
+            if (visible) VisualTransformation.None else PasswordVisualTransformation(),
         trailingIcon = {
             IconButton(onClick = { visible = !visible }) {
                 Icon(
-                    painter = painterResource(if (visible) R.drawable.outline_visibility_off_24 else R.drawable.outline_visibility_24),
-                    contentDescription = if (visible) "Hide password" else "Show password"
+                    painter =
+                        painterResource(
+                            if (visible) R.drawable.outline_visibility_off_24
+                            else R.drawable.outline_visibility_24
+                        ),
+                    contentDescription = if (visible) "Hide password" else "Show password",
                 )
             }
-        })
+        },
+    )
 }

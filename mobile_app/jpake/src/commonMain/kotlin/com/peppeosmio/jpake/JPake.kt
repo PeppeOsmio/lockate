@@ -11,7 +11,9 @@ internal interface JPakeNative {
     /** Throws [JPakeNativeException] if Mbed TLS refuses the step */
     fun output(step: Int): ByteArray
 
-    /** Throws [JPakeNativeException] if Mbed TLS refuses the step, e.g. an invalid point or proof */
+    /**
+     * Throws [JPakeNativeException] if Mbed TLS refuses the step, e.g. an invalid point or proof
+     */
     fun input(step: Int, data: ByteArray)
 
     fun deriveKey(): ByteArray
@@ -27,11 +29,13 @@ internal expect fun createJPakeNative(isServer: Boolean, password: ByteArray): J
 class JPakeException(message: String = "J-PAKE exchange failed") : Exception(message)
 
 /**
- * The two sides of J-PAKE. They only differ in the order they may call the steps in, see
- * [JPake]. Mbed TLS' zero-knowledge proofs name them "server" and "client", and that isn't
- * configurable.
+ * The two sides of J-PAKE. They only differ in the order they may call the steps in, see [JPake].
+ * Mbed TLS' zero-knowledge proofs name them "server" and "client", and that isn't configurable.
  */
-enum class JPakeRole { CLIENT, SERVER }
+enum class JPakeRole {
+    CLIENT,
+    SERVER,
+}
 
 /**
  * A party's first round: two key shares (curve points), each with a zero-knowledge proof, as the
@@ -40,8 +44,8 @@ enum class JPakeRole { CLIENT, SERVER }
 class JPakeRound1(val bytes: ByteArray) {
     /** The two key shares as uncompressed points, which RFC 8236 key confirmation covers */
     fun keyShares(): List<ByteArray> {
-        val parts = lvSplit(bytes)?.takeIf { it.size == ROUND_ONE_STEPS.size }
-            ?: throw JPakeException()
+        val parts =
+            lvSplit(bytes)?.takeIf { it.size == ROUND_ONE_STEPS.size } ?: throw JPakeException()
         return listOf(parts[0], parts[3])
     }
 }
@@ -49,11 +53,17 @@ class JPakeRound1(val bytes: ByteArray) {
 /** A party's second round: a key share with its zero-knowledge proof, as the bytes to send */
 class JPakeRound2(val bytes: ByteArray)
 
-private val ROUND_ONE_STEPS = listOf(
-    JPAKE_STEP_KEY_SHARE, JPAKE_STEP_ZK_PUBLIC, JPAKE_STEP_ZK_PROOF,
-    JPAKE_STEP_KEY_SHARE, JPAKE_STEP_ZK_PUBLIC, JPAKE_STEP_ZK_PROOF
-)
-private val ROUND_TWO_STEPS = listOf(JPAKE_STEP_KEY_SHARE, JPAKE_STEP_ZK_PUBLIC, JPAKE_STEP_ZK_PROOF)
+private val ROUND_ONE_STEPS =
+    listOf(
+        JPAKE_STEP_KEY_SHARE,
+        JPAKE_STEP_ZK_PUBLIC,
+        JPAKE_STEP_ZK_PROOF,
+        JPAKE_STEP_KEY_SHARE,
+        JPAKE_STEP_ZK_PUBLIC,
+        JPAKE_STEP_ZK_PROOF,
+    )
+private val ROUND_TWO_STEPS =
+    listOf(JPAKE_STEP_KEY_SHARE, JPAKE_STEP_ZK_PUBLIC, JPAKE_STEP_ZK_PROOF)
 
 /**
  * EC-JPAKE (RFC 8236) on P-256 with SHA-256, from Mbed TLS: the low-level API. Both sides get the
@@ -87,8 +97,9 @@ class JPake(role: JPakeRole, password: ByteArray) {
      */
     fun deriveSecret(): ByteArray = guarded { native.deriveKey() }.also { native.close() }
 
-    private fun write(steps: List<Int>): ByteArray =
-        guarded { lvCat(*Array(steps.size) { native.output(steps[it]) }) }
+    private fun write(steps: List<Int>): ByteArray = guarded {
+        lvCat(*Array(steps.size) { native.output(steps[it]) })
+    }
 
     private fun read(steps: List<Int>, message: ByteArray) {
         val parts = lvSplit(message)?.takeIf { it.size == steps.size }
@@ -98,13 +109,14 @@ class JPake(role: JPakeRole, password: ByteArray) {
         }
     }
 
-    private fun <T> guarded(block: () -> T): T = try {
-        block()
-    } catch (e: JPakeNativeException) {
-        native.close()
-        throw JPakeException()
-    } catch (e: JPakeException) {
-        native.close()
-        throw e
-    }
+    private fun <T> guarded(block: () -> T): T =
+        try {
+            block()
+        } catch (e: JPakeNativeException) {
+            native.close()
+            throw JPakeException()
+        } catch (e: JPakeException) {
+            native.close()
+            throw e
+        }
 }

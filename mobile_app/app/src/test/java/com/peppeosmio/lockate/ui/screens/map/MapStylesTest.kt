@@ -9,16 +9,34 @@ class MapStylesTest {
 
     @Test
     fun `defaults are used when there are no custom styles`() {
-        assertEquals(DEFAULT_LIGHT_STYLE_URL, resolveMapStyleUrl(isDarkTheme = false, customLight = null, customDark = null))
-        assertEquals(DEFAULT_DARK_STYLE_URL, resolveMapStyleUrl(isDarkTheme = true, customLight = null, customDark = null))
+        assertEquals(
+            DEFAULT_LIGHT_STYLE_URL,
+            resolveMapStyleUrl(isDarkTheme = false, customLight = null, customDark = null),
+        )
+        assertEquals(
+            DEFAULT_DARK_STYLE_URL,
+            resolveMapStyleUrl(isDarkTheme = true, customLight = null, customDark = null),
+        )
     }
 
     @Test
     fun `custom style is used for the matching theme only`() {
-        assertEquals("https://example.com/light.json", resolveMapStyleUrl(false, "https://example.com/light.json", null))
-        assertEquals(DEFAULT_DARK_STYLE_URL, resolveMapStyleUrl(true, "https://example.com/light.json", null))
-        assertEquals("https://example.com/dark.json", resolveMapStyleUrl(true, null, "https://example.com/dark.json"))
-        assertEquals(DEFAULT_LIGHT_STYLE_URL, resolveMapStyleUrl(false, null, "https://example.com/dark.json"))
+        assertEquals(
+            "https://example.com/light.json",
+            resolveMapStyleUrl(false, "https://example.com/light.json", null),
+        )
+        assertEquals(
+            DEFAULT_DARK_STYLE_URL,
+            resolveMapStyleUrl(true, "https://example.com/light.json", null),
+        )
+        assertEquals(
+            "https://example.com/dark.json",
+            resolveMapStyleUrl(true, null, "https://example.com/dark.json"),
+        )
+        assertEquals(
+            DEFAULT_LIGHT_STYLE_URL,
+            resolveMapStyleUrl(false, null, "https://example.com/dark.json"),
+        )
     }
 
     @Test
@@ -29,7 +47,10 @@ class MapStylesTest {
 
     @Test
     fun `custom style is trimmed`() {
-        assertEquals("https://example.com/light.json", resolveMapStyleUrl(false, "  https://example.com/light.json \n", null))
+        assertEquals(
+            "https://example.com/light.json",
+            resolveMapStyleUrl(false, "  https://example.com/light.json \n", null),
+        )
     }
 
     @Test

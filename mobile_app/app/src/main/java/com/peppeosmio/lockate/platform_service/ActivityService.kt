@@ -15,22 +15,25 @@ import com.google.android.gms.location.DetectedActivity
 import com.peppeosmio.lockate.domain.UserActivity
 import com.peppeosmio.lockate.service.PermissionsService
 import com.peppeosmio.lockate.utils.SendLoopLog
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.emitAll
-import kotlinx.coroutines.flow.flow
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.concurrent.atomics.decrementAndFetch
 import kotlin.concurrent.atomics.incrementAndFetch
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 
-internal fun userActivityOf(detectedActivityType: Int): UserActivity = when (detectedActivityType) {
-    DetectedActivity.STILL -> UserActivity.Still
-    DetectedActivity.WALKING, DetectedActivity.RUNNING, DetectedActivity.ON_FOOT -> UserActivity.OnFoot
-    DetectedActivity.ON_BICYCLE -> UserActivity.OnBicycle
-    DetectedActivity.IN_VEHICLE -> UserActivity.InVehicle
-    else -> UserActivity.Unknown
-}
+internal fun userActivityOf(detectedActivityType: Int): UserActivity =
+    when (detectedActivityType) {
+        DetectedActivity.STILL -> UserActivity.Still
+        DetectedActivity.WALKING,
+        DetectedActivity.RUNNING,
+        DetectedActivity.ON_FOOT -> UserActivity.OnFoot
+        DetectedActivity.ON_BICYCLE -> UserActivity.OnBicycle
+        DetectedActivity.IN_VEHICLE -> UserActivity.InVehicle
+        else -> UserActivity.Unknown
+    }
 
 /**
  * The user's activity from the Activity Recognition transitions. Stays [UserActivity.Unknown]
@@ -43,8 +46,7 @@ class ActivityService(
 ) {
     private val activity = MutableStateFlow(UserActivity.Unknown)
 
-    @OptIn(ExperimentalAtomicApi::class)
-    private val activeCollectors = AtomicInt(0)
+    @OptIn(ExperimentalAtomicApi::class) private val activeCollectors = AtomicInt(0)
     private var receiver: BroadcastReceiver? = null
 
     private val pendingIntent by lazy {
@@ -53,7 +55,7 @@ class ActivityService(
             context,
             0,
             Intent(ACTION_TRANSITIONS).setPackage(context.packageName),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
         )
     }
 
@@ -94,35 +96,50 @@ class ActivityService(
             sendLoopLog.log("activity updates not started: permission denied")
             return
         }
-        val receiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context?, intent: Intent?) {
-                val result = intent?.let { ActivityTransitionResult.extractResult(it) } ?: return
-                result.transitionEvents.forEach { event ->
-                    val eventActivity = userActivityOf(event.activityType)
-                    sendLoopLog.log("activity transition type=${event.activityType} transition=${event.transitionType}")
-                    when (event.transitionType) {
-                        ActivityTransition.ACTIVITY_TRANSITION_ENTER -> activity.value = eventActivity
-                        ActivityTransition.ACTIVITY_TRANSITION_EXIT ->
-                            activity.compareAndSet(eventActivity, UserActivity.Unknown)
+        val receiver =
+            object : BroadcastReceiver() {
+                override fun onReceive(context: Context?, intent: Intent?) {
+                    val result =
+                        intent?.let { ActivityTransitionResult.extractResult(it) } ?: return
+                    result.transitionEvents.forEach { event ->
+                        val eventActivity = userActivityOf(event.activityType)
+                        sendLoopLog.log(
+                            "activity transition type=${event.activityType} transition=${event.transitionType}"
+                        )
+                        when (event.transitionType) {
+                            ActivityTransition.ACTIVITY_TRANSITION_ENTER ->
+                                activity.value = eventActivity
+                            ActivityTransition.ACTIVITY_TRANSITION_EXIT ->
+                                activity.compareAndSet(eventActivity, UserActivity.Unknown)
+                        }
                     }
                 }
             }
-        }
         ContextCompat.registerReceiver(
-            context, receiver, IntentFilter(ACTION_TRANSITIONS), ContextCompat.RECEIVER_NOT_EXPORTED
+            context,
+            receiver,
+            IntentFilter(ACTION_TRANSITIONS),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
         )
         this.receiver = receiver
         val transitions = TRACKED_ACTIVITIES.flatMap { type ->
             listOf(
-                ActivityTransition.ACTIVITY_TRANSITION_ENTER,
-                ActivityTransition.ACTIVITY_TRANSITION_EXIT
-            ).map {
-                ActivityTransition.Builder().setActivityType(type).setActivityTransition(it).build()
-            }
+                    ActivityTransition.ACTIVITY_TRANSITION_ENTER,
+                    ActivityTransition.ACTIVITY_TRANSITION_EXIT,
+                )
+                .map {
+                    ActivityTransition.Builder()
+                        .setActivityType(type)
+                        .setActivityTransition(it)
+                        .build()
+                }
         }
         try {
             ActivityRecognition.getClient(context)
-                .requestActivityTransitionUpdates(ActivityTransitionRequest(transitions), pendingIntent)
+                .requestActivityTransitionUpdates(
+                    ActivityTransitionRequest(transitions),
+                    pendingIntent,
+                )
                 .addOnSuccessListener { sendLoopLog.log("activity updates registered") }
                 .addOnFailureListener { e ->
                     sendLoopLog.log("activity updates failed ${e::class.simpleName}: ${e.message}")
@@ -136,7 +153,8 @@ class ActivityService(
     private fun stopActivityUpdates() {
         receiver?.let {
             try {
-                ActivityRecognition.getClient(context).removeActivityTransitionUpdates(pendingIntent)
+                ActivityRecognition.getClient(context)
+                    .removeActivityTransitionUpdates(pendingIntent)
             } catch (e: SecurityException) {
                 e.printStackTrace()
             }
@@ -148,12 +166,13 @@ class ActivityService(
 
     companion object {
         private const val ACTION_TRANSITIONS = "com.peppeosmio.lockate.ACTIVITY_TRANSITIONS"
-        private val TRACKED_ACTIVITIES = listOf(
-            DetectedActivity.STILL,
-            DetectedActivity.WALKING,
-            DetectedActivity.RUNNING,
-            DetectedActivity.ON_BICYCLE,
-            DetectedActivity.IN_VEHICLE
-        )
+        private val TRACKED_ACTIVITIES =
+            listOf(
+                DetectedActivity.STILL,
+                DetectedActivity.WALKING,
+                DetectedActivity.RUNNING,
+                DetectedActivity.ON_BICYCLE,
+                DetectedActivity.IN_VEHICLE,
+            )
     }
 }

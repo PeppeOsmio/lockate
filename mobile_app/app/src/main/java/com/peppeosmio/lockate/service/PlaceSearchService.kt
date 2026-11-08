@@ -19,14 +19,15 @@ const val DEFAULT_GEOCODER_URL = "https://photon.komoot.io"
 
 data class Place(val name: String, val description: String, val coordinates: Coordinates)
 
-@Serializable
-private data class PhotonResponseDto(val features: List<PhotonFeatureDto>)
+@Serializable private data class PhotonResponseDto(val features: List<PhotonFeatureDto>)
 
 @Serializable
-private data class PhotonFeatureDto(val geometry: PhotonGeometryDto, val properties: PhotonPropertiesDto)
+private data class PhotonFeatureDto(
+    val geometry: PhotonGeometryDto,
+    val properties: PhotonPropertiesDto,
+)
 
-@Serializable
-private data class PhotonGeometryDto(val coordinates: List<Double>)
+@Serializable private data class PhotonGeometryDto(val coordinates: List<Double>)
 
 @Serializable
 private data class PhotonPropertiesDto(
@@ -48,24 +49,30 @@ private const val SAME_PLACE_METERS = 300.0
  * so are repeats of a place already listed.
  */
 internal fun parsePhotonPlaces(json: String): List<Place> =
-    photonJson.decodeFromString<PhotonResponseDto>(json).features.mapNotNull { feature ->
-        val p = feature.properties
-        val street = p.street?.let { listOfNotNull(it, p.housenumber).joinToString(" ") }
-        val name = p.name ?: street ?: return@mapNotNull null
-        val description = listOfNotNull(street.takeIf { p.name != null }, p.city, p.state, p.country)
-            .filter { it != name }
-            .distinct()
-            .joinToString(", ")
-        // GeoJSON puts the longitude first
-        val (longitude, latitude) = feature.geometry.coordinates
-        Place(name, description, Coordinates(latitude = latitude, longitude = longitude))
-    }.fold(emptyList()) { places, place ->
-        val isRepeat = places.any {
-            it.name == place.name && it.description == place.description &&
-                it.coordinates.distanceMetersTo(place.coordinates) < SAME_PLACE_METERS
+    photonJson
+        .decodeFromString<PhotonResponseDto>(json)
+        .features
+        .mapNotNull { feature ->
+            val p = feature.properties
+            val street = p.street?.let { listOfNotNull(it, p.housenumber).joinToString(" ") }
+            val name = p.name ?: street ?: return@mapNotNull null
+            val description =
+                listOfNotNull(street.takeIf { p.name != null }, p.city, p.state, p.country)
+                    .filter { it != name }
+                    .distinct()
+                    .joinToString(", ")
+            // GeoJSON puts the longitude first
+            val (longitude, latitude) = feature.geometry.coordinates
+            Place(name, description, Coordinates(latitude = latitude, longitude = longitude))
         }
-        if (isRepeat) places else places + place
-    }
+        .fold(emptyList()) { places, place ->
+            val isRepeat = places.any {
+                it.name == place.name &&
+                    it.description == place.description &&
+                    it.coordinates.distanceMetersTo(place.coordinates) < SAME_PLACE_METERS
+            }
+            if (isRepeat) places else places + place
+        }
 
 /** Searches places with a Photon geocoder, which sees the query and the area it is biased to. */
 class PlaceSearchService(private val context: Context, private val httpClient: HttpClient) {
@@ -84,27 +91,30 @@ class PlaceSearchService(private val context: Context, private val httpClient: H
 
     /** Places matching [query], the ones closest to [near] first. */
     suspend fun search(query: String, near: Coordinates): List<Place> {
-        val response = httpClient.get("${geocoderUrl.first() ?: DEFAULT_GEOCODER_URL}/api") {
-            parameter("q", query)
-            parameter("limit", MAX_RESULTS)
-            parameter("lat", near.latitude)
-            parameter("lon", near.longitude)
-        }
+        val response =
+            httpClient.get("${geocoderUrl.first() ?: DEFAULT_GEOCODER_URL}/api") {
+                parameter("q", query)
+                parameter("limit", MAX_RESULTS)
+                parameter("lat", near.latitude)
+                parameter("lon", near.longitude)
+            }
         check(response.status.isSuccess()) { "The geocoder answered ${response.status}" }
         return parsePhotonPlaces(response.bodyAsText())
     }
 
-    suspend fun isValidGeocoderUrl(url: String): Boolean = try {
-        val response = httpClient.get("${url.trim().trimEnd('/')}/api") {
-            parameter("q", "Roma")
-            parameter("limit", 1)
+    suspend fun isValidGeocoderUrl(url: String): Boolean =
+        try {
+            val response =
+                httpClient.get("${url.trim().trimEnd('/')}/api") {
+                    parameter("q", "Roma")
+                    parameter("limit", 1)
+                }
+            response.status.isSuccess() && parsePhotonPlaces(response.bodyAsText()).isNotEmpty()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            false
         }
-        response.status.isSuccess() && parsePhotonPlaces(response.bodyAsText()).isNotEmpty()
-    } catch (e: CancellationException) {
-        throw e
-    } catch (_: Exception) {
-        false
-    }
 
     private companion object {
         const val MAX_RESULTS = 5

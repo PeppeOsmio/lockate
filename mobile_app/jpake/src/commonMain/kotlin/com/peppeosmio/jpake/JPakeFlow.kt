@@ -30,16 +30,19 @@ class ServerConfirm(val round2: JPakeRound2, val tag: ByteArray)
 class ClientConfirm(val tag: ByteArray)
 
 /**
- * @param serverVerified false if the server's tag didn't match, i.e. the passwords or the
- *   configs differ. [confirm] is still there to send, so the server finds out at once.
+ * @param serverVerified false if the server's tag didn't match, i.e. the passwords or the configs
+ *   differ. [confirm] is still there to send, so the server finds out at once.
  */
 class ClientConfirmResult(val confirm: ClientConfirm, val serverVerified: Boolean)
 
 /** AES-GCM output: the random IV and the ciphertext with its authentication tag */
 class SealedMessage(val iv: ByteArray, val cipherText: ByteArray)
 
-class JPakeServer private constructor(
-    private val jpake: JPake, private val config: JPakeConfig, val hello: ServerHello
+class JPakeServer
+private constructor(
+    private val jpake: JPake,
+    private val config: JPakeConfig,
+    val hello: ServerHello,
 ) {
     private var keys: ConfirmedKeys? = null
 
@@ -58,9 +61,14 @@ class JPakeServer private constructor(
         jpake.readRound1(reply.round1)
         val round2 = jpake.writeRound2()
         jpake.readRound2(reply.round2)
-        val confirmedKeys = ConfirmedKeys(
-            jpake.deriveSecret(), JPakeRole.SERVER, config, hello.round1, reply.round1
-        )
+        val confirmedKeys =
+            ConfirmedKeys(
+                jpake.deriveSecret(),
+                JPakeRole.SERVER,
+                config,
+                hello.round1,
+                reply.round1,
+            )
         keys = confirmedKeys
         return ServerConfirm(round2, confirmedKeys.localTag())
     }
@@ -68,23 +76,27 @@ class JPakeServer private constructor(
     /** Throws [JPakeException] if the client's tag doesn't match, e.g. a wrong password */
     suspend fun finish(confirm: ClientConfirm): JPakeSession {
         val confirmedKeys = keys ?: throw JPakeException("respond() wasn't called")
-        if (!confirmedKeys.verifyPeerTag(confirm.tag)) throw JPakeException("Key confirmation failed")
+        if (!confirmedKeys.verifyPeerTag(confirm.tag))
+            throw JPakeException("Key confirmation failed")
         return JPakeSession(confirmedKeys, config)
     }
 }
 
-class JPakeClient private constructor(
+class JPakeClient
+private constructor(
     private val jpake: JPake,
     private val config: JPakeConfig,
     private val serverRound1: JPakeRound1,
-    val reply: ClientReply
+    val reply: ClientReply,
 ) {
     private var verifiedKeys: ConfirmedKeys? = null
 
     companion object {
         /** Throws [JPakeException] if the server's round isn't a valid J-PAKE message */
         fun respond(
-            password: ByteArray, hello: ServerHello, config: JPakeConfig = JPakeConfig()
+            password: ByteArray,
+            hello: ServerHello,
+            config: JPakeConfig = JPakeConfig(),
         ): JPakeClient {
             val jpake = JPake(JPakeRole.CLIENT, password)
             jpake.readRound1(hello.round1)
@@ -99,49 +111,71 @@ class JPakeClient private constructor(
     /** Throws [JPakeException] if the server's round isn't a valid J-PAKE message */
     suspend fun confirm(confirm: ServerConfirm): ClientConfirmResult {
         jpake.readRound2(confirm.round2)
-        val confirmedKeys = ConfirmedKeys(
-            jpake.deriveSecret(), JPakeRole.CLIENT, config, reply.round1, serverRound1
-        )
+        val confirmedKeys =
+            ConfirmedKeys(
+                jpake.deriveSecret(),
+                JPakeRole.CLIENT,
+                config,
+                reply.round1,
+                serverRound1,
+            )
         val verified = confirmedKeys.verifyPeerTag(confirm.tag)
         if (verified) verifiedKeys = confirmedKeys
         return ClientConfirmResult(ClientConfirm(confirmedKeys.localTag()), verified)
     }
 
     /** Throws [JPakeException] unless [confirm] verified the server's tag */
-    fun session(): JPakeSession = JPakeSession(
-        verifiedKeys ?: throw JPakeException("The server wasn't verified"), config
-    )
+    fun session(): JPakeSession =
+        JPakeSession(
+            verifiedKeys ?: throw JPakeException("The server wasn't verified"),
+            config,
+        )
 }
 
 /**
  * What both sides share once the keys are confirmed: keys derived for any purpose, and AES-256-GCM
  * for messages. Use a different [info] for every kind of message so the keys stay independent.
  */
-class JPakeSession internal constructor(
-    private val keys: ConfirmedKeys, private val config: JPakeConfig
+class JPakeSession
+internal constructor(
+    private val keys: ConfirmedKeys,
+    private val config: JPakeConfig,
 ) {
     suspend fun deriveKey(info: ByteArray, bits: Int = JPakeConfig.DERIVED_KEY_BITS): ByteArray =
         keys.deriveKey(info, bits)
 
     @OptIn(DelicateCryptographyApi::class)
-    suspend fun seal(plaintext: ByteArray, info: ByteArray = config.encryptionLabel): SealedMessage {
+    suspend fun seal(
+        plaintext: ByteArray,
+        info: ByteArray = config.encryptionLabel,
+    ): SealedMessage {
         val iv = CryptographyRandom.nextBytes(config.ivBytes)
-        val cipherText = aesGcmKey(info).cipher(config.tagBits.bits)
-            .encryptWithIv(iv = iv, plaintext = plaintext)
+        val cipherText =
+            aesGcmKey(info)
+                .cipher(config.tagBits.bits)
+                .encryptWithIv(iv = iv, plaintext = plaintext)
         return SealedMessage(iv, cipherText)
     }
 
-    /** Throws [JPakeException] if the message was altered, or [info] isn't the one it was sealed with */
+    /**
+     * Throws [JPakeException] if the message was altered, or [info] isn't the one it was sealed
+     * with
+     */
     @OptIn(DelicateCryptographyApi::class)
     suspend fun open(message: SealedMessage, info: ByteArray = config.encryptionLabel): ByteArray =
         try {
-            aesGcmKey(info).cipher(config.tagBits.bits)
+            aesGcmKey(info)
+                .cipher(config.tagBits.bits)
                 .decryptWithIv(iv = message.iv, ciphertext = message.cipherText)
         } catch (_: Exception) {
             throw JPakeException("Can't open the message")
         }
 
     private suspend fun aesGcmKey(info: ByteArray) =
-        CryptographyProvider.Default.get(AES.GCM).keyDecoder()
-            .decodeFromByteArray(AES.Key.Format.RAW, keys.deriveKey(info, JPakeConfig.DERIVED_KEY_BITS))
+        CryptographyProvider.Default.get(AES.GCM)
+            .keyDecoder()
+            .decodeFromByteArray(
+                AES.Key.Format.RAW,
+                keys.deriveKey(info, JPakeConfig.DERIVED_KEY_BITS),
+            )
 }

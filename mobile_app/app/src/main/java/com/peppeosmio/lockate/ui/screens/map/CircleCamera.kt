@@ -15,21 +15,26 @@ fun zoomToFitCircle(
     latitude: Double,
     radiusMeters: Double,
     viewportWidthDp: Double,
-    widthFraction: Double = 0.6
+    widthFraction: Double = 0.6,
 ): Double {
     val metersPerDp = 2 * radiusMeters / (widthFraction * viewportWidthDp)
-    val zoom = ln(
-        EARTH_CIRCUMFERENCE_METERS * cos(Math.toRadians(latitude)) /
+    val zoom =
+        ln(
+            EARTH_CIRCUMFERENCE_METERS * cos(Math.toRadians(latitude)) /
                 (WORLD_WIDTH_DP_AT_ZOOM_0 * metersPerDp)
-    ) / ln(2.0)
+        ) / ln(2.0)
     return zoom.coerceIn(MIN_ZOOM, MAX_ZOOM)
 }
 
 /** The share of a map [viewportWidthDp] wide that a circle's diameter takes at [zoom]. */
 fun circleWidthFraction(
-    latitude: Double, radiusMeters: Double, zoom: Double, viewportWidthDp: Double
+    latitude: Double,
+    radiusMeters: Double,
+    zoom: Double,
+    viewportWidthDp: Double,
 ): Double {
-    val metersPerDp = EARTH_CIRCUMFERENCE_METERS * cos(Math.toRadians(latitude)) /
+    val metersPerDp =
+        EARTH_CIRCUMFERENCE_METERS * cos(Math.toRadians(latitude)) /
             (WORLD_WIDTH_DP_AT_ZOOM_0 * 2.0.pow(zoom))
     return 2 * radiusMeters / metersPerDp / viewportWidthDp
 }

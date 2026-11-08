@@ -30,10 +30,14 @@ class PayloadCodec(private val cryptoService: CryptoService) {
         "$prefix|$groupId|$ownerId".toByteArray()
 
     private suspend fun decrypt(
-        data: EncryptedData, key: ByteArray, aad: ByteArray, size: Int
-    ): ByteArray = cryptoService.decrypt(data, key, aad).also {
-        if (it.size != size) throw CryptoException()
-    }
+        data: EncryptedData,
+        key: ByteArray,
+        aad: ByteArray,
+        size: Int,
+    ): ByteArray =
+        cryptoService.decrypt(data, key, aad).also {
+            if (it.size != size) throw CryptoException()
+        }
 
     private suspend fun encryptName(name: String, key: ByteArray, aad: ByteArray): EncryptedData =
         cryptoService.encrypt(Padding.pad(name.toByteArray(), NAME_SIZE), key, aad)
@@ -48,11 +52,17 @@ class PayloadCodec(private val cryptoService: CryptoService) {
         decryptName(data, key, "$GROUP_NAME_AAD_PREFIX|$groupId".toByteArray())
 
     suspend fun encryptMemberName(
-        name: String, key: ByteArray, groupId: String, memberId: String
+        name: String,
+        key: ByteArray,
+        groupId: String,
+        memberId: String,
     ): EncryptedData = encryptName(name, key, aad(MEMBER_NAME_AAD_PREFIX, groupId, memberId))
 
     suspend fun decryptMemberName(
-        data: EncryptedData, key: ByteArray, groupId: String, memberId: String
+        data: EncryptedData,
+        key: ByteArray,
+        groupId: String,
+        memberId: String,
     ): String = decryptName(data, key, aad(MEMBER_NAME_AAD_PREFIX, groupId, memberId))
 
     private fun encodeCoordinates(coordinates: Coordinates): ByteArray =
@@ -65,99 +75,140 @@ class PayloadCodec(private val cryptoService: CryptoService) {
         val buffer = ByteBuffer.wrap(bytes)
         return Coordinates(
             latitude = buffer.getInt() / MICRODEGREES,
-            longitude = buffer.getInt() / MICRODEGREES
+            longitude = buffer.getInt() / MICRODEGREES,
         )
     }
 
     suspend fun encryptMemberMessage(
-        message: MemberMessage, key: ByteArray, groupId: String, memberId: String
+        message: MemberMessage,
+        key: ByteArray,
+        groupId: String,
+        memberId: String,
     ): EncryptedMemberMessage {
         val activity = byteArrayOf(ACTIVITY_CODES.indexOf(message.activity).toByte())
         return EncryptedMemberMessage(
-            coordinates = cryptoService.encrypt(
-                encodeCoordinates(message.coordinates),
-                key,
-                aad(MEMBER_COORDINATES_AAD_PREFIX, groupId, memberId)
-            ),
-            activity = cryptoService.encrypt(
-                activity, key, aad(MEMBER_ACTIVITY_AAD_PREFIX, groupId, memberId)
-            )
+            coordinates =
+                cryptoService.encrypt(
+                    encodeCoordinates(message.coordinates),
+                    key,
+                    aad(MEMBER_COORDINATES_AAD_PREFIX, groupId, memberId),
+                ),
+            activity =
+                cryptoService.encrypt(
+                    activity,
+                    key,
+                    aad(MEMBER_ACTIVITY_AAD_PREFIX, groupId, memberId),
+                ),
         )
     }
 
     suspend fun decryptMemberMessage(
-        message: EncryptedMemberMessage, key: ByteArray, groupId: String, memberId: String
+        message: EncryptedMemberMessage,
+        key: ByteArray,
+        groupId: String,
+        memberId: String,
     ): MemberMessage {
-        val coordinates = decrypt(
-            message.coordinates,
-            key,
-            aad(MEMBER_COORDINATES_AAD_PREFIX, groupId, memberId),
-            COORDINATES_BYTES
-        )
+        val coordinates =
+            decrypt(
+                message.coordinates,
+                key,
+                aad(MEMBER_COORDINATES_AAD_PREFIX, groupId, memberId),
+                COORDINATES_BYTES,
+            )
         val activity =
             decrypt(message.activity, key, aad(MEMBER_ACTIVITY_AAD_PREFIX, groupId, memberId), 1)
         return MemberMessage(
             coordinates = decodeCoordinates(coordinates),
             // an activity added by a newer version is read as unknown, so its position still counts
-            activity = ACTIVITY_CODES.getOrNull(activity[0].toInt()) ?: UserActivity.Unknown
+            activity = ACTIVITY_CODES.getOrNull(activity[0].toInt()) ?: UserActivity.Unknown,
         )
     }
 
     suspend fun encryptCircle(circle: Circle, key: ByteArray, groupId: String): EncryptedCircle =
         EncryptedCircle(
-            coordinates = cryptoService.encrypt(
-                encodeCoordinates(circle.center),
-                key,
-                aad(CIRCLE_COORDINATES_AAD_PREFIX, groupId, circle.id)
-            ),
-            radius = cryptoService.encrypt(
-                ByteBuffer.allocate(RADIUS_BYTES).putDouble(circle.radiusMeters).array(),
-                key,
-                aad(CIRCLE_RADIUS_AAD_PREFIX, groupId, circle.id)
-            ),
-            name = encryptName(circle.name, key, aad(CIRCLE_NAME_AAD_PREFIX, groupId, circle.id))
+            coordinates =
+                cryptoService.encrypt(
+                    encodeCoordinates(circle.center),
+                    key,
+                    aad(CIRCLE_COORDINATES_AAD_PREFIX, groupId, circle.id),
+                ),
+            radius =
+                cryptoService.encrypt(
+                    ByteBuffer.allocate(RADIUS_BYTES).putDouble(circle.radiusMeters).array(),
+                    key,
+                    aad(CIRCLE_RADIUS_AAD_PREFIX, groupId, circle.id),
+                ),
+            name = encryptName(circle.name, key, aad(CIRCLE_NAME_AAD_PREFIX, groupId, circle.id)),
         )
 
     suspend fun decryptCircle(
-        circle: EncryptedCircle, key: ByteArray, groupId: String, circleId: String
+        circle: EncryptedCircle,
+        key: ByteArray,
+        groupId: String,
+        circleId: String,
     ): Circle {
-        val coordinates = decrypt(
-            circle.coordinates,
-            key,
-            aad(CIRCLE_COORDINATES_AAD_PREFIX, groupId, circleId),
-            COORDINATES_BYTES
-        )
-        val radius = ByteBuffer.wrap(
-            decrypt(circle.radius, key, aad(CIRCLE_RADIUS_AAD_PREFIX, groupId, circleId), RADIUS_BYTES)
-        ).getDouble()
+        val coordinates =
+            decrypt(
+                circle.coordinates,
+                key,
+                aad(CIRCLE_COORDINATES_AAD_PREFIX, groupId, circleId),
+                COORDINATES_BYTES,
+            )
+        val radius =
+            ByteBuffer.wrap(
+                    decrypt(
+                        circle.radius,
+                        key,
+                        aad(CIRCLE_RADIUS_AAD_PREFIX, groupId, circleId),
+                        RADIUS_BYTES,
+                    )
+                )
+                .getDouble()
         if (!radius.isFinite() || radius <= 0) throw CryptoException()
         val name = decryptName(circle.name, key, aad(CIRCLE_NAME_AAD_PREFIX, groupId, circleId))
         return Circle(
             id = circleId,
             name = name,
             center = decodeCoordinates(coordinates),
-            radiusMeters = radius
+            radiusMeters = radius,
         )
     }
 
     suspend fun encryptCircleEvent(
-        event: CircleTransition, key: ByteArray, groupId: String, memberId: String
+        event: CircleTransition,
+        key: ByteArray,
+        groupId: String,
+        memberId: String,
     ): EncryptedData {
         val circleId = UUID.fromString(event.circleId)
-        val plaintext = ByteBuffer.allocate(CIRCLE_EVENT_BYTES)
-            .putLong(circleId.mostSignificantBits)
-            .putLong(circleId.leastSignificantBits)
-            .put(TRANSITION_CODES.indexOf(event.kind).toByte())
-            .array()
-        return cryptoService.encrypt(plaintext, key, aad(CIRCLE_EVENT_AAD_PREFIX, groupId, memberId))
+        val plaintext =
+            ByteBuffer.allocate(CIRCLE_EVENT_BYTES)
+                .putLong(circleId.mostSignificantBits)
+                .putLong(circleId.leastSignificantBits)
+                .put(TRANSITION_CODES.indexOf(event.kind).toByte())
+                .array()
+        return cryptoService.encrypt(
+            plaintext,
+            key,
+            aad(CIRCLE_EVENT_AAD_PREFIX, groupId, memberId),
+        )
     }
 
     suspend fun decryptCircleEvent(
-        data: EncryptedData, key: ByteArray, groupId: String, memberId: String
+        data: EncryptedData,
+        key: ByteArray,
+        groupId: String,
+        memberId: String,
     ): CircleTransition {
-        val buffer = ByteBuffer.wrap(
-            decrypt(data, key, aad(CIRCLE_EVENT_AAD_PREFIX, groupId, memberId), CIRCLE_EVENT_BYTES)
-        )
+        val buffer =
+            ByteBuffer.wrap(
+                decrypt(
+                    data,
+                    key,
+                    aad(CIRCLE_EVENT_AAD_PREFIX, groupId, memberId),
+                    CIRCLE_EVENT_BYTES,
+                )
+            )
         val circleId = UUID(buffer.getLong(), buffer.getLong()).toString()
         val kind = TRANSITION_CODES.getOrNull(buffer.get().toInt()) ?: throw CryptoException()
         return CircleTransition(circleId, kind)
@@ -168,13 +219,14 @@ class PayloadCodec(private val cryptoService: CryptoService) {
         private const val MICRODEGREES = 1_000_000.0
         private const val RADIUS_BYTES = 8
         // the index is the byte on the wire, so new activities go at the end
-        private val ACTIVITY_CODES = listOf(
-            UserActivity.Unknown,
-            UserActivity.Still,
-            UserActivity.OnFoot,
-            UserActivity.OnBicycle,
-            UserActivity.InVehicle
-        )
+        private val ACTIVITY_CODES =
+            listOf(
+                UserActivity.Unknown,
+                UserActivity.Still,
+                UserActivity.OnFoot,
+                UserActivity.OnBicycle,
+                UserActivity.InVehicle,
+            )
         private const val CIRCLE_EVENT_BYTES = 17
         private val TRANSITION_CODES = listOf(TransitionKind.Enter, TransitionKind.Exit)
         const val MAX_NAME_CHARS = 40

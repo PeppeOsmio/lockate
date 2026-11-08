@@ -12,11 +12,12 @@ class InviteExchangeTest {
 
     private val code = InviteCode(7, listOf("acid", "acorn", "acre"))
     private val wrongWords = listOf("acid", "acorn", "acted")
-    private val payload = InvitePayload(
-        groupId = "69e74d01-ef20-47af-b602-0b45776d8666",
-        groupKey = ByteArray(32) { it.toByte() },
-        joinToken = ByteArray(32) { (it * 3).toByte() }
-    )
+    private val payload =
+        InvitePayload(
+            groupId = "69e74d01-ef20-47af-b602-0b45776d8666",
+            groupKey = ByteArray(32) { it.toByte() },
+            joinToken = ByteArray(32) { (it * 3).toByte() },
+        )
 
     private fun ByteArray.flipBit(index: Int = 0) =
         copyOf().also { it[index] = (it[index].toInt() xor 1).toByte() }
@@ -27,11 +28,14 @@ class InviteExchangeTest {
         try {
             block()
             fail("Expected InviteAbortedException")
-        } catch (_: InviteAbortedException) {
-        }
+        } catch (_: InviteAbortedException) {}
     }
 
-    private class Exchange(val inviter: Inviter, val invitee: Invitee, val confirmation: InviterConfirmation)
+    private class Exchange(
+        val inviter: Inviter,
+        val invitee: Invitee,
+        val confirmation: InviterConfirmation,
+    )
 
     private suspend fun exchange(inviteeWords: List<String>): Exchange {
         val inviter = Inviter.start(code.words)
@@ -95,8 +99,12 @@ class InviteExchangeTest {
         val e = exchange(code.words)
         val tb = e.invitee.confirm(e.confirmation).tb
         val final = e.inviter.finish(tb, payload)
-        assertAborts { e.invitee.open(InviterFinal(final.payloadIv, final.payloadCipherText.flipBit())) }
-        assertAborts { e.invitee.open(InviterFinal(final.payloadIv.flipBit(), final.payloadCipherText)) }
+        assertAborts {
+            e.invitee.open(InviterFinal(final.payloadIv, final.payloadCipherText.flipBit()))
+        }
+        assertAborts {
+            e.invitee.open(InviterFinal(final.payloadIv.flipBit(), final.payloadCipherText))
+        }
     }
 
     @Test
@@ -114,15 +122,21 @@ class InviteExchangeTest {
         val invitee = Invitee.respond(code, inviter.hello)
         val confirmation = inviter.confirm(invitee.reply)
         assertAborts {
-            invitee.confirm(InviterConfirmation(confirmation.round2.flipMiddleBit(), confirmation.ta))
+            invitee.confirm(
+                InviterConfirmation(confirmation.round2.flipMiddleBit(), confirmation.ta)
+            )
         }
     }
 
     @Test
     fun `malformed messages are rejected`() = runTest {
         val inviter = Inviter.start(code.words)
-        assertAborts { Invitee.respond(code, InviterHello(inviter.hello.sid.copyOf(15), inviter.hello.round1)) }
-        assertAborts { Invitee.respond(code, InviterHello(inviter.hello.sid, inviter.hello.round1.copyOf(40))) }
+        assertAborts {
+            Invitee.respond(code, InviterHello(inviter.hello.sid.copyOf(15), inviter.hello.round1))
+        }
+        assertAborts {
+            Invitee.respond(code, InviterHello(inviter.hello.sid, inviter.hello.round1.copyOf(40)))
+        }
         assertAborts { Invitee.respond(code, InviterHello(inviter.hello.sid, ByteArray(0))) }
         val reply = Invitee.respond(code, inviter.hello).reply
         assertAborts { inviter.confirm(InviteeReply(reply.round1, ByteArray(0))) }
@@ -130,6 +144,8 @@ class InviteExchangeTest {
 
     @Test
     fun `every invite uses a fresh session id`() = runTest {
-        assertFalse(Inviter.start(code.words).hello.sid.contentEquals(Inviter.start(code.words).hello.sid))
+        assertFalse(
+            Inviter.start(code.words).hello.sid.contentEquals(Inviter.start(code.words).hello.sid)
+        )
     }
 }

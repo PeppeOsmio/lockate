@@ -57,20 +57,24 @@ private val PAYLOAD_INFO = "lockate-invite-payload".encodeToByteArray()
 private fun password(words: List<String>) = lvCat(PASSWORD_LABEL, WordPassphrase.bytes(words))
 
 /** The session id goes into every key and tag, so a message from another invite never verifies */
-private fun config(sid: ByteArray) = JPakeConfig(
-    context = sid,
-    serverId = "lockate-inviter".encodeToByteArray(),
-    clientId = "lockate-invitee".encodeToByteArray()
-)
+private fun config(sid: ByteArray) =
+    JPakeConfig(
+        context = sid,
+        serverId = "lockate-inviter".encodeToByteArray(),
+        clientId = "lockate-invitee".encodeToByteArray(),
+    )
 
-private inline fun <T> aborting(block: () -> T): T = try {
-    block()
-} catch (_: JPakeException) {
-    throw InviteAbortedException()
-}
+private inline fun <T> aborting(block: () -> T): T =
+    try {
+        block()
+    } catch (_: JPakeException) {
+        throw InviteAbortedException()
+    }
 
-class Inviter private constructor(
-    private val server: JPakeServer, val hello: InviterHello
+class Inviter
+private constructor(
+    private val server: JPakeServer,
+    val hello: InviterHello,
 ) {
     companion object {
         /** Takes only the words because the server assigns the nameplate after seeing the hello */
@@ -86,22 +90,28 @@ class Inviter private constructor(
 
     /** Throws [InviteAbortedException] if the invitee's rounds aren't valid J-PAKE messages */
     suspend fun confirm(reply: InviteeReply): InviterConfirmation = aborting {
-        val confirm = server.respond(ClientReply(JPakeRound1(reply.round1), JPakeRound2(reply.round2)))
+        val confirm =
+            server.respond(ClientReply(JPakeRound1(reply.round1), JPakeRound2(reply.round2)))
         InviterConfirmation(confirm.round2.bytes, confirm.tag)
     }
 
     /** Throws [InviteAbortedException] when the invitee didn't use the same code */
     suspend fun finish(tb: ByteArray, payload: InvitePayload): InviterFinal = aborting {
-        val sealed = server.finish(ClientConfirm(tb)).seal(
-            lvCat(payload.groupId.encodeToByteArray(), payload.groupKey, payload.joinToken),
-            PAYLOAD_INFO
-        )
+        val sealed =
+            server
+                .finish(ClientConfirm(tb))
+                .seal(
+                    lvCat(payload.groupId.encodeToByteArray(), payload.groupKey, payload.joinToken),
+                    PAYLOAD_INFO,
+                )
         InviterFinal(payloadIv = sealed.iv, payloadCipherText = sealed.cipherText)
     }
 }
 
-class Invitee private constructor(
-    private val client: JPakeClient, val reply: InviteeReply
+class Invitee
+private constructor(
+    private val client: JPakeClient,
+    val reply: InviteeReply,
 ) {
     private var session: JPakeSession? = null
 
@@ -109,9 +119,12 @@ class Invitee private constructor(
         /** Throws [InviteAbortedException] when the inviter's message is malformed or invalid */
         fun respond(code: InviteCode, hello: InviterHello): Invitee = aborting {
             if (hello.sid.size != SID_BYTES) throw InviteAbortedException()
-            val client = JPakeClient.respond(
-                password(code.words), ServerHello(JPakeRound1(hello.round1)), config(hello.sid)
-            )
+            val client =
+                JPakeClient.respond(
+                    password(code.words),
+                    ServerHello(JPakeRound1(hello.round1)),
+                    config(hello.sid),
+                )
             Invitee(client, InviteeReply(client.reply.round1.bytes, client.reply.round2.bytes))
         }
     }
@@ -125,16 +138,25 @@ class Invitee private constructor(
      * mismatch at once instead of waiting for a timeout.
      */
     suspend fun confirm(confirmation: InviterConfirmation): InviteeConfirmation = aborting {
-        val result = client.confirm(ServerConfirm(JPakeRound2(confirmation.round2), confirmation.ta))
+        val result =
+            client.confirm(ServerConfirm(JPakeRound2(confirmation.round2), confirmation.ta))
         if (result.serverVerified) session = client.session()
         InviteeConfirmation(result.confirm.tag, result.serverVerified)
     }
 
-    /** Throws [InviteAbortedException] when the inviter didn't use the same code or the payload was altered */
+    /**
+     * Throws [InviteAbortedException] when the inviter didn't use the same code or the payload was
+     * altered
+     */
     suspend fun open(final: InviterFinal): InvitePayload = aborting {
         val session = this.session ?: throw InviteAbortedException()
-        val plaintext = session.open(SealedMessage(final.payloadIv, final.payloadCipherText), PAYLOAD_INFO)
+        val plaintext =
+            session.open(SealedMessage(final.payloadIv, final.payloadCipherText), PAYLOAD_INFO)
         val parts = lvSplit(plaintext)?.takeIf { it.size == 3 } ?: throw InviteAbortedException()
-        InvitePayload(groupId = parts[0].decodeToString(), groupKey = parts[1], joinToken = parts[2])
+        InvitePayload(
+            groupId = parts[0].decodeToString(),
+            groupKey = parts[1],
+            joinToken = parts[2],
+        )
     }
 }

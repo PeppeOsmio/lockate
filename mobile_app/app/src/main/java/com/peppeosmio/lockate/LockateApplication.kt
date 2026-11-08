@@ -17,13 +17,15 @@ class LockateApplication : Application() {
         startKoin {
             androidContext(this@LockateApplication)
             modules(
-                appModule, viewModelModule
+                appModule,
+                viewModelModule,
             )
-            val channel = NotificationChannel(
-                AndroidSendLocationService.NOTIFICATION_CHANNEL_ID,
-                "Location",
-                NotificationManager.IMPORTANCE_LOW
-            )
+            val channel =
+                NotificationChannel(
+                    AndroidSendLocationService.NOTIFICATION_CHANNEL_ID,
+                    "Location",
+                    NotificationManager.IMPORTANCE_LOW,
+                )
             val notificationManager =
                 getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.createNotificationChannel(channel)
@@ -31,7 +33,7 @@ class LockateApplication : Application() {
                 NotificationChannel(
                     AndroidSendLocationService.CIRCLE_NOTIFICATION_CHANNEL_ID,
                     "Circles",
-                    NotificationManager.IMPORTANCE_DEFAULT
+                    NotificationManager.IMPORTANCE_DEFAULT,
                 )
             )
         }

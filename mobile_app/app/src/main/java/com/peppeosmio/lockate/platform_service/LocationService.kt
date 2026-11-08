@@ -1,6 +1,6 @@
 package com.peppeosmio.lockate.platform_service
 
-import  android.Manifest
+import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -10,11 +10,7 @@ import android.os.Build
 import android.os.Looper
 import android.util.Log
 import androidx.core.content.ContextCompat
-import com.google.android.gms.location.DeviceOrientation
-import com.google.android.gms.location.DeviceOrientationListener
-import com.google.android.gms.location.DeviceOrientationRequest
 import com.google.android.gms.location.FusedLocationProviderClient
-import com.google.android.gms.location.FusedOrientationProviderClient
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
@@ -31,23 +27,22 @@ import com.peppeosmio.lockate.exceptions.NoPermissionException
 import com.peppeosmio.lockate.service.ConfigSettings
 import com.peppeosmio.lockate.service.PermissionsService
 import com.peppeosmio.lockate.service.dataStore
-import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.suspendCancellableCoroutine
-import java.util.concurrent.Executor
 import kotlin.concurrent.atomics.AtomicInt
-import kotlin.concurrent.atomics.AtomicReference
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.concurrent.atomics.decrementAndFetch
 import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.coroutines.resumeWithException
 import kotlin.io.encoding.Base64
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.suspendCancellableCoroutine
 
 /**
  * Suspends until [condition] holds. Checks it once immediately, and otherwise re-evaluates it on
- * every emission of [signal], returning on the first emission after which it holds. [signal] is only
- * collected when the initial check fails, so a callback-backed flow isn't registered needlessly.
+ * every emission of [signal], returning on the first emission after which it holds. [signal] is
+ * only collected when the initial check fails, so a callback-backed flow isn't registered
+ * needlessly.
  */
 internal suspend fun awaitSignal(signal: Flow<Unit>, condition: suspend () -> Boolean) {
     if (condition()) return
@@ -62,19 +57,19 @@ class LocationService(
 
     // A collector that falls behind (the map, on the main thread) gets the newest fix, and doesn't
     // make tryEmit drop it for the sending loop too
-    private val _locationFixes = MutableSharedFlow<LocationFix>(
-        extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST
-    )
+    private val _locationFixes =
+        MutableSharedFlow<LocationFix>(
+            extraBufferCapacity = 1,
+            onBufferOverflow = BufferOverflow.DROP_OLDEST,
+        )
 
-    @OptIn(ExperimentalAtomicApi::class)
-    private val activeCollectors = AtomicInt(0)
+    @OptIn(ExperimentalAtomicApi::class) private val activeCollectors = AtomicInt(0)
     private var locationCallback: LocationCallback? = null
 
-
     private fun checkPermissions() {
-        if (permissionsService.isPermissionDenied(Manifest.permission.ACCESS_COARSE_LOCATION) || permissionsService.isPermissionDenied(
-                Manifest.permission.ACCESS_FINE_LOCATION
-            )
+        if (
+            permissionsService.isPermissionDenied(Manifest.permission.ACCESS_COARSE_LOCATION) ||
+                permissionsService.isPermissionDenied(Manifest.permission.ACCESS_FINE_LOCATION)
         ) {
             throw NoPermissionException(
                 "${Manifest.permission.ACCESS_COARSE_LOCATION} or ${Manifest.permission.ACCESS_FINE_LOCATION}"
@@ -83,9 +78,11 @@ class LocationService(
         if (permissionsService.isPermissionDenied(Manifest.permission.ACCESS_BACKGROUND_LOCATION)) {
             throw NoPermissionException(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && permissionsService.isPermissionDenied(
-                Manifest.permission.FOREGROUND_SERVICE_LOCATION
-            )
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+                permissionsService.isPermissionDenied(
+                    Manifest.permission.FOREGROUND_SERVICE_LOCATION
+                )
         ) {
             throw NoPermissionException(Manifest.permission.FOREGROUND_SERVICE_LOCATION)
         }
@@ -118,27 +115,30 @@ class LocationService(
     }
 
     private fun locationEnabledChanges(): Flow<Unit> = callbackFlow {
-        val receiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context?, intent: Intent?) {
-                trySend(Unit)
+        val receiver =
+            object : BroadcastReceiver() {
+                override fun onReceive(context: Context?, intent: Intent?) {
+                    trySend(Unit)
+                }
             }
-        }
         ContextCompat.registerReceiver(
             context,
             receiver,
             IntentFilter(LocationManager.PROVIDERS_CHANGED_ACTION),
-            ContextCompat.RECEIVER_NOT_EXPORTED
+            ContextCompat.RECEIVER_NOT_EXPORTED,
         )
         awaitClose { context.unregisterReceiver(receiver) }
     }
 
-    suspend fun awaitLocationEnabled() = awaitSignal(locationEnabledChanges()) {
-        runCatching { checkPermissionsAndLocationEnabled() }.isSuccess
-    }
+    suspend fun awaitLocationEnabled() =
+        awaitSignal(locationEnabledChanges()) {
+            runCatching { checkPermissionsAndLocationEnabled() }.isSuccess
+        }
 
-    suspend fun awaitLocationDisabled() = awaitSignal(locationEnabledChanges()) {
-        runCatching { checkPermissionsAndLocationEnabled() }.isFailure
-    }
+    suspend fun awaitLocationDisabled() =
+        awaitSignal(locationEnabledChanges()) {
+            runCatching { checkPermissionsAndLocationEnabled() }.isFailure
+        }
 
     @Throws
     fun getLocationUpdates(): Flow<LocationFix> = flow {
@@ -170,27 +170,33 @@ class LocationService(
     @OptIn(ExperimentalAtomicApi::class)
     @Throws(NoPermissionException::class)
     private fun startLocationUpdates() {
-        val request = LocationRequest.Builder(
-            Priority.PRIORITY_HIGH_ACCURACY, 2000L
-        ).build()
+        val request =
+            LocationRequest.Builder(
+                    Priority.PRIORITY_HIGH_ACCURACY,
+                    2000L,
+                )
+                .build()
 
-        locationCallback = object : LocationCallback() {
-            override fun onLocationResult(result: LocationResult) {
-                result.lastLocation?.let { loc ->
-                    _locationFixes.tryEmit(
-                        LocationFix(
-                            coordinates = Coordinates(loc.latitude, loc.longitude),
-                            accuracyMeters = loc.accuracy,
-                            atMillis = loc.time
+        locationCallback =
+            object : LocationCallback() {
+                override fun onLocationResult(result: LocationResult) {
+                    result.lastLocation?.let { loc ->
+                        _locationFixes.tryEmit(
+                            LocationFix(
+                                coordinates = Coordinates(loc.latitude, loc.longitude),
+                                accuracyMeters = loc.accuracy,
+                                atMillis = loc.time,
+                            )
                         )
-                    )
+                    }
                 }
             }
-        }
 
         try {
             fusedLocationClient.requestLocationUpdates(
-                request, locationCallback!!, Looper.getMainLooper()
+                request,
+                locationCallback!!,
+                Looper.getMainLooper(),
             )
         } catch (e: SecurityException) {
             throw NoPermissionException("")
@@ -210,13 +216,15 @@ class LocationService(
         checkLocationEnabled()
         return try {
             suspendCancellableCoroutine { cont ->
-                fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+                fusedLocationClient
+                    .getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
                     .addOnSuccessListener { coordinates ->
                         val location = coordinates?.let {
                             Coordinates(it.latitude, it.longitude)
                         }
                         cont.resume(location) { _, _, _ -> }
-                    }.addOnFailureListener { e ->
+                    }
+                    .addOnFailureListener { e ->
                         cont.resumeWithException(e)
                     }
             }
@@ -228,11 +236,15 @@ class LocationService(
     suspend fun getLastLocation(): Coordinates? {
         Log.i("", "Getting last location")
         try {
-            val coordinatesBytes = (context.dataStore.data.map {
-                it[ConfigSettings.LAST_MAP_LOCATION]
-            }.first()?.let {
-                Base64.decode(it)
-            }) ?: return null
+            val coordinatesBytes =
+                (context.dataStore.data
+                    .map {
+                        it[ConfigSettings.LAST_MAP_LOCATION]
+                    }
+                    .first()
+                    ?.let {
+                        Base64.decode(it)
+                    }) ?: return null
             return Coordinates.fromByteArray(coordinatesBytes)
         } catch (e: Exception) {
             e.printStackTrace()

@@ -5,8 +5,7 @@ import com.peppeosmio.lockate.domain.Coordinates
 data class MapPoint(
     val id: String,
     val name: String,
-    val coordinates:Coordinates,
+    val coordinates: Coordinates,
     val isOld: Boolean,
     val isSelected: Boolean,
-) {
-}
+) {}

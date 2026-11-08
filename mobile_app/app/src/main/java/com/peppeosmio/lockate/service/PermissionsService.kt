@@ -8,7 +8,7 @@ class PermissionsService(private val context: Context) {
     fun isPermissionGranted(permission: String): Boolean {
         return ContextCompat.checkSelfPermission(
             context,
-            permission
+            permission,
         ) == PackageManager.PERMISSION_GRANTED
     }
 

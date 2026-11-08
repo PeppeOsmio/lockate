@@ -29,14 +29,15 @@ class InviteViewModel(
         inviteJob?.cancel()
         inviteJob = viewModelScope.launch {
             _state.update { it.copy(inviteState = InviteState.Creating) }
-            val group = try {
-                anonymousGroupService.getAGByInternalId(anonymousGroupInternalId)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _state.update { it.copy(inviteState = InviteState.Failed(e)) }
-                return@launch
-            }
+            val group =
+                try {
+                    anonymousGroupService.getAGByInternalId(anonymousGroupInternalId)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    _state.update { it.copy(inviteState = InviteState.Failed(e)) }
+                    return@launch
+                }
             _state.update { it.copy(groupName = group.name) }
             inviteService.startInvite(group).collect { inviteState ->
                 _state.update { it.copy(inviteState = inviteState) }

@@ -18,6 +18,8 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import io.ktor.serialization.JsonConvertException
 import io.ktor.serialization.kotlinx.json.json
+import java.net.ConnectException
+import java.net.NoRouteToHostException
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.SerializationException
 import org.junit.Assert.assertEquals
@@ -25,24 +27,25 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.fail
 import org.junit.Test
-import java.net.ConnectException
-import java.net.NoRouteToHostException
 
 class ErrorHandlerTest {
 
     private suspend fun mockResponse(
-        body: String, status: HttpStatusCode, contentType: String = "application/json"
+        body: String,
+        status: HttpStatusCode,
+        contentType: String = "application/json",
     ): HttpResponse {
         val mockEngine = MockEngine {
             respond(
                 content = body,
                 status = status,
-                headers = headersOf(HttpHeaders.ContentType, contentType)
+                headers = headersOf(HttpHeaders.ContentType, contentType),
             )
         }
-        val client = HttpClient(mockEngine) {
-            install(ContentNegotiation) { json() }
-        }
+        val client =
+            HttpClient(mockEngine) {
+                install(ContentNegotiation) { json() }
+            }
         return client.get("http://test")
     }
 
@@ -85,16 +88,18 @@ class ErrorHandlerTest {
     }
 
     @Test
-    fun `handleUnauthorized with ag_member_not_admin error throws AGMemberNotAdminException`() = runTest {
-        val response = mockResponse("""{"error":"ag_member_not_admin"}""", HttpStatusCode.Forbidden)
+    fun `handleUnauthorized with ag_member_not_admin error throws AGMemberNotAdminException`() =
+        runTest {
+            val response =
+                mockResponse("""{"error":"ag_member_not_admin"}""", HttpStatusCode.Forbidden)
 
-        try {
-            ErrorHandler.handleUnauthorized(response)
-            fail("Expected AGMemberNotAdminException")
-        } catch (e: AGMemberNotAdminException) {
-            // expected
+            try {
+                ErrorHandler.handleUnauthorized(response)
+                fail("Expected AGMemberNotAdminException")
+            } catch (e: AGMemberNotAdminException) {
+                // expected
+            }
         }
-    }
 
     @Test
     fun `handleUnauthorized with a malformed body throws JsonConvertException, not UnauthorizedException`() {
@@ -129,7 +134,8 @@ class ErrorHandlerTest {
 
     @Test
     fun `handleGeneric with a malformed body throws JsonConvertException, not APIException`() {
-        // Same gap as handleUnauthorized above: JsonConvertException isn't a SerializationException.
+        // Same gap as handleUnauthorized above: JsonConvertException isn't a
+        // SerializationException.
         assertThrows(JsonConvertException::class.java) {
             runTest {
                 val response = mockResponse("not json", HttpStatusCode.InternalServerError)
@@ -239,8 +245,10 @@ class ErrorHandlerTest {
             val customErrorInfo =
                 ErrorInfo(title = "custom", body = "custom body", exception = exception)
 
-            val result = ErrorHandler.runAndHandleException<Unit>(
-                customHandler = { customErrorInfo }) { throw exception }
+            val result =
+                ErrorHandler.runAndHandleException<Unit>(customHandler = { customErrorInfo }) {
+                    throw exception
+                }
 
             assertEquals(customErrorInfo, result.errorInfo)
         }
@@ -256,8 +264,10 @@ class ErrorHandlerTest {
             // documents current behavior, not something this test suite fixes.
             val exception = RemoteAGNotFoundException()
 
-            val result = ErrorHandler.runAndHandleException<Unit>(
-                customHandler = { null }) { throw exception }
+            val result =
+                ErrorHandler.runAndHandleException<Unit>(customHandler = { null }) {
+                    throw exception
+                }
 
             assertNull(result.errorInfo)
         }
@@ -267,8 +277,10 @@ class ErrorHandlerTest {
         runTest {
             val exception = RemoteAGNotFoundException()
 
-            val result = ErrorHandler.runAndHandleException<Unit>(
-                customHandler = { throw it }) { throw exception }
+            val result =
+                ErrorHandler.runAndHandleException<Unit>(customHandler = { throw it }) {
+                    throw exception
+                }
 
             assertEquals(ErrorInfo.remoteAGNotFoundException(exception), result.errorInfo)
         }

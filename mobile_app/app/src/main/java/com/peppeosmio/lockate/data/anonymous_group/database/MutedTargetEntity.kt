@@ -7,12 +7,15 @@ import androidx.room.ForeignKey
 @Entity(
     tableName = "muted_target",
     primaryKeys = ["anonymousGroupInternalId", "targetId"],
-    foreignKeys = [ForeignKey(
-        entity = AnonymousGroupEntity::class,
-        parentColumns = ["internalId"],
-        childColumns = ["anonymousGroupInternalId"],
-        onDelete = ForeignKey.CASCADE
-    )]
+    foreignKeys =
+        [
+            ForeignKey(
+                entity = AnonymousGroupEntity::class,
+                parentColumns = ["internalId"],
+                childColumns = ["anonymousGroupInternalId"],
+                onDelete = ForeignKey.CASCADE,
+            )
+        ],
 )
 data class MutedTargetEntity(
     val anonymousGroupInternalId: Long,

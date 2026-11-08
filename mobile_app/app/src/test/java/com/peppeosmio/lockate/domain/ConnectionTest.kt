@@ -5,9 +5,15 @@ import org.junit.Test
 
 class ConnectionTest {
 
-    private fun connection(url: String) = Connection(
-        id = null, name = "", url = url, apiKey = null, username = null, authToken = null
-    )
+    private fun connection(url: String) =
+        Connection(
+            id = null,
+            name = "",
+            url = url,
+            apiKey = null,
+            username = null,
+            authToken = null,
+        )
 
     @Test
     fun `getWebSocketUrl converts https to wss`() {

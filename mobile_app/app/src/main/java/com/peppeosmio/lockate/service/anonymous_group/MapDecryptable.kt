@@ -7,7 +7,8 @@ import com.peppeosmio.lockate.service.crypto.CryptoException
  * the group down with it.
  */
 internal suspend fun <T, R> List<T>.mapDecryptable(
-    onUndecryptable: (T) -> Unit, transform: suspend (T) -> R
+    onUndecryptable: (T) -> Unit,
+    transform: suspend (T) -> R,
 ): List<R> = mapNotNull { item ->
     try {
         transform(item)

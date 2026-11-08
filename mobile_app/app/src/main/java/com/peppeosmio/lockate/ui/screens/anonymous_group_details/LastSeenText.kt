@@ -17,17 +17,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.peppeosmio.lockate.utils.DateTimeUtils
-import kotlinx.coroutines.delay
-import kotlinx.datetime.LocalDateTime
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toInstant
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
+import kotlinx.coroutines.delay
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toInstant
 
-enum class LastSeenFreshness { Live, Recent, Stale }
+enum class LastSeenFreshness {
+    Live,
+    Recent,
+    Stale,
+}
 
 private val LIVE_WINDOW = 1.minutes
 private val RECENT_WINDOW = 5.minutes
@@ -50,30 +54,31 @@ fun lastSeenFreshness(lastSeen: LocalDateTime?, now: Instant): LastSeenFreshness
 @OptIn(ExperimentalTime::class)
 @Composable
 fun LastSeenText(modifier: Modifier = Modifier, lastSeen: LocalDateTime?) {
-    val now by produceState(Clock.System.now()) {
-        while (true) {
-            value = Clock.System.now()
-            delay(30.seconds)
+    val now by
+        produceState(Clock.System.now()) {
+            while (true) {
+                value = Clock.System.now()
+                delay(30.seconds)
+            }
         }
-    }
     val freshness = lastSeenFreshness(lastSeen, now)
-    val dotColor = when (freshness) {
-        LastSeenFreshness.Live -> Color(0xFF4CAF50)
-        LastSeenFreshness.Recent -> Color(0xFFFFC107)
-        LastSeenFreshness.Stale -> MaterialTheme.colorScheme.outline
-    }
+    val dotColor =
+        when (freshness) {
+            LastSeenFreshness.Live -> Color(0xFF4CAF50)
+            LastSeenFreshness.Recent -> Color(0xFFFFC107)
+            LastSeenFreshness.Stale -> MaterialTheme.colorScheme.outline
+        }
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            Modifier
-                .size(8.dp)
-                .background(dotColor, CircleShape)
-        )
+        Box(Modifier.size(8.dp).background(dotColor, CircleShape))
         Spacer(Modifier.width(6.dp))
         Text(
-            text = when {
-                lastSeen == null -> "No location yet"
-                else -> "Last location ${DateTimeUtils.formatRelative(lastSeen.toInstant(TimeZone.UTC), now)}"
-            }, style = MaterialTheme.typography.bodyMedium
+            text =
+                when {
+                    lastSeen == null -> "No location yet"
+                    else ->
+                        "Last location ${DateTimeUtils.formatRelative(lastSeen.toInstant(TimeZone.UTC), now)}"
+                },
+            style = MaterialTheme.typography.bodyMedium,
         )
     }
 }

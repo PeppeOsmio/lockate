@@ -11,5 +11,5 @@ data class ConnectionEntity(
     val url: String,
     val apiKey: String?,
     val username: String?,
-    val authToken: String?
+    val authToken: String?,
 )

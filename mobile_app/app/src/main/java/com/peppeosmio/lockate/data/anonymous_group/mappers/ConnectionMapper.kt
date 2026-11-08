@@ -11,18 +11,18 @@ object ConnectionMapper {
             url = connection.url,
             apiKey = connection.apiKey,
             username = connection.username,
-            authToken = connection.authToken
+            authToken = connection.authToken,
         )
     }
 
-    fun toDomain(entity : ConnectionEntity): Connection {
+    fun toDomain(entity: ConnectionEntity): Connection {
         return Connection(
             id = entity.id,
             name = entity.name,
             url = entity.url,
             apiKey = entity.apiKey,
             username = entity.username,
-            authToken = entity.authToken
+            authToken = entity.authToken,
         )
     }
 }

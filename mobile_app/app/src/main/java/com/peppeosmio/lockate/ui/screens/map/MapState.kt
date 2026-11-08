@@ -21,5 +21,6 @@ data class MapState(
     val selectedGroup: AnonymousGroup?
         get() = groups?.firstOrNull { it.internalId == selectedGroupInternalId }
 
-    val selectedConnection get() = selectedConnectionId?.let { connections?.get(it) }
+    val selectedConnection
+        get() = selectedConnectionId?.let { connections?.get(it) }
 }

@@ -5,7 +5,7 @@ data class SendLocationStatus(
     val activeAGCount: Int,
     val receivingAGCount: Int,
     val isLocationDisabled: Boolean,
-    val isLocationUnavailable: Boolean
+    val isLocationUnavailable: Boolean,
 ) {
     companion object {
         const val TEXT_NO_GROUPS = "No groups to send location to"
@@ -21,13 +21,16 @@ data class SendLocationStatus(
     }
 }
 
-fun SendLocationStatus.notificationText(): String = when {
-    totalAGCount == 0 && receivingAGCount == 0 -> SendLocationStatus.TEXT_NO_GROUPS
-    totalAGCount == 0 && receivingAGCount == 1 -> SendLocationStatus.TEXT_RECEIVING_ONE
-    totalAGCount == 0 -> "${SendLocationStatus.TEXT_RECEIVING_MANY_PREFIX}$receivingAGCount${SendLocationStatus.TEXT_RECEIVING_MANY_SUFFIX}"
-    isLocationDisabled -> SendLocationStatus.TEXT_LOCATION_DISABLED
-    isLocationUnavailable -> SendLocationStatus.TEXT_LOCATION_UNAVAILABLE
-    activeAGCount == 0 -> SendLocationStatus.TEXT_SERVER_UNREACHABLE
-    activeAGCount == 1 -> SendLocationStatus.TEXT_SHARING_ONE
-    else -> "${SendLocationStatus.TEXT_SHARING_MANY_PREFIX}$activeAGCount${SendLocationStatus.TEXT_SHARING_MANY_SUFFIX}"
-}
+fun SendLocationStatus.notificationText(): String =
+    when {
+        totalAGCount == 0 && receivingAGCount == 0 -> SendLocationStatus.TEXT_NO_GROUPS
+        totalAGCount == 0 && receivingAGCount == 1 -> SendLocationStatus.TEXT_RECEIVING_ONE
+        totalAGCount == 0 ->
+            "${SendLocationStatus.TEXT_RECEIVING_MANY_PREFIX}$receivingAGCount${SendLocationStatus.TEXT_RECEIVING_MANY_SUFFIX}"
+        isLocationDisabled -> SendLocationStatus.TEXT_LOCATION_DISABLED
+        isLocationUnavailable -> SendLocationStatus.TEXT_LOCATION_UNAVAILABLE
+        activeAGCount == 0 -> SendLocationStatus.TEXT_SERVER_UNREACHABLE
+        activeAGCount == 1 -> SendLocationStatus.TEXT_SHARING_ONE
+        else ->
+            "${SendLocationStatus.TEXT_SHARING_MANY_PREFIX}$activeAGCount${SendLocationStatus.TEXT_SHARING_MANY_SUFFIX}"
+    }

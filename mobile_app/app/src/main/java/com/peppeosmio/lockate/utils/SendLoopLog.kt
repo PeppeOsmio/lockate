@@ -15,7 +15,6 @@ class SendLoopLog(private val file: File, private val maxBytes: Long = 512 * 102
                 file.renameTo(backup)
             }
             file.appendText("${Instant.now()} $message\n")
-        } catch (_: Exception) {
-        }
+        } catch (_: Exception) {}
     }
 }

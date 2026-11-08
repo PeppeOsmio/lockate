@@ -14,7 +14,10 @@ class JPakeTest {
         copyOf().also { it[size / 2] = (it[size / 2].toInt() xor 1).toByte() }
 
     /** Runs both parties through the rounds in the order the flow uses and returns their secrets */
-    private fun exchange(serverPassword: ByteArray, clientPassword: ByteArray): Pair<ByteArray, ByteArray> {
+    private fun exchange(
+        serverPassword: ByteArray,
+        clientPassword: ByteArray,
+    ): Pair<ByteArray, ByteArray> {
         val server = JPake(JPakeRole.SERVER, serverPassword)
         val client = JPake(JPakeRole.CLIENT, clientPassword)
         val serverRound1 = server.writeRound1()
@@ -43,7 +46,9 @@ class JPakeTest {
 
     @Test
     fun everyExchangeGivesAFreshSecret() {
-        assertFalse(exchange(password, password).first.contentEquals(exchange(password, password).first))
+        assertFalse(
+            exchange(password, password).first.contentEquals(exchange(password, password).first)
+        )
     }
 
     @Test

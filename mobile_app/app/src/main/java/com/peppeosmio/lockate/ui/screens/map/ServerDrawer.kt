@@ -34,19 +34,15 @@ fun ServerDrawer(
     onSelectConnection: (connectionId: Long) -> Unit,
     onAddServer: () -> Unit,
     onManageServers: () -> Unit,
-    onSettings: () -> Unit
+    onSettings: () -> Unit,
 ) {
     ModalDrawerSheet {
         Text(
             modifier = Modifier.padding(start = 28.dp, end = 16.dp, top = 24.dp, bottom = 12.dp),
             text = "Servers",
-            style = MaterialTheme.typography.titleMedium
+            style = MaterialTheme.typography.titleMedium,
         )
-        LazyColumn(
-            modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = 12.dp)
-        ) {
+        LazyColumn(modifier = Modifier.weight(1f).padding(horizontal = 12.dp)) {
             items(connections, key = { it.id!! }) { connection ->
                 NavigationDrawerItem(
                     label = {
@@ -56,23 +52,30 @@ fun ServerDrawer(
                                 text = connection.url,
                                 style = MaterialTheme.typography.bodySmall,
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                     },
-                    icon = { Icon(painterResource(R.drawable.outline_data_table_24), contentDescription = null) },
-                    badge = if (connection.id in unreachableConnectionIds) {
-                        { UnreachableDot() }
-                    } else null,
+                    icon = {
+                        Icon(
+                            painterResource(R.drawable.outline_data_table_24),
+                            contentDescription = null,
+                        )
+                    },
+                    badge =
+                        if (connection.id in unreachableConnectionIds) {
+                            { UnreachableDot() }
+                        } else null,
                     selected = connection.id == selectedConnectionId,
-                    onClick = { onSelectConnection(connection.id!!) })
+                    onClick = { onSelectConnection(connection.id!!) },
+                )
             }
             item {
                 NavigationDrawerItem(
                     label = { Text("Add server") },
                     icon = { Icon(Icons.Default.Add, contentDescription = null) },
                     selected = false,
-                    onClick = onAddServer
+                    onClick = onAddServer,
                 )
             }
         }
@@ -80,16 +83,18 @@ fun ServerDrawer(
         NavigationDrawerItem(
             modifier = Modifier.padding(horizontal = 12.dp),
             label = { Text("Manage servers") },
-            icon = { Icon(painterResource(R.drawable.outline_data_table_24), contentDescription = null) },
+            icon = {
+                Icon(painterResource(R.drawable.outline_data_table_24), contentDescription = null)
+            },
             selected = false,
-            onClick = onManageServers
+            onClick = onManageServers,
         )
         NavigationDrawerItem(
             modifier = Modifier.padding(horizontal = 12.dp),
             label = { Text("Settings") },
             icon = { Icon(Icons.Default.Settings, contentDescription = null) },
             selected = false,
-            onClick = onSettings
+            onClick = onSettings,
         )
         Spacer(Modifier.size(12.dp))
     }
@@ -97,9 +102,5 @@ fun ServerDrawer(
 
 @Composable
 private fun UnreachableDot() {
-    Box(
-        modifier = Modifier
-            .size(8.dp)
-            .background(MaterialTheme.colorScheme.error, CircleShape)
-    )
+    Box(modifier = Modifier.size(8.dp).background(MaterialTheme.colorScheme.error, CircleShape))
 }

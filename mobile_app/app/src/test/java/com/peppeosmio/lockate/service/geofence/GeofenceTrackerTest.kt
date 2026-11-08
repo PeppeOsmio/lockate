@@ -11,22 +11,28 @@ import org.junit.Test
 
 class GeofenceTrackerTest {
 
-    private val home = Circle(
-        id = "home", name = "Home", center = Coordinates(40.0, 14.0), radiusMeters = 100.0
-    )
+    private val home =
+        Circle(
+            id = "home",
+            name = "Home",
+            center = Coordinates(40.0, 14.0),
+            radiusMeters = 100.0,
+        )
 
     // meters north of the center of home
     private fun north(meters: Double) =
         Coordinates(home.center.latitude + meters / 111_195.0, home.center.longitude)
 
-    private fun tracker(vararg circles: Circle) = GeofenceTracker().also {
-        it.replaceCircles(circles.toList())
-    }
+    private fun tracker(vararg circles: Circle) =
+        GeofenceTracker().also {
+            it.replaceCircles(circles.toList())
+        }
 
     private fun GeofenceTracker.update(position: Coordinates, accuracy: Float = 10f) =
         update(LocationFix(position, accuracy, 0))
 
     private fun enter(circle: String) = CircleTransition(circle, TransitionKind.Enter)
+
     private fun exit(circle: String) = CircleTransition(circle, TransitionKind.Exit)
 
     @Test

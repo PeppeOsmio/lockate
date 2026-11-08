@@ -1,6 +1,5 @@
 package com.peppeosmio.lockate.ui.screens.manage_connections
 
-import com.peppeosmio.lockate.ui.composables.ErrorDialog
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -31,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.window.Dialog
 import com.peppeosmio.lockate.domain.Connection
+import com.peppeosmio.lockate.ui.composables.ErrorDialog
 import com.peppeosmio.lockate.ui.routes.ConnectionSettingsRoute
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -39,7 +39,7 @@ import org.koin.compose.viewmodel.koinViewModel
 fun ManageConnectionsScreen(
     navigateBack: () -> Unit,
     navigateToConnectionSettings: (route: ConnectionSettingsRoute) -> Unit,
-    viewModel: ManageConnectionsViewModel = koinViewModel()
+    viewModel: ManageConnectionsViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -60,7 +60,8 @@ fun ManageConnectionsScreen(
                 viewModel.showErrorDialog(snackbarMessage)
             } else {
                 snackbarHostState.showSnackbar(
-                    message = snackbarMessage.text, withDismissAction = true
+                    message = snackbarMessage.text,
+                    withDismissAction = true,
                 )
             }
         }
@@ -69,21 +70,29 @@ fun ManageConnectionsScreen(
     state.dialogError?.let { ErrorDialog(it, onDismiss = viewModel::hideErrorDialog) }
 
     if (state.showDeleteConfirmDialog && state.selectedConnectionIdForDelete != null) {
-        val connection =
-            state.connections!!.first { it.id == state.selectedConnectionIdForDelete }
+        val connection = state.connections!!.first { it.id == state.selectedConnectionIdForDelete }
         AlertDialog(
             onDismissRequest = {},
             title = { Text("Delete connection") },
-            text = { Text("Are you sure you want to delete ${connection.name.ifBlank { connection.url }}?") },
+            text = {
+                Text(
+                    "Are you sure you want to delete ${connection.name.ifBlank { connection.url }}?"
+                )
+            },
             confirmButton = {
                 TextButton(onClick = { viewModel.deleteConnection() }) { Text("Yes, delete") }
             },
             dismissButton = {
-                TextButton(onClick = {
-                    viewModel.closeDeleteConfirmDialog()
-                    viewModel.unselectForDelete()
-                }) { Text("No, keep") }
-            })
+                TextButton(
+                    onClick = {
+                        viewModel.closeDeleteConfirmDialog()
+                        viewModel.unselectForDelete()
+                    }
+                ) {
+                    Text("No, keep")
+                }
+            },
+        )
     }
 
     if (state.showLoadingOverlay) {
@@ -92,28 +101,41 @@ fun ManageConnectionsScreen(
         }
     }
 
-    Scaffold(snackbarHost = {
-        SnackbarHost(hostState = snackbarHostState)
-    }, topBar = {
-        TopAppBar(title = { Text("Manage connections") }, navigationIcon = {
-            IconButton(onClick = { navigateBack() }) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Default.ArrowBack,
-                    contentDescription = "Navigate back"
-                )
-            }
-        }, actions = {
-            IconButton(onClick = {
-                navigateToConnectionSettings(
-                    ConnectionSettingsRoute(
-                        initialConnectionSettingsId = null, showBackButton = true
-                    )
-                )
-            }) {
-                Icon(imageVector = Icons.Default.Add, contentDescription = "Add new connection")
-            }
-        })
-    }) { paddingValues ->
+    Scaffold(
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState)
+        },
+        topBar = {
+            TopAppBar(
+                title = { Text("Manage connections") },
+                navigationIcon = {
+                    IconButton(onClick = { navigateBack() }) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Default.ArrowBack,
+                            contentDescription = "Navigate back",
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = {
+                            navigateToConnectionSettings(
+                                ConnectionSettingsRoute(
+                                    initialConnectionSettingsId = null,
+                                    showBackButton = true,
+                                )
+                            )
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Add new connection",
+                        )
+                    }
+                },
+            )
+        },
+    ) { paddingValues ->
         val connections = state.connections ?: return@Scaffold
         LazyColumn(modifier = Modifier.padding(paddingValues)) {
             items(connections, key = { it.id!! }) { connection ->
@@ -122,14 +144,16 @@ fun ManageConnectionsScreen(
                     onEdit = {
                         navigateToConnectionSettings(
                             ConnectionSettingsRoute(
-                                initialConnectionSettingsId = connection.id, showBackButton = true
+                                initialConnectionSettingsId = connection.id,
+                                showBackButton = true,
                             )
                         )
                     },
                     onDelete = {
                         viewModel.selectForDelete(connection.id!!)
                         viewModel.openDeleteConfirmDialog()
-                    })
+                    },
+                )
             }
         }
     }
@@ -137,9 +161,12 @@ fun ManageConnectionsScreen(
 
 @Composable
 private fun ManageConnectionRow(
-    connection: Connection, onEdit: () -> Unit, onDelete: () -> Unit
+    connection: Connection,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
 ) {
-    ListItem(headlineContent = { Text(connection.name.ifBlank { connection.url }) },
+    ListItem(
+        headlineContent = { Text(connection.name.ifBlank { connection.url }) },
         supportingContent = { Text(connection.url) },
         trailingContent = {
             Row {
@@ -149,11 +176,11 @@ private fun ManageConnectionRow(
                 IconButton(onClick = onDelete) {
                     Icon(
                         imageVector = Icons.Default.Delete,
-                        contentDescription = "Delete connection"
+                        contentDescription = "Delete connection",
                     )
                 }
             }
         },
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
     )
 }

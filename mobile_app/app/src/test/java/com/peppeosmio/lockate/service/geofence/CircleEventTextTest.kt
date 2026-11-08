@@ -14,50 +14,63 @@ class CircleEventTextTest {
 
     @Test
     fun `an arrival and a departure are described`() {
-        val texts = circleEventTexts(
-            memberId = "m1",
-            memberName = "Mario",
-            transitions = listOf(
-                CircleTransition("home", TransitionKind.Enter),
-                CircleTransition("school", TransitionKind.Exit)
-            ),
-            circles = circles,
-            mutedTargets = emptySet()
-        )
+        val texts =
+            circleEventTexts(
+                memberId = "m1",
+                memberName = "Mario",
+                transitions =
+                    listOf(
+                        CircleTransition("home", TransitionKind.Enter),
+                        CircleTransition("school", TransitionKind.Exit),
+                    ),
+                circles = circles,
+                mutedTargets = emptySet(),
+            )
 
         assertEquals(listOf("Mario arrived at Home", "Mario left School"), texts)
     }
 
     @Test
     fun `a muted circle is skipped`() {
-        val texts = circleEventTexts(
-            "m1", "Mario",
-            listOf(
-                CircleTransition("home", TransitionKind.Enter),
-                CircleTransition("school", TransitionKind.Enter)
-            ),
-            circles, mutedTargets = setOf("home")
-        )
+        val texts =
+            circleEventTexts(
+                "m1",
+                "Mario",
+                listOf(
+                    CircleTransition("home", TransitionKind.Enter),
+                    CircleTransition("school", TransitionKind.Enter),
+                ),
+                circles,
+                mutedTargets = setOf("home"),
+            )
 
         assertEquals(listOf("Mario arrived at School"), texts)
     }
 
     @Test
     fun `a muted member is skipped`() {
-        val texts = circleEventTexts(
-            "m1", "Mario", listOf(CircleTransition("home", TransitionKind.Enter)), circles,
-            mutedTargets = setOf("m1")
-        )
+        val texts =
+            circleEventTexts(
+                "m1",
+                "Mario",
+                listOf(CircleTransition("home", TransitionKind.Enter)),
+                circles,
+                mutedTargets = setOf("m1"),
+            )
 
         assertEquals(emptyList<String>(), texts)
     }
 
     @Test
     fun `a circle we don't know is skipped`() {
-        val texts = circleEventTexts(
-            "m1", "Mario", listOf(CircleTransition("gone", TransitionKind.Enter)), circles,
-            emptySet()
-        )
+        val texts =
+            circleEventTexts(
+                "m1",
+                "Mario",
+                listOf(CircleTransition("gone", TransitionKind.Enter)),
+                circles,
+                emptySet(),
+            )
 
         assertEquals(emptyList<String>(), texts)
     }

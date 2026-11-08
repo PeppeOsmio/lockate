@@ -15,7 +15,7 @@ import kotlinx.coroutines.launch
 
 class SettingsViewModel(
     private val mapStyleService: MapStyleService,
-    private val placeSearchService: PlaceSearchService
+    private val placeSearchService: PlaceSearchService,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsState())
@@ -31,7 +31,7 @@ class SettingsViewModel(
                 it.copy(
                     lightStyleUrl = urls.light ?: "",
                     darkStyleUrl = urls.dark ?: "",
-                    geocoderUrl = geocoderUrl ?: ""
+                    geocoderUrl = geocoderUrl ?: "",
                 )
             }
         }
@@ -53,10 +53,15 @@ class SettingsViewModel(
         val current = state.value
         viewModelScope.launch {
             _state.update { it.copy(isSaving = true) }
-            val lightValid = current.lightStyleUrl.isBlank() || mapStyleService.isValidStyleUrl(current.lightStyleUrl)
-            val darkValid = current.darkStyleUrl.isBlank() || mapStyleService.isValidStyleUrl(current.darkStyleUrl)
+            val lightValid =
+                current.lightStyleUrl.isBlank() ||
+                    mapStyleService.isValidStyleUrl(current.lightStyleUrl)
+            val darkValid =
+                current.darkStyleUrl.isBlank() ||
+                    mapStyleService.isValidStyleUrl(current.darkStyleUrl)
             val geocoderValid =
-                current.geocoderUrl.isBlank() || placeSearchService.isValidGeocoderUrl(current.geocoderUrl)
+                current.geocoderUrl.isBlank() ||
+                    placeSearchService.isValidGeocoderUrl(current.geocoderUrl)
             if (lightValid && darkValid && geocoderValid) {
                 mapStyleService.save(current.lightStyleUrl, current.darkStyleUrl)
                 placeSearchService.save(current.geocoderUrl)
@@ -68,7 +73,7 @@ class SettingsViewModel(
                         isSaving = false,
                         lightStyleError = !lightValid,
                         darkStyleError = !darkValid,
-                        geocoderError = !geocoderValid
+                        geocoderError = !geocoderValid,
                     )
                 }
             }

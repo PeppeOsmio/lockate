@@ -34,6 +34,11 @@ import io.ktor.client.request.setBody
 import io.ktor.client.request.url
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.HttpHeaders
+import kotlin.io.encoding.Base64
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -42,11 +47,6 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
-import kotlin.io.encoding.Base64
-import kotlin.time.Clock
-import kotlin.time.Duration.Companion.minutes
-import kotlin.time.Duration.Companion.seconds
-import kotlin.time.Instant
 
 /**
  * Adds people to a group with an invite code, see the `jpake` module for the exchange itself. The
@@ -79,46 +79,54 @@ class InviteService(
             val expiresAt = created.expiresAt.toInstant(TimeZone.UTC)
             emit(InviteState.WaitingForInvitee(InviteCode(created.nameplate, words), expiresAt))
 
-            val progress = pollUntil(expiresAt) {
-                getInviteeProgress(connection, anonymousGroup, created.inviteId)
-                    .takeIf { it.round1 != null && it.round2 != null }
-            } ?: run {
-                emit(InviteState.Expired)
-                return@flow
-            }
+            val progress =
+                pollUntil(expiresAt) {
+                    getInviteeProgress(connection, anonymousGroup, created.inviteId).takeIf {
+                        it.round1 != null && it.round2 != null
+                    }
+                }
+                    ?: run {
+                        emit(InviteState.Expired)
+                        return@flow
+                    }
             emit(InviteState.Verifying)
-            val confirmation = try {
-                inviter.confirm(
-                    InviteeReply(
-                        round1 = Base64.decode(progress.round1!!),
-                        round2 = Base64.decode(progress.round2!!)
+            val confirmation =
+                try {
+                    inviter.confirm(
+                        InviteeReply(
+                            round1 = Base64.decode(progress.round1!!),
+                            round2 = Base64.decode(progress.round2!!),
+                        )
                     )
-                )
-            } catch (_: InviteAbortedException) {
-                emit(InviteState.WrongCode)
-                return@flow
-            }
+                } catch (_: InviteAbortedException) {
+                    emit(InviteState.WrongCode)
+                    return@flow
+                }
             postConfirmation(connection, anonymousGroup, created.inviteId, confirmation)
 
-            val tb = pollUntil(expiresAt) {
-                getInviteeProgress(connection, anonymousGroup, created.inviteId).tb
-            } ?: run {
-                emit(InviteState.Expired)
-                return@flow
-            }
-            val final = try {
-                inviter.finish(
-                    tb = Base64.decode(tb),
-                    payload = InvitePayload(
-                        groupId = anonymousGroup.id,
-                        groupKey = anonymousGroup.key,
-                        joinToken = Base64.decode(created.joinToken)
+            val tb =
+                pollUntil(expiresAt) {
+                    getInviteeProgress(connection, anonymousGroup, created.inviteId).tb
+                }
+                    ?: run {
+                        emit(InviteState.Expired)
+                        return@flow
+                    }
+            val final =
+                try {
+                    inviter.finish(
+                        tb = Base64.decode(tb),
+                        payload =
+                            InvitePayload(
+                                groupId = anonymousGroup.id,
+                                groupKey = anonymousGroup.key,
+                                joinToken = Base64.decode(created.joinToken),
+                            ),
                     )
-                )
-            } catch (_: InviteAbortedException) {
-                emit(InviteState.WrongCode)
-                return@flow
-            }
+                } catch (_: InviteAbortedException) {
+                    emit(InviteState.WrongCode)
+                    return@flow
+                }
             emit(InviteState.Sending)
             postFinal(connection, anonymousGroup, created.inviteId, final)
             finalSent = true
@@ -134,9 +142,10 @@ class InviteService(
                 }
             }
         }
-    }.catch { e ->
-        emit(if (e is InviteExpiredException) InviteState.Expired else InviteState.Failed(e))
     }
+        .catch { e ->
+            emit(if (e is InviteExpiredException) InviteState.Expired else InviteState.Failed(e))
+        }
 
     @Throws(
         InviteNotFoundException::class,
@@ -146,56 +155,64 @@ class InviteService(
         TooManyRequestsException::class,
     )
     suspend fun joinWithCode(
-        connectionId: Long, code: InviteCode, memberName: String
+        connectionId: Long,
+        code: InviteCode,
+        memberName: String,
     ): AnonymousGroup {
         val connection = connectionService.getConnectionSettingsById(connectionId)
         val hello = getInviterHello(connection, code.nameplate)
-        val invitee = try {
-            Invitee.respond(code, hello)
-        } catch (_: InviteAbortedException) {
-            throw InviteRejectedException()
-        }
+        val invitee =
+            try {
+                Invitee.respond(code, hello)
+            } catch (_: InviteAbortedException) {
+                throw InviteRejectedException()
+            }
         try {
             val claimToken = postInviteeMessage(connection, code.nameplate, invitee.reply)
             val deadline = Clock.System.now() + INVITE_TTL
 
-            val inviterMessage = pollUntil(deadline) {
-                getInviterMessage(connection, code.nameplate, claimToken)
-                    .takeIf { it.round2 != null && it.ta != null }
-            } ?: throw InviteExpiredException()
-            val confirmation = try {
-                invitee.confirm(
-                    InviterConfirmation(
-                        round2 = Base64.decode(inviterMessage.round2!!),
-                        ta = Base64.decode(inviterMessage.ta!!)
+            val inviterMessage =
+                pollUntil(deadline) {
+                    getInviterMessage(connection, code.nameplate, claimToken).takeIf {
+                        it.round2 != null && it.ta != null
+                    }
+                } ?: throw InviteExpiredException()
+            val confirmation =
+                try {
+                    invitee.confirm(
+                        InviterConfirmation(
+                            round2 = Base64.decode(inviterMessage.round2!!),
+                            ta = Base64.decode(inviterMessage.ta!!),
+                        )
                     )
-                )
-            } catch (_: InviteAbortedException) {
-                throw InviteRejectedException()
-            }
+                } catch (_: InviteAbortedException) {
+                    throw InviteRejectedException()
+                }
             // Posted even when the inviter's tag was wrong, so the inviter finds out at once
             postInviteeConfirmation(connection, code.nameplate, claimToken, confirmation.tb)
             if (!confirmation.inviterTagValid) throw InviteRejectedException()
 
-            val encryptedPayload = pollUntil(deadline) {
-                getInviterMessage(connection, code.nameplate, claimToken).payload
-            } ?: throw InviteExpiredException()
-            val payload = try {
-                invitee.open(
-                    InviterFinal(
-                        payloadIv = Base64.decode(encryptedPayload.iv),
-                        payloadCipherText = Base64.decode(encryptedPayload.cipherText)
+            val encryptedPayload =
+                pollUntil(deadline) {
+                    getInviterMessage(connection, code.nameplate, claimToken).payload
+                } ?: throw InviteExpiredException()
+            val payload =
+                try {
+                    invitee.open(
+                        InviterFinal(
+                            payloadIv = Base64.decode(encryptedPayload.iv),
+                            payloadCipherText = Base64.decode(encryptedPayload.cipherText),
+                        )
                     )
-                )
-            } catch (_: InviteAbortedException) {
-                throw InviteRejectedException()
-            }
+                } catch (_: InviteAbortedException) {
+                    throw InviteRejectedException()
+                }
             return anonymousGroupService.joinWithInvite(
                 connectionId = connectionId,
                 anonymousGroupId = payload.groupId,
                 groupKey = payload.groupKey,
                 joinToken = payload.joinToken,
-                memberName = memberName
+                memberName = memberName,
             )
         } finally {
             invitee.close()
@@ -204,7 +221,9 @@ class InviteService(
 
     private suspend fun <T : Any> pollUntil(deadline: Instant, poll: suspend () -> T?): T? {
         while (Clock.System.now() < deadline) {
-            poll()?.let { return it }
+            poll()?.let {
+                return it
+            }
             delay(POLL_INTERVAL)
         }
         return null
@@ -218,19 +237,23 @@ class InviteService(
     }
 
     private fun HttpRequestBuilder.memberHeaders(
-        connection: Connection, anonymousGroup: AnonymousGroup, json: Boolean = false
+        connection: Connection,
+        anonymousGroup: AnonymousGroup,
+        json: Boolean = false,
     ) {
         commonHeaders(connection, json)
         headers {
             append(
                 HttpHeaders.Authorization,
-                "AGMember ${anonymousGroup.memberId} ${Base64.encode(anonymousGroup.memberToken)}"
+                "AGMember ${anonymousGroup.memberId} ${Base64.encode(anonymousGroup.memberToken)}",
             )
         }
     }
 
     private fun HttpRequestBuilder.claimHeaders(
-        connection: Connection, claimToken: String, json: Boolean = false
+        connection: Connection,
+        claimToken: String,
+        json: Boolean = false,
     ) {
         commonHeaders(connection, json)
         headers { append(CLAIM_TOKEN_HEADER, claimToken) }
@@ -239,7 +262,8 @@ class InviteService(
     private suspend fun HttpResponse.checkStatus(onNotFound: () -> Exception) {
         when (status.value) {
             in 200..299 -> Unit
-            401, 403 -> ErrorHandler.handleUnauthorized(this)
+            401,
+            403 -> ErrorHandler.handleUnauthorized(this)
             404 -> throw onNotFound()
             409 -> throw InviteAlreadyClaimedException()
             429 -> throw TooManyRequestsException()
@@ -251,14 +275,17 @@ class InviteService(
         "${connection.url}/api/anonymous-groups/${anonymousGroup.id}/invites"
 
     private suspend fun createInvite(
-        connection: Connection, anonymousGroup: AnonymousGroup, hello: InviterHello
+        connection: Connection,
+        anonymousGroup: AnonymousGroup,
+        hello: InviterHello,
     ): InviteCreateResDto {
         val response = httpClient.post {
             url(groupInvitesUrl(connection, anonymousGroup))
             memberHeaders(connection, anonymousGroup, json = true)
             setBody(
                 InviteCreateReqDto(
-                    sid = Base64.encode(hello.sid), round1 = Base64.encode(hello.round1)
+                    sid = Base64.encode(hello.sid),
+                    round1 = Base64.encode(hello.round1),
                 )
             )
         }
@@ -267,7 +294,9 @@ class InviteService(
     }
 
     private suspend fun getInviteeProgress(
-        connection: Connection, anonymousGroup: AnonymousGroup, inviteId: String
+        connection: Connection,
+        anonymousGroup: AnonymousGroup,
+        inviteId: String,
     ): InviteeProgressDto {
         val response = httpClient.get {
             url("${groupInvitesUrl(connection, anonymousGroup)}/$inviteId")
@@ -281,14 +310,15 @@ class InviteService(
         connection: Connection,
         anonymousGroup: AnonymousGroup,
         inviteId: String,
-        confirmation: InviterConfirmation
+        confirmation: InviterConfirmation,
     ) {
         val response = httpClient.post {
             url("${groupInvitesUrl(connection, anonymousGroup)}/$inviteId/confirm")
             memberHeaders(connection, anonymousGroup, json = true)
             setBody(
                 InviterConfirmDto(
-                    round2 = Base64.encode(confirmation.round2), ta = Base64.encode(confirmation.ta)
+                    round2 = Base64.encode(confirmation.round2),
+                    ta = Base64.encode(confirmation.ta),
                 )
             )
         }
@@ -296,16 +326,23 @@ class InviteService(
     }
 
     private suspend fun postFinal(
-        connection: Connection, anonymousGroup: AnonymousGroup, inviteId: String, final: InviterFinal
+        connection: Connection,
+        anonymousGroup: AnonymousGroup,
+        inviteId: String,
+        final: InviterFinal,
     ) {
         val response = httpClient.post {
             url("${groupInvitesUrl(connection, anonymousGroup)}/$inviteId/final")
             memberHeaders(connection, anonymousGroup, json = true)
             setBody(
                 InviterFinalDto(
-                    payload = EncryptedDataMapper.toDto(
-                        EncryptedData(cipherText = final.payloadCipherText, iv = final.payloadIv)
-                    )
+                    payload =
+                        EncryptedDataMapper.toDto(
+                            EncryptedData(
+                                cipherText = final.payloadCipherText,
+                                iv = final.payloadIv,
+                            )
+                        )
                 )
             )
         }
@@ -313,7 +350,9 @@ class InviteService(
     }
 
     private suspend fun cancelInvite(
-        connection: Connection, anonymousGroup: AnonymousGroup, inviteId: String
+        connection: Connection,
+        anonymousGroup: AnonymousGroup,
+        inviteId: String,
     ) {
         val response = httpClient.delete {
             url("${groupInvitesUrl(connection, anonymousGroup)}/$inviteId")
@@ -334,14 +373,17 @@ class InviteService(
 
     /** @return the claim token, which proves later requests come from the one who answered */
     private suspend fun postInviteeMessage(
-        connection: Connection, nameplate: Int, reply: InviteeReply
+        connection: Connection,
+        nameplate: Int,
+        reply: InviteeReply,
     ): String {
         val response = httpClient.post {
             url("${connection.url}/api/invites/$nameplate/invitee-message")
             commonHeaders(connection, json = true)
             setBody(
                 InviteeMessageDto(
-                    round1 = Base64.encode(reply.round1), round2 = Base64.encode(reply.round2)
+                    round1 = Base64.encode(reply.round1),
+                    round2 = Base64.encode(reply.round2),
                 )
             )
         }
@@ -349,9 +391,13 @@ class InviteService(
         return response.body<InviteClaimDto>().claimToken
     }
 
-    /** A 404 after the reply was accepted means the inviter cancelled: it didn't accept the words */
+    /**
+     * A 404 after the reply was accepted means the inviter cancelled: it didn't accept the words
+     */
     private suspend fun getInviterMessage(
-        connection: Connection, nameplate: Int, claimToken: String
+        connection: Connection,
+        nameplate: Int,
+        claimToken: String,
     ): InviterMessageDto {
         val response = httpClient.get {
             url("${connection.url}/api/invites/$nameplate/inviter-message")
@@ -362,7 +408,10 @@ class InviteService(
     }
 
     private suspend fun postInviteeConfirmation(
-        connection: Connection, nameplate: Int, claimToken: String, tb: ByteArray
+        connection: Connection,
+        nameplate: Int,
+        claimToken: String,
+        tb: ByteArray,
     ) {
         val response = httpClient.post {
             url("${connection.url}/api/invites/$nameplate/confirm")

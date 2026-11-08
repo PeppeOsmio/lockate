@@ -12,12 +12,19 @@ import com.sun.jna.ptr.NativeLongByReference
 @Suppress("FunctionName")
 private interface JPakeLibrary : Library {
     fun jpake_new(isServer: Int, password: ByteArray, passwordLen: NativeLong): Pointer?
+
     fun jpake_output(
-        handle: Pointer, step: Int, out: ByteArray, capacity: NativeLong, outLen: NativeLongByReference
+        handle: Pointer,
+        step: Int,
+        out: ByteArray,
+        capacity: NativeLong,
+        outLen: NativeLongByReference,
     ): Int
 
     fun jpake_input(handle: Pointer, step: Int, data: ByteArray, len: NativeLong): Int
+
     fun jpake_derive_key(handle: Pointer, out: ByteArray): Int
+
     fun jpake_free(handle: Pointer)
 }
 
@@ -27,18 +34,26 @@ private val library: JPakeLibrary by lazy { Native.load("jpake", JPakeLibrary::c
 private const val OUTPUT_CAPACITY = 256
 
 private class JnaJPakeNative(isServer: Boolean, password: ByteArray) : JPakeNative {
-    private var handle: Pointer? = library.jpake_new(
-        if (isServer) 1 else 0, password, NativeLong(password.size.toLong())
-    ) ?: throw IllegalStateException("Can't start J-PAKE")
+    private var handle: Pointer? =
+        library.jpake_new(
+            if (isServer) 1 else 0,
+            password,
+            NativeLong(password.size.toLong()),
+        ) ?: throw IllegalStateException("Can't start J-PAKE")
 
     private fun handle() = handle ?: throw JPakeNativeException(-1)
 
     override fun output(step: Int): ByteArray {
         val out = ByteArray(OUTPUT_CAPACITY)
         val length = NativeLongByReference()
-        val status = library.jpake_output(
-            handle(), step, out, NativeLong(OUTPUT_CAPACITY.toLong()), length
-        )
+        val status =
+            library.jpake_output(
+                handle(),
+                step,
+                out,
+                NativeLong(OUTPUT_CAPACITY.toLong()),
+                length,
+            )
         if (status != 0) throw JPakeNativeException(status)
         return out.copyOf(length.value.toInt())
     }

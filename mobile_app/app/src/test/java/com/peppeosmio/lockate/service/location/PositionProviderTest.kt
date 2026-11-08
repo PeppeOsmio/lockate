@@ -57,15 +57,16 @@ class PositionProviderTest {
         val activity = MutableStateFlow(UserActivity.Unknown)
         var gpsCollectors = 0
 
-        fun provider(scope: TestScope) = PositionProvider(
-            gpsFixes = {
-                gps.onStart { gpsCollectors++ }.onCompletion { gpsCollectors-- }
-            },
-            passiveFixes = { passive },
-            activities = { activity },
-            now = { scope.testScheduler.currentTime },
-            stillJitterMillis = { 0 }
-        )
+        fun provider(scope: TestScope) =
+            PositionProvider(
+                gpsFixes = {
+                    gps.onStart { gpsCollectors++ }.onCompletion { gpsCollectors-- }
+                },
+                passiveFixes = { passive },
+                activities = { activity },
+                now = { scope.testScheduler.currentTime },
+                stillJitterMillis = { 0 },
+            )
     }
 
     private fun TestScope.collect(flow: Flow<Position>): MutableList<Position> {
@@ -266,18 +267,17 @@ class PositionProviderTest {
     }
 
     @Test
-    fun `switching between moving activities sends the last fix at once`() =
-        runTest {
-            val fakes = Fakes()
-            val positions = collect(fakes.provider(this).positions())
-            fakes.gps.emit(fix(1.0, 5f, 0))
-            runCurrent()
-            fakes.activity.value = UserActivity.InVehicle
-            runCurrent()
+    fun `switching between moving activities sends the last fix at once`() = runTest {
+        val fakes = Fakes()
+        val positions = collect(fakes.provider(this).positions())
+        fakes.gps.emit(fix(1.0, 5f, 0))
+        runCurrent()
+        fakes.activity.value = UserActivity.InVehicle
+        runCurrent()
 
-            assertEquals(1.0, positions.last().fix.coordinates.latitude, 0.0)
-            assertEquals(UserActivity.InVehicle, positions.last().activity)
-        }
+        assertEquals(1.0, positions.last().fix.coordinates.latitude, 0.0)
+        assertEquals(UserActivity.InVehicle, positions.last().activity)
+    }
 
     @Test
     fun `without a recent fix nothing is sent before the GPS answers`() = runTest {

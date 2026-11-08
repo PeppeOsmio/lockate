@@ -15,11 +15,13 @@ data class MapStyleUrls(val light: String? = null, val dark: String? = null)
 
 class MapStyleService(private val context: Context, private val httpClient: HttpClient) {
 
-    val mapStyleUrls: Flow<MapStyleUrls> = context.dataStore.data.map {
-        MapStyleUrls(
-            light = it[ConfigSettings.MAP_STYLE_URL_LIGHT], dark = it[ConfigSettings.MAP_STYLE_URL_DARK]
-        )
-    }
+    val mapStyleUrls: Flow<MapStyleUrls> =
+        context.dataStore.data.map {
+            MapStyleUrls(
+                light = it[ConfigSettings.MAP_STYLE_URL_LIGHT],
+                dark = it[ConfigSettings.MAP_STYLE_URL_DARK],
+            )
+        }
 
     /** Blank values are stored as absent, so the default style is used */
     suspend fun save(light: String?, dark: String?) {
@@ -33,12 +35,13 @@ class MapStyleService(private val context: Context, private val httpClient: Http
         }
     }
 
-    suspend fun isValidStyleUrl(url: String): Boolean = try {
-        val response = httpClient.get(url.trim())
-        response.status.isSuccess() && isValidStyleJson(response.bodyAsText())
-    } catch (e: CancellationException) {
-        throw e
-    } catch (_: Exception) {
-        false
-    }
+    suspend fun isValidStyleUrl(url: String): Boolean =
+        try {
+            val response = httpClient.get(url.trim())
+            response.status.isSuccess() && isValidStyleJson(response.bodyAsText())
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            false
+        }
 }

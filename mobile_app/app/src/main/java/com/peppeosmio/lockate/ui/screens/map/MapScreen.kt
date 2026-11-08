@@ -18,9 +18,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -29,7 +29,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.SnackbarHost
@@ -57,9 +56,9 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.compose.ui.window.Dialog
 import androidx.core.net.toUri
+import androidx.lifecycle.compose.LifecycleStartEffect
 import com.peppeosmio.lockate.R
 import com.peppeosmio.lockate.domain.Coordinates
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
@@ -73,14 +72,13 @@ import com.peppeosmio.lockate.ui.screens.anonymous_group_details.AGDetailsViewMo
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.LocationStreamState
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.MARKER_MOVE_DURATION_MS
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.MapPoint
-import org.maplibre.compose.camera.CameraAnimation
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.MembersMap
 import com.peppeosmio.lockate.utils.LoadingState
 import com.peppeosmio.lockate.utils.LockatePermissions
-import org.maplibre.compose.camera.CameraPosition
-import org.maplibre.compose.camera.CameraUpdate
-import org.maplibre.compose.map.rememberMapState
-import org.maplibre.compose.style.BaseStyle
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.ExperimentalTime
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
@@ -90,11 +88,11 @@ import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
 import org.koin.compose.viewmodel.koinViewModel
-import kotlin.time.Clock
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.minutes
-import kotlin.time.ExperimentalTime
-
+import org.maplibre.compose.camera.CameraAnimation
+import org.maplibre.compose.camera.CameraPosition
+import org.maplibre.compose.camera.CameraUpdate
+import org.maplibre.compose.map.rememberMapState
+import org.maplibre.compose.style.BaseStyle
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalTime::class)
 @Composable
@@ -108,7 +106,7 @@ fun MapScreen(
     navigateToSettings: () -> Unit,
     startLocationService: () -> Unit,
     viewModel: MapViewModel = koinViewModel(),
-    detailsViewModel: AGDetailsViewModel = koinViewModel()
+    detailsViewModel: AGDetailsViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
     val details by detailsViewModel.state.collectAsState()
@@ -116,9 +114,11 @@ fun MapScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val sheetState = rememberStandardBottomSheetState(skipHiddenState = true)
-    val scaffoldState = rememberBottomSheetScaffoldState(
-        bottomSheetState = sheetState, snackbarHostState = snackbarHostState
-    )
+    val scaffoldState =
+        rememberBottomSheetScaffoldState(
+            bottomSheetState = sheetState,
+            snackbarHostState = snackbarHostState,
+        )
     val clipboard = LocalClipboard.current
     val context = LocalContext.current
 
@@ -170,30 +170,44 @@ fun MapScreen(
         viewModel.navigateToConnectionSettingsEvents.collect { navigateToConnectionSettings(it) }
     }
 
-    // rememberMapState owns the base style, so switching theme or style setting updates it on recomposition
-    val mapState = rememberMapState(
-        baseStyle = BaseStyle.Uri(
-            resolveMapStyleUrl(isSystemInDarkTheme(), state.mapStyleUrls.light, state.mapStyleUrls.dark)
-        ),
-        initialCameraPosition = CameraPosition(
-            center = Coordinates.NAPOLI.toMapLibreComposePosition(), zoom = 15.0
+    // rememberMapState owns the base style, so switching theme or style setting updates it on
+    // recomposition
+    val mapState =
+        rememberMapState(
+            baseStyle =
+                BaseStyle.Uri(
+                    resolveMapStyleUrl(
+                        isSystemInDarkTheme(),
+                        state.mapStyleUrls.light,
+                        state.mapStyleUrls.dark,
+                    )
+                ),
+            initialCameraPosition =
+                CameraPosition(
+                    center = Coordinates.NAPOLI.toMapLibreComposePosition(),
+                    zoom = 15.0,
+                ),
         )
-    )
     val screenWidthDp = LocalConfiguration.current.screenWidthDp.toDouble()
     LaunchedEffect(true) {
         detailsViewModel.cameraPositionEvents.collect { target ->
-            val zoom = target.fitRadiusMeters?.let {
-                zoomToFitCircle(
-                    latitude = target.coordinates.latitude,
-                    radiusMeters = it,
-                    viewportWidthDp = screenWidthDp
-                )
-            } ?: 15.0
-            // a map gesture cancels the animation by throwing, which would otherwise end this collector
+            val zoom =
+                target.fitRadiusMeters?.let {
+                    zoomToFitCircle(
+                        latitude = target.coordinates.latitude,
+                        radiusMeters = it,
+                        viewportWidthDp = screenWidthDp,
+                    )
+                } ?: 15.0
+            // a map gesture cancels the animation by throwing, which would otherwise end this
+            // collector
             try {
                 mapState.animateCamera(
-                    CameraUpdate(center = target.coordinates.toMapLibreComposePosition(), zoom = zoom),
-                    CameraAnimation.Ease { duration = MARKER_MOVE_DURATION_MS.milliseconds }
+                    CameraUpdate(
+                        center = target.coordinates.toMapLibreComposePosition(),
+                        zoom = zoom,
+                    ),
+                    CameraAnimation.Ease { duration = MARKER_MOVE_DURATION_MS.milliseconds },
                 )
             } catch (_: CancellationException) {
                 currentCoroutineContext().ensureActive()
@@ -201,33 +215,35 @@ fun MapScreen(
         }
     }
 
-    val membersPoints = remember(details.members, oldLocations, details.anonymousGroup, details.selectedMemberId) {
-        val group = details.anonymousGroup ?: return@remember null
-        details.members?.mapNotNull { (memberId, member) ->
-            if (group.memberId == memberId) {
-                return@mapNotNull null
+    val membersPoints =
+        remember(details.members, oldLocations, details.anonymousGroup, details.selectedMemberId) {
+            val group = details.anonymousGroup ?: return@remember null
+            details.members?.mapNotNull { (memberId, member) ->
+                if (group.memberId == memberId) {
+                    return@mapNotNull null
+                }
+                val locationRecord = member.lastLocationRecord ?: return@mapNotNull null
+                MapPoint(
+                    coordinates = locationRecord.coordinates,
+                    name = member.name,
+                    isOld = oldLocations.contains(memberId),
+                    isSelected = memberId == details.selectedMemberId,
+                    id = memberId,
+                )
             }
-            val locationRecord = member.lastLocationRecord ?: return@mapNotNull null
+        }
+
+    val myPoint =
+        remember(details.myLocationRecordFromGPS, details.anonymousGroup, isMyLocationOld) {
+            val record = details.myLocationRecordFromGPS ?: return@remember null
             MapPoint(
-                coordinates = locationRecord.coordinates,
-                name = member.name,
-                isOld = oldLocations.contains(memberId),
-                isSelected = memberId == details.selectedMemberId,
-                id = memberId
+                coordinates = record.coordinates,
+                name = "You",
+                isOld = isMyLocationOld,
+                isSelected = false,
+                id = details.anonymousGroup?.memberId ?: "me",
             )
         }
-    }
-
-    val myPoint = remember(details.myLocationRecordFromGPS, details.anonymousGroup, isMyLocationOld) {
-        val record = details.myLocationRecordFromGPS ?: return@remember null
-        MapPoint(
-            coordinates = record.coordinates,
-            name = "You",
-            isOld = isMyLocationOld,
-            isSelected = false,
-            id = details.anonymousGroup?.memberId ?: "me"
-        )
-    }
 
     LaunchedEffect(details.members) {
         details.members?.forEach { (memberId, member) ->
@@ -238,10 +254,14 @@ fun MapScreen(
             }
             val now = Clock.System.now()
             val locationTimestamp = member.lastLocationRecord.timestamp.toInstant(TimeZone.UTC)
-            val msToWait = (locationTimestamp.plus(1.minutes) - now).inWholeMilliseconds.coerceAtLeast(0)
+            val msToWait =
+                (locationTimestamp.plus(1.minutes) - now).inWholeMilliseconds.coerceAtLeast(0)
             oldLocationsJobs[member.id] = launch {
                 delay(msToWait)
-                if (details.members?.get(memberId)?.lastLocationRecord?.timestamp == member.lastLocationRecord.timestamp) {
+                if (
+                    details.members?.get(memberId)?.lastLocationRecord?.timestamp ==
+                        member.lastLocationRecord.timestamp
+                ) {
                     oldLocations += memberId
                 }
             }
@@ -268,17 +288,22 @@ fun MapScreen(
         }
     }
 
-    val multiplePermissionsLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions(),
-        onResult = { detailsViewModel.startMyLocation() })
+    val multiplePermissionsLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestMultiplePermissions(),
+            onResult = { detailsViewModel.startMyLocation() },
+        )
     PermissionsRequester(
         permissionRequests = LockatePermissions.PERMISSION_REQUESTS,
-        requestPermissions = { permissions -> multiplePermissionsLauncher.launch(permissions.toTypedArray()) },
+        requestPermissions = { permissions ->
+            multiplePermissionsLauncher.launch(permissions.toTypedArray())
+        },
         checkPermissionGranted = { permission -> viewModel.checkPermissionGranted(permission) },
         onPermissionsRequested = {
             startLocationService()
             detailsViewModel.startMyLocation()
-        })
+        },
+    )
 
     BackHandler(enabled = state.isGroupPickerOpen || details.selectedMemberId != null) {
         if (state.isGroupPickerOpen) {
@@ -301,7 +326,11 @@ fun MapScreen(
 
     fun copyCoordinates(member: AGMember) {
         val coordinates = member.lastLocationRecord?.coordinates ?: return
-        copyToClipboard("coordinates", coordinates.toShareableString(), "Coordinates copied to clipboard")
+        copyToClipboard(
+            "coordinates",
+            coordinates.toShareableString(),
+            "Coordinates copied to clipboard",
+        )
     }
 
     // The geo label is a fixed string, not the member name, so the decrypted name
@@ -315,7 +344,8 @@ fun MapScreen(
         }
     }
 
-    // Collapse before switching to the details, otherwise they'd show up fully expanded and then close
+    // Collapse before switching to the details, otherwise they'd show up fully expanded and then
+    // close
     fun selectMember(memberId: String) {
         coroutineScope.launch {
             sheetState.partialExpand()
@@ -334,14 +364,21 @@ fun MapScreen(
     if (details.showDeleteAGDialog) {
         AlertDialog(
             title = { Text("Delete $groupName") },
-            text = { Text("Are you sure you want to delete this anonymous group? This action is permanent!") },
+            text = {
+                Text(
+                    "Are you sure you want to delete this anonymous group? This action is permanent!"
+                )
+            },
             dismissButton = {
-                TextButton(onClick = detailsViewModel::hideDeleteAGDialog) { Text("No, don't delete") }
+                TextButton(onClick = detailsViewModel::hideDeleteAGDialog) {
+                    Text("No, don't delete")
+                }
             },
             confirmButton = {
                 TextButton(onClick = detailsViewModel::deleteAnonymousGroup) { Text("Yes, delete") }
             },
-            onDismissRequest = detailsViewModel::hideDeleteAGDialog)
+            onDismissRequest = detailsViewModel::hideDeleteAGDialog,
+        )
     }
 
     if (details.showLeaveAGDialog) {
@@ -354,21 +391,27 @@ fun MapScreen(
             confirmButton = {
                 TextButton(onClick = detailsViewModel::leaveAnonymousGroup) { Text("Yes, leave") }
             },
-            onDismissRequest = detailsViewModel::hideLeaveAGDialog)
+            onDismissRequest = detailsViewModel::hideLeaveAGDialog,
+        )
     }
 
     details.makeAdminDialogMemberId?.let { memberId ->
         val memberName = details.members?.get(memberId)?.name ?: "this member"
         AlertDialog(
             title = { Text("Make $memberName an admin?") },
-            text = { Text("They will be able to delete the group and make other members admins. This can't be undone from the app.") },
+            text = {
+                Text(
+                    "They will be able to delete the group and make other members admins. This can't be undone from the app."
+                )
+            },
             dismissButton = {
                 TextButton(onClick = detailsViewModel::hideMakeAdminDialog) { Text("Cancel") }
             },
             confirmButton = {
                 TextButton(onClick = detailsViewModel::makeMemberAdmin) { Text("Make admin") }
             },
-            onDismissRequest = detailsViewModel::hideMakeAdminDialog)
+            onDismissRequest = detailsViewModel::hideMakeAdminDialog,
+        )
     }
 
     val connectionId = state.selectedConnectionId
@@ -390,7 +433,10 @@ fun MapScreen(
                 onAddServer = {
                     coroutineScope.launch { drawerState.close() }
                     navigateToConnectionSettings(
-                        ConnectionSettingsRoute(initialConnectionSettingsId = null, showBackButton = true)
+                        ConnectionSettingsRoute(
+                            initialConnectionSettingsId = null,
+                            showBackButton = true,
+                        )
                     )
                 },
                 onManageServers = {
@@ -400,8 +446,10 @@ fun MapScreen(
                 onSettings = {
                     coroutineScope.launch { drawerState.close() }
                     navigateToSettings()
-                })
-        }) {
+                },
+            )
+        },
+    ) {
         PeekHeaderBottomSheetScaffold(
             scaffoldState = scaffoldState,
             sheetMaxHeight = LocalConfiguration.current.screenHeightDp.dp * 0.55f,
@@ -415,24 +463,29 @@ fun MapScreen(
                     onJoinGroup = { connectionId?.let(navigateToJoinAG) },
                     onRemoveGroup = viewModel::removeLocalGroup,
                     onBackToMembers = detailsViewModel::clearSelectedMember,
-                    onToggleFollow = detailsViewModel::setFollowSelectedMember
+                    onToggleFollow = detailsViewModel::setFollowSelectedMember,
                 )
             },
-            sheetBody = if (sheetKind.hasBody) {
-                {
-                    MembersSheetBody(
-                        kind = sheetKind,
-                        details = details,
-                        onSelectMember = ::selectMember,
-                        onCopyCoordinates = ::copyCoordinates,
-                        onOpenInMaps = ::openInMaps,
-                        onCopyMemberId = { member ->
-                            copyToClipboard("memberId", member.id, "Member id copied to clipboard")
-                        },
-                        onMakeAdmin = detailsViewModel::showMakeAdminDialog
-                    )
-                }
-            } else null
+            sheetBody =
+                if (sheetKind.hasBody) {
+                    {
+                        MembersSheetBody(
+                            kind = sheetKind,
+                            details = details,
+                            onSelectMember = ::selectMember,
+                            onCopyCoordinates = ::copyCoordinates,
+                            onOpenInMaps = ::openInMaps,
+                            onCopyMemberId = { member ->
+                                copyToClipboard(
+                                    "memberId",
+                                    member.id,
+                                    "Member id copied to clipboard",
+                                )
+                            },
+                            onMakeAdmin = detailsViewModel::showMakeAdminDialog,
+                        )
+                    }
+                } else null,
         ) { sheetPeekHeight ->
             Box(modifier = Modifier.fillMaxSize()) {
                 MembersMap(
@@ -447,23 +500,25 @@ fun MapScreen(
                     compassTopPadding = statusBarTop + 72.dp,
                     bottomPadding = sheetPeekHeight,
                     onTapMember = ::selectMember,
-                    onMapGesture = detailsViewModel::onMapGesture
+                    onMapGesture = detailsViewModel::onMapGesture,
                 )
 
                 if (state.isGroupPickerOpen) {
                     Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.32f))
-                            .clickable(interactionSource = null, indication = null) {
-                                viewModel.closeGroupPicker()
-                            })
+                        modifier =
+                            Modifier.fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.32f))
+                                .clickable(interactionSource = null, indication = null) {
+                                    viewModel.closeGroupPicker()
+                                }
+                    )
                 }
 
                 Column(modifier = Modifier.align(Alignment.TopCenter)) {
                     FloatingGroupBar(
                         selectedGroup = selectedGroup,
-                        groups = filterGroups(sortGroups(state.groups ?: emptyList()), state.groupQuery),
+                        groups =
+                            filterGroups(sortGroups(state.groups ?: emptyList()), state.groupQuery),
                         isPickerOpen = state.isGroupPickerOpen,
                         query = state.groupQuery,
                         onQueryChange = viewModel::setGroupQuery,
@@ -485,39 +540,62 @@ fun MapScreen(
                                 isSharingLocation = details.anonymousGroup?.sendLocation == true,
                                 canToggleSharing = details.anonymousGroup != null,
                                 isAdmin = details.anonymousGroup?.memberIsAGAdmin == true,
-                                onToggleSharing = { dismiss(); detailsViewModel.toggleAGShareLocation() },
-                                onCircles = { dismiss(); selectedGroup?.let { navigateToCircles(it.internalId) } },
-                                onInvite = { dismiss(); selectedGroup?.let { navigateToInvite(it.internalId) } },
-                                onLeave = { dismiss(); detailsViewModel.showLeaveAGDialog() },
-                                onRemove = { dismiss(); viewModel.removeLocalGroup() },
-                                onDelete = { dismiss(); detailsViewModel.showDeleteAGDialog() })
-                        })
-                    if (!state.isGroupPickerOpen &&
-                        (state.isServerUnreachable || details.remoteDataLoadingState == LoadingState.Failed ||
-                            details.locationStreamState == LocationStreamState.Reconnecting)
+                                onToggleSharing = {
+                                    dismiss()
+                                    detailsViewModel.toggleAGShareLocation()
+                                },
+                                onCircles = {
+                                    dismiss()
+                                    selectedGroup?.let { navigateToCircles(it.internalId) }
+                                },
+                                onInvite = {
+                                    dismiss()
+                                    selectedGroup?.let { navigateToInvite(it.internalId) }
+                                },
+                                onLeave = {
+                                    dismiss()
+                                    detailsViewModel.showLeaveAGDialog()
+                                },
+                                onRemove = {
+                                    dismiss()
+                                    viewModel.removeLocalGroup()
+                                },
+                                onDelete = {
+                                    dismiss()
+                                    detailsViewModel.showDeleteAGDialog()
+                                },
+                            )
+                        },
+                    )
+                    if (
+                        !state.isGroupPickerOpen &&
+                            (state.isServerUnreachable ||
+                                details.remoteDataLoadingState == LoadingState.Failed ||
+                                details.locationStreamState == LocationStreamState.Reconnecting)
                     ) {
                         ServerUnreachableBanner(
-                            modifier = Modifier
-                                .padding(horizontal = 12.dp)
-                                .clip(RoundedCornerShape(16.dp)),
+                            modifier =
+                                Modifier.padding(horizontal = 12.dp)
+                                    .clip(RoundedCornerShape(16.dp)),
                             onRetry = {
                                 viewModel.retryServer()
                                 detailsViewModel.remoteOperations()
-                            })
+                            },
+                        )
                     }
                 }
 
                 if (scaffoldState.bottomSheetState.targetValue != SheetValue.Expanded) {
                     FloatingActionButton(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(16.dp)
-                            .padding(bottom = sheetPeekHeight),
-                        onClick = detailsViewModel::onTapMyLocation
+                        modifier =
+                            Modifier.align(Alignment.BottomEnd)
+                                .padding(16.dp)
+                                .padding(bottom = sheetPeekHeight),
+                        onClick = detailsViewModel::onTapMyLocation,
                     ) {
                         Icon(
                             painter = painterResource(R.drawable.outline_location_searching_24),
-                            contentDescription = "My location"
+                            contentDescription = "My location",
                         )
                     }
                 }
@@ -537,7 +615,7 @@ private fun GroupMenuItems(
     onInvite: () -> Unit,
     onLeave: () -> Unit,
     onRemove: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
 ) {
     group ?: return
     val isActive = group.isMember && group.existsRemote
@@ -546,37 +624,39 @@ private fun GroupMenuItems(
             leadingIcon = { Checkbox(checked = isSharingLocation, onCheckedChange = null) },
             text = { Text("Share location") },
             enabled = canToggleSharing,
-            onClick = onToggleSharing
+            onClick = onToggleSharing,
         )
     }
     if (isActive) {
         DropdownMenuItem(
             leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) },
             text = { Text("Circles") },
-            onClick = onCircles
+            onClick = onCircles,
         )
         DropdownMenuItem(
             leadingIcon = { Icon(Icons.Default.Add, contentDescription = null) },
             text = { Text("Invite") },
-            onClick = onInvite
+            onClick = onInvite,
         )
         DropdownMenuItem(
-            leadingIcon = { Icon(painterResource(R.drawable.outline_logout_24), contentDescription = null) },
+            leadingIcon = {
+                Icon(painterResource(R.drawable.outline_logout_24), contentDescription = null)
+            },
             text = { Text("Leave") },
-            onClick = onLeave
+            onClick = onLeave,
         )
         if (isAdmin) {
             DropdownMenuItem(
                 leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
                 text = { Text("Delete") },
-                onClick = onDelete
+                onClick = onDelete,
             )
         }
     } else {
         DropdownMenuItem(
             leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
             text = { Text("Remove from device") },
-            onClick = onRemove
+            onClick = onRemove,
         )
     }
 }

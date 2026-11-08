@@ -22,9 +22,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class JoinAnonymousGroupViewModel(
-    private val inviteService: InviteService
-) : ViewModel() {
+class JoinAnonymousGroupViewModel(private val inviteService: InviteService) : ViewModel() {
     private val _state = MutableStateFlow(JoinAnonymousGroupState())
     val state = _state.asStateFlow()
     private val _snackbarEvents = Channel<SnackbarErrorMessage>(Channel.BUFFERED)
@@ -50,7 +48,8 @@ class JoinAnonymousGroupViewModel(
         _state.update {
             it.copy(
                 codeError = if (code == null) "Enter a code like 7-word-word-word" else null,
-                memberNameError = if (memberName.isEmpty()) "Please enter your member name" else null,
+                memberNameError =
+                    if (memberName.isEmpty()) "Please enter your member name" else null,
             )
         }
         if (code == null || memberName.isEmpty()) return
@@ -58,7 +57,9 @@ class JoinAnonymousGroupViewModel(
             _state.update { it.copy(isJoining = true) }
             try {
                 inviteService.joinWithCode(
-                    connectionId = connectionSettingsId, code = code, memberName = memberName
+                    connectionId = connectionSettingsId,
+                    code = code,
+                    memberName = memberName,
                 )
                 _navigateBackEvents.trySend(Unit)
             } catch (e: CancellationException) {
@@ -66,34 +67,35 @@ class JoinAnonymousGroupViewModel(
             } catch (e: Exception) {
                 _snackbarEvents.trySend(
                     when (e) {
-                        is InviteNotFoundException -> SnackbarErrorMessage(
-                            "There's no invite with this number. It may have expired."
-                        )
+                        is InviteNotFoundException ->
+                            SnackbarErrorMessage(
+                                "There's no invite with this number. It may have expired."
+                            )
 
-                        is InviteAlreadyClaimedException -> SnackbarErrorMessage(
-                            "Someone else already used this code. Ask for a new one."
-                        )
+                        is InviteAlreadyClaimedException ->
+                            SnackbarErrorMessage(
+                                "Someone else already used this code. Ask for a new one."
+                            )
 
-                        is InviteRejectedException -> SnackbarErrorMessage(
-                            "The code is wrong or the invite was cancelled. Ask for a new one."
-                        )
+                        is InviteRejectedException ->
+                            SnackbarErrorMessage(
+                                "The code is wrong or the invite was cancelled. Ask for a new one."
+                            )
 
-                        is InviteExpiredException -> SnackbarErrorMessage(
-                            "The invite expired. Ask for a new one."
-                        )
+                        is InviteExpiredException ->
+                            SnackbarErrorMessage("The invite expired. Ask for a new one.")
 
-                        is TooManyRequestsException -> SnackbarErrorMessage(
-                            "Too many attempts. Try again in a minute."
-                        )
+                        is TooManyRequestsException ->
+                            SnackbarErrorMessage("Too many attempts. Try again in a minute.")
 
-                        is LocalAGExistsException -> SnackbarErrorMessage(
-                            "You already joined this anonymous group"
-                        )
+                        is LocalAGExistsException ->
+                            SnackbarErrorMessage("You already joined this anonymous group")
 
-                        else -> SnackbarErrorMessage(
-                            text = "Can't join anonymous group",
-                            errorInfo = ErrorInfo.fromException(e)
-                        )
+                        else ->
+                            SnackbarErrorMessage(
+                                text = "Can't join anonymous group",
+                                errorInfo = ErrorInfo.fromException(e),
+                            )
                     }
                 )
             } finally {

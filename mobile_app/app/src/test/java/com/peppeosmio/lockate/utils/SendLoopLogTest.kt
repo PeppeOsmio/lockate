@@ -1,18 +1,17 @@
 package com.peppeosmio.lockate.utils
 
+import java.io.File
+import kotlin.concurrent.thread
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
-import java.io.File
-import kotlin.concurrent.thread
 
 class SendLoopLogTest {
 
-    @get:Rule
-    val tmp = TemporaryFolder()
+    @get:Rule val tmp = TemporaryFolder()
 
     @Test
     fun `appends timestamped lines`() {

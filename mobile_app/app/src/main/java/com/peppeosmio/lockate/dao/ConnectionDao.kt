@@ -17,11 +17,9 @@ interface ConnectionDao {
     @Query("SELECT * FROM connection ORDER BY name COLLATE NOCASE")
     suspend fun listConnections(): List<ConnectionEntity>
 
-    @Insert
-    suspend fun insertConnection(connectionEntity: ConnectionEntity): Long
+    @Insert suspend fun insertConnection(connectionEntity: ConnectionEntity): Long
 
-    @Update
-    suspend fun updateConnection(connectionEntity: ConnectionEntity)
+    @Update suspend fun updateConnection(connectionEntity: ConnectionEntity)
 
     @Query("DELETE FROM connection WHERE id = :connectionId")
     suspend fun deleteConnectionSettings(connectionId: Long)

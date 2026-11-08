@@ -49,7 +49,10 @@ class AndroidSendLocationService : Service() {
         return null
     }
 
-    @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
+    @RequiresPermission(
+        allOf =
+            [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION]
+    )
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         sendLoopLog.log("service onStartCommand action=${intent?.action} running=$isRunning")
         when (intent?.action) {
@@ -64,7 +67,10 @@ class AndroidSendLocationService : Service() {
         return START_STICKY
     }
 
-    @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
+    @RequiresPermission(
+        allOf =
+            [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION]
+    )
     private fun start() {
         // startForeground with type location throws SecurityException when the
         // location permission isn't active, so refuse to start without it.
@@ -73,9 +79,11 @@ class AndroidSendLocationService : Service() {
             return
         }
         isRunning = true
-        val builder = notificationBuilder ?: createNotificationBuilder().also {
-            notificationBuilder = it
-        }
+        val builder =
+            notificationBuilder
+                ?: createNotificationBuilder().also {
+                    notificationBuilder = it
+                }
         // also when already running, so the notification is always owned by this instance
         startForeground(1, builder.build())
         if (sendJob?.isActive == true) return
@@ -97,12 +105,14 @@ class AndroidSendLocationService : Service() {
                 anonymousGroupService.holdAllChannels { status ->
                     // when the coroutines are canceled the status callback is still invoked
                     // to notify that they're not sending location anymore by decrementing AG count
-                    // so update the notification only while running, otherwise a "ghost" notification
+                    // so update the notification only while running, otherwise a "ghost"
+                    // notification
                     // is created
                     mainHandler.post {
                         if (isRunning) {
                             notificationManager.notify(
-                                1, builder.setContentText(status.notificationText()).build()
+                                1,
+                                builder.setContentText(status.notificationText()).build(),
                             )
                         }
                     }
@@ -114,78 +124,113 @@ class AndroidSendLocationService : Service() {
     }
 
     private fun showCircleNotifications(update: CircleNotificationUpdate) {
-        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
-        val openIntent = PendingIntent.getActivity(
-            this,
-            2,
-            Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        if (
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+                PackageManager.PERMISSION_GRANTED
         )
+            return
+        val openIntent =
+            PendingIntent.getActivity(
+                this,
+                2,
+                Intent(this, MainActivity::class.java),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.notify(
             update.member.tag,
             CIRCLE_NOTIFICATION_ID,
             circleNotificationBuilder(update.member, openIntent)
-                .setStyle(NotificationCompat.BigTextStyle().bigText(update.member.lines.joinToString("\n")))
-                .build()
+                .setStyle(
+                    NotificationCompat.BigTextStyle()
+                        .bigText(update.member.lines.joinToString("\n"))
+                )
+                .build(),
         )
         // the summary is silent: the member's notification is the one that alerts
         notificationManager.notify(
             update.summary.tag,
             CIRCLE_NOTIFICATION_ID,
-            circleNotificationBuilder(update.summary, openIntent).setGroupSummary(true)
-                .setOnlyAlertOnce(true).setStyle(
+            circleNotificationBuilder(update.summary, openIntent)
+                .setGroupSummary(true)
+                .setOnlyAlertOnce(true)
+                .setStyle(
                     NotificationCompat.InboxStyle().also { style ->
                         update.summary.lines.forEach { style.addLine(it) }
-                    }).build()
+                    }
+                )
+                .build(),
         )
     }
 
     private fun circleNotificationBuilder(
-        notification: CircleNotification, openIntent: PendingIntent
-    ) = NotificationCompat.Builder(this, CIRCLE_NOTIFICATION_CHANNEL_ID)
-        .setContentTitle(notification.title).setContentText(notification.text)
-        .setSmallIcon(R.drawable.ic_launcher_background).setContentIntent(openIntent)
-        .setGroup(notification.groupKey).setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
-        .setWhen(notification.whenMillis).setShowWhen(true)
-        .setTimeoutAfter(CIRCLE_NOTIFICATION_TIMEOUT_MILLIS).setAutoCancel(true)
+        notification: CircleNotification,
+        openIntent: PendingIntent,
+    ) =
+        NotificationCompat.Builder(this, CIRCLE_NOTIFICATION_CHANNEL_ID)
+            .setContentTitle(notification.title)
+            .setContentText(notification.text)
+            .setSmallIcon(R.drawable.ic_launcher_background)
+            .setContentIntent(openIntent)
+            .setGroup(notification.groupKey)
+            .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
+            .setWhen(notification.whenMillis)
+            .setShowWhen(true)
+            .setTimeoutAfter(CIRCLE_NOTIFICATION_TIMEOUT_MILLIS)
+            .setAutoCancel(true)
 
     private fun createNotificationBuilder(): NotificationCompat.Builder {
-        val stopIntent = Intent(this, AndroidSendLocationService::class.java).apply {
-            action = ACTION_STOP
-        }
-        val stopPendingIntent = PendingIntent.getService(
-            this, 0, stopIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        val stopIntent =
+            Intent(this, AndroidSendLocationService::class.java).apply {
+                action = ACTION_STOP
+            }
+        val stopPendingIntent =
+            PendingIntent.getService(
+                this,
+                0,
+                stopIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
 
-        val restartIntent = Intent(this, AndroidSendLocationService::class.java).apply {
-            action = ACTION_RESTART
-        }
-        val restartPendingIntent = PendingIntent.getService(
-            this,
-            1,
-            restartIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID).setContentTitle("Lockate")
-            .setContentText("Loading...").setSmallIcon(R.drawable.ic_launcher_background)
-            .setOngoing(true).addAction(
-                R.drawable.outline_stop_24, "Stop", stopPendingIntent
-            ).addAction(
-                R.drawable.baseline_restart_alt_24, "Restart", restartPendingIntent
+        val restartIntent =
+            Intent(this, AndroidSendLocationService::class.java).apply {
+                action = ACTION_RESTART
+            }
+        val restartPendingIntent =
+            PendingIntent.getService(
+                this,
+                1,
+                restartIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+            .setContentTitle("Lockate")
+            .setContentText("Loading...")
+            .setSmallIcon(R.drawable.ic_launcher_background)
+            .setOngoing(true)
+            .addAction(
+                R.drawable.outline_stop_24,
+                "Stop",
+                stopPendingIntent,
+            )
+            .addAction(
+                R.drawable.baseline_restart_alt_24,
+                "Restart",
+                restartPendingIntent,
             )
     }
 
     private fun hasLocationPermission(): Boolean {
-        return checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED || checkSelfPermission(
-            Manifest.permission.ACCESS_COARSE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
+        return checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED ||
+            checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) ==
+                PackageManager.PERMISSION_GRANTED
     }
 
     private fun hasBackgroundLocationPermission(): Boolean {
-        return hasLocationPermission() && checkSelfPermission(
-            Manifest.permission.ACCESS_BACKGROUND_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
+        return hasLocationPermission() &&
+            checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION) ==
+                PackageManager.PERMISSION_GRANTED
     }
 
     // also cancels the notification explicitly: stopForeground only removes it when this instance
@@ -202,17 +247,21 @@ class AndroidSendLocationService : Service() {
         stopSelf()
     }
 
-    @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
+    @RequiresPermission(
+        allOf =
+            [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION]
+    )
     private fun restart() {
         restartJob?.cancel()
         val oldJob = sendJob
         sendJob = null
         notifyJob?.cancel()
         notifyJob = null
-        restartJob = serviceScope.launch(Dispatchers.Main) {
-            oldJob?.cancelAndJoin()
-            start()
-        }
+        restartJob =
+            serviceScope.launch(Dispatchers.Main) {
+                oldJob?.cancelAndJoin()
+                start()
+            }
     }
 
     override fun onDestroy() {

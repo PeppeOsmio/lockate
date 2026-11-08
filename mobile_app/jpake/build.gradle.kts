@@ -43,18 +43,20 @@ kotlin {
 val jpakeSources = rootProject.layout.projectDirectory.dir("jpake-native/src/main/cpp")
 val jpakeHostDir = layout.buildDirectory.dir("jpake-host")
 
-val buildJpakeHost = tasks.register<Exec>("buildJpakeHost") {
-    inputs.dir(jpakeSources)
-    inputs.dir(rootProject.layout.projectDirectory.dir("third_party/mbedtls/library"))
-    inputs.dir(rootProject.layout.projectDirectory.dir("third_party/mbedtls/include"))
-    outputs.dir(jpakeHostDir)
-    val build = jpakeHostDir.get().asFile.absolutePath
-    commandLine(
-        "sh", "-c",
-        "cmake -S '${jpakeSources.asFile.absolutePath}' -B '$build' -DCMAKE_BUILD_TYPE=Release " +
-            "&& cmake --build '$build' --parallel"
-    )
-}
+val buildJpakeHost =
+    tasks.register<Exec>("buildJpakeHost") {
+        inputs.dir(jpakeSources)
+        inputs.dir(rootProject.layout.projectDirectory.dir("third_party/mbedtls/library"))
+        inputs.dir(rootProject.layout.projectDirectory.dir("third_party/mbedtls/include"))
+        outputs.dir(jpakeHostDir)
+        val build = jpakeHostDir.get().asFile.absolutePath
+        commandLine(
+            "sh",
+            "-c",
+            "cmake -S '${jpakeSources.asFile.absolutePath}' -B '$build' -DCMAKE_BUILD_TYPE=Release " +
+                "&& cmake --build '$build' --parallel",
+        )
+    }
 
 tasks.named<Test>("jvmTest") {
     dependsOn(buildJpakeHost)

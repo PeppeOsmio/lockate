@@ -7,19 +7,20 @@ import org.junit.Test
 
 class DoubleBytesUtilsTest {
 
-    private val values = listOf(
-        0.0,
-        -0.0,
-        1.0,
-        -1.0,
-        40.8517746,
-        -14.2681244,
-        Double.MIN_VALUE,
-        Double.MAX_VALUE,
-        Double.NaN,
-        Double.POSITIVE_INFINITY,
-        Double.NEGATIVE_INFINITY,
-    )
+    private val values =
+        listOf(
+            0.0,
+            -0.0,
+            1.0,
+            -1.0,
+            40.8517746,
+            -14.2681244,
+            Double.MIN_VALUE,
+            Double.MAX_VALUE,
+            Double.NaN,
+            Double.POSITIVE_INFINITY,
+            Double.NEGATIVE_INFINITY,
+        )
 
     @Test
     fun `round trip preserves the original value, big endian`() {
@@ -28,7 +29,7 @@ class DoubleBytesUtilsTest {
             val roundTripped = DoubleBytesUtils.byteArrayToDouble(bytes, bigEndian = true)
             assertTrue(
                 "expected $value but got $roundTripped",
-                value.toRawBits() == roundTripped.toRawBits()
+                value.toRawBits() == roundTripped.toRawBits(),
             )
         }
     }
@@ -40,7 +41,7 @@ class DoubleBytesUtilsTest {
             val roundTripped = DoubleBytesUtils.byteArrayToDouble(bytes, bigEndian = false)
             assertTrue(
                 "expected $value but got $roundTripped",
-                value.toRawBits() == roundTripped.toRawBits()
+                value.toRawBits() == roundTripped.toRawBits(),
             )
         }
     }

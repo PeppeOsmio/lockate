@@ -1,4 +1,3 @@
 package com.peppeosmio.lockate.exceptions
 
-class LocationDisabledException : Exception() {
-}
+class LocationDisabledException : Exception() {}

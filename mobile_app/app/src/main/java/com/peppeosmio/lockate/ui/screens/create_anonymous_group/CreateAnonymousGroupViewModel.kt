@@ -13,9 +13,8 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class CreateAnonymousGroupViewModel(
-    private val anonymousGroupService: AnonymousGroupService
-) : ViewModel() {
+class CreateAnonymousGroupViewModel(private val anonymousGroupService: AnonymousGroupService) :
+    ViewModel() {
     private val _state = MutableStateFlow(CreateAnonymousGroupState())
     val state = _state.asStateFlow()
     private val _snackbarEvents = Channel<SnackbarErrorMessage>(Channel.BUFFERED)
@@ -47,7 +46,7 @@ class CreateAnonymousGroupViewModel(
         _state.update {
             it.copy(
                 groupNameError = null,
-                userNameError = null
+                userNameError = null,
             )
         }
     }
@@ -72,12 +71,11 @@ class CreateAnonymousGroupViewModel(
                 _snackbarEvents.trySend(
                     SnackbarErrorMessage(
                         text = "Can't create anonymous group",
-                        errorInfo = ErrorInfo.fromException(e)
+                        errorInfo = ErrorInfo.fromException(e),
                     )
                 )
                 _state.update { it.copy(showLoadingOverlay = false) }
             }
-
         }
     }
 

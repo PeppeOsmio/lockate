@@ -15,7 +15,7 @@ import kotlinx.coroutines.launch
 
 class ManageConnectionsViewModel(
     private val connectionService: ConnectionService,
-    private val anonymousGroupService: AnonymousGroupService
+    private val anonymousGroupService: AnonymousGroupService,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ManageConnectionsState())
@@ -35,7 +35,8 @@ class ManageConnectionsViewModel(
                 _state.update { it.copy(showLoadingOverlay = false) }
                 _snackbarEvents.trySend(
                     SnackbarErrorMessage(
-                        text = "Can't get connections", errorInfo = ErrorInfo.fromException(e)
+                        text = "Can't get connections",
+                        errorInfo = ErrorInfo.fromException(e),
                     )
                 )
             }
@@ -74,7 +75,7 @@ class ManageConnectionsViewModel(
                     it.copy(
                         showLoadingOverlay = false,
                         connections = newConnections,
-                        selectedConnectionIdForDelete = null
+                        selectedConnectionIdForDelete = null,
                     )
                 }
                 if (newConnections.isEmpty()) {
@@ -84,7 +85,8 @@ class ManageConnectionsViewModel(
                 _state.update { it.copy(showLoadingOverlay = false) }
                 _snackbarEvents.trySend(
                     SnackbarErrorMessage(
-                        text = "Can't delete connection", errorInfo = ErrorInfo.fromException(e)
+                        text = "Can't delete connection",
+                        errorInfo = ErrorInfo.fromException(e),
                     )
                 )
             }

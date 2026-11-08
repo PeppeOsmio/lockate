@@ -35,7 +35,9 @@ class WordPassphraseTest {
 
     @Test
     fun generateRejectsAnEmptyWordlistOrACountBelowOne() {
-        assertFailsWith<IllegalArgumentException> { WordPassphrase.generate(wordlist = emptyList()) }
+        assertFailsWith<IllegalArgumentException> {
+            WordPassphrase.generate(wordlist = emptyList())
+        }
         assertFailsWith<IllegalArgumentException> { WordPassphrase.generate(count = 0) }
     }
 
@@ -60,18 +62,32 @@ class WordPassphraseTest {
         val wordlist = listOf("red", "green", "blue")
         assertEquals(
             listOf("red", "blue"),
-            WordPassphrase.parse("red+blue", count = 2, wordlist = wordlist, separators = Regex("\\+"))
+            WordPassphrase.parse(
+                "red+blue",
+                count = 2,
+                wordlist = wordlist,
+                separators = Regex("\\+"),
+            ),
         )
-        assertNull(WordPassphrase.parse("red-blue", count = 2, wordlist = wordlist, separators = Regex("\\+")))
+        assertNull(
+            WordPassphrase.parse(
+                "red-blue",
+                count = 2,
+                wordlist = wordlist,
+                separators = Regex("\\+"),
+            )
+        )
     }
 
     @Test
     fun bytesJoinTheWordsWithTheSeparator() {
         assertContentEquals(
-            "acid-acorn-acre".encodeToByteArray(), WordPassphrase.bytes(listOf("acid", "acorn", "acre"))
+            "acid-acorn-acre".encodeToByteArray(),
+            WordPassphrase.bytes(listOf("acid", "acorn", "acre")),
         )
         assertContentEquals(
-            "a b".encodeToByteArray(), WordPassphrase.bytes(listOf("a", "b"), separator = " ")
+            "a b".encodeToByteArray(),
+            WordPassphrase.bytes(listOf("a", "b"), separator = " "),
         )
     }
 }

@@ -16,14 +16,18 @@ import org.junit.Test
 class AwaitSignalTest {
 
     @Test
-    fun `returns immediately without collecting the signal when condition already holds`() = runTest {
-        var collected = false
-        val signal = flow<Unit> { collected = true }
+    fun `returns immediately without collecting the signal when condition already holds`() =
+        runTest {
+            var collected = false
+            val signal = flow<Unit> { collected = true }
 
-        awaitSignal(signal) { true }
+            awaitSignal(signal) { true }
 
-        assertFalse("signal must not be collected when the condition is already true", collected)
-    }
+            assertFalse(
+                "signal must not be collected when the condition is already true",
+                collected,
+            )
+        }
 
     @Test
     fun `does not return while the condition stays false`() = runTest {

@@ -9,8 +9,6 @@ import androidx.navigation.toRoute
 import com.peppeosmio.lockate.ui.routes.CircleEditorRoute
 import com.peppeosmio.lockate.ui.routes.CirclesRoute
 import com.peppeosmio.lockate.ui.routes.ConnectionSettingsRoute
-import com.peppeosmio.lockate.ui.screens.circles.CircleEditorScreen
-import com.peppeosmio.lockate.ui.screens.circles.CirclesScreen
 import com.peppeosmio.lockate.ui.routes.CreateAnonymousGroupRoute
 import com.peppeosmio.lockate.ui.routes.HomeRoute
 import com.peppeosmio.lockate.ui.routes.InviteRoute
@@ -18,13 +16,15 @@ import com.peppeosmio.lockate.ui.routes.JoinAnonymousGroupRoute
 import com.peppeosmio.lockate.ui.routes.LoadingRoute
 import com.peppeosmio.lockate.ui.routes.ManageConnectionsRoute
 import com.peppeosmio.lockate.ui.routes.SettingsRoute
+import com.peppeosmio.lockate.ui.screens.circles.CircleEditorScreen
+import com.peppeosmio.lockate.ui.screens.circles.CirclesScreen
 import com.peppeosmio.lockate.ui.screens.connection_settings.ConnectionSettingsScreen
 import com.peppeosmio.lockate.ui.screens.create_anonymous_group.CreateAnonymousGroupScreen
 import com.peppeosmio.lockate.ui.screens.invite.InviteScreen
-import com.peppeosmio.lockate.ui.screens.map.MapScreen
 import com.peppeosmio.lockate.ui.screens.join_anonymous_group.JoinAnonymousGroupScreen
 import com.peppeosmio.lockate.ui.screens.loading.LoadingScreen
 import com.peppeosmio.lockate.ui.screens.manage_connections.ManageConnectionsScreen
+import com.peppeosmio.lockate.ui.screens.map.MapScreen
 import com.peppeosmio.lockate.ui.screens.settings.SettingsScreen
 import com.peppeosmio.lockate.ui.theme.LockateTheme
 
@@ -37,45 +37,40 @@ fun LockateApp(startLocationService: () -> Unit) {
             navController = appNavController,
             startDestination = LoadingRoute,
             enterTransition = {
-                slideIntoContainer(
-                    AnimatedContentTransitionScope.SlideDirection.Start,
-                )
+                slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start)
             },
             exitTransition = {
-                slideOutOfContainer(
-                    AnimatedContentTransitionScope.SlideDirection.Start,
-                )
+                slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Start)
             },
             popEnterTransition = {
-                slideIntoContainer(
-                    AnimatedContentTransitionScope.SlideDirection.End,
-                )
+                slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.End)
             },
             popExitTransition = {
-                slideOutOfContainer(
-                    AnimatedContentTransitionScope.SlideDirection.End,
-                )
+                slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End)
             },
         ) {
             composable<LoadingRoute> {
-                LoadingScreen(navigateToHome = {
-                    appNavController.navigate(HomeRoute) {
-                        popUpTo<LoadingRoute>() {
-                            inclusive = true
+                LoadingScreen(
+                    navigateToHome = {
+                        appNavController.navigate(HomeRoute) {
+                            popUpTo<LoadingRoute>() {
+                                inclusive = true
+                            }
                         }
-                    }
-                }, navigateToConnectionSettings = {
-                    appNavController.navigate(
-                        ConnectionSettingsRoute(
-                            initialConnectionSettingsId = null,
-                            showBackButton = false
-                        )
-                    ) {
-                        popUpTo<LoadingRoute>() {
-                            inclusive = true
+                    },
+                    navigateToConnectionSettings = {
+                        appNavController.navigate(
+                            ConnectionSettingsRoute(
+                                initialConnectionSettingsId = null,
+                                showBackButton = false,
+                            )
+                        ) {
+                            popUpTo<LoadingRoute>() {
+                                inclusive = true
+                            }
                         }
-                    }
-                })
+                    },
+                )
             }
             composable<HomeRoute> {
                 MapScreen(
@@ -96,7 +91,7 @@ fun LockateApp(startLocationService: () -> Unit) {
                         appNavController.navigate(ManageConnectionsRoute)
                     },
                     navigateToSettings = { appNavController.navigate(SettingsRoute) },
-                    startLocationService = startLocationService
+                    startLocationService = startLocationService,
                 )
             }
             composable<SettingsRoute> {
@@ -109,26 +104,34 @@ fun LockateApp(startLocationService: () -> Unit) {
                     },
                     navigateToConnectionSettings = { route ->
                         appNavController.navigate(route)
-                    })
+                    },
+                )
             }
             composable<CreateAnonymousGroupRoute> { navBackStackEntry ->
                 val createAnonymousGroupRoute =
                     navBackStackEntry.toRoute<CreateAnonymousGroupRoute>()
-                CreateAnonymousGroupScreen(navigateBack = {
-                    appNavController.popBackStack()
-                }, connectionSettingsId = createAnonymousGroupRoute.connectionSettingsId)
+                CreateAnonymousGroupScreen(
+                    navigateBack = {
+                        appNavController.popBackStack()
+                    },
+                    connectionSettingsId = createAnonymousGroupRoute.connectionSettingsId,
+                )
             }
             composable<JoinAnonymousGroupRoute> { navBackStackEntry ->
                 val joinAnonymousGroupRoute = navBackStackEntry.toRoute<JoinAnonymousGroupRoute>()
-                JoinAnonymousGroupScreen(navigateBack = {
-                    appNavController.popBackStack()
-                }, connectionId = joinAnonymousGroupRoute.connectionSettingsId)
+                JoinAnonymousGroupScreen(
+                    navigateBack = {
+                        appNavController.popBackStack()
+                    },
+                    connectionId = joinAnonymousGroupRoute.connectionSettingsId,
+                )
             }
             composable<InviteRoute> { navBackStackEntry ->
                 val inviteRoute = navBackStackEntry.toRoute<InviteRoute>()
                 InviteScreen(
                     anonymousGroupInternalId = inviteRoute.anonymousGroupInternalId,
-                    navigateBack = { appNavController.popBackStack() })
+                    navigateBack = { appNavController.popBackStack() },
+                )
             }
             composable<CirclesRoute> { navBackStackEntry ->
                 val circlesRoute = navBackStackEntry.toRoute<CirclesRoute>()
@@ -139,17 +142,19 @@ fun LockateApp(startLocationService: () -> Unit) {
                         appNavController.navigate(
                             CircleEditorRoute(
                                 anonymousGroupInternalId = circlesRoute.anonymousGroupInternalId,
-                                circleId = circleId
+                                circleId = circleId,
                             )
                         )
-                    })
+                    },
+                )
             }
             composable<CircleEditorRoute> { navBackStackEntry ->
                 val route = navBackStackEntry.toRoute<CircleEditorRoute>()
                 CircleEditorScreen(
                     anonymousGroupInternalId = route.anonymousGroupInternalId,
                     circleId = route.circleId,
-                    navigateBack = { appNavController.popBackStack() })
+                    navigateBack = { appNavController.popBackStack() },
+                )
             }
             composable<ConnectionSettingsRoute> { navBackStackEntry ->
                 val connectionSettingsRoute = navBackStackEntry.toRoute<ConnectionSettingsRoute>()
@@ -163,7 +168,8 @@ fun LockateApp(startLocationService: () -> Unit) {
                         appNavController.navigate(HomeRoute) {
                             popUpTo(0) { inclusive = true }
                         }
-                    })
+                    },
+                )
             }
         }
     }

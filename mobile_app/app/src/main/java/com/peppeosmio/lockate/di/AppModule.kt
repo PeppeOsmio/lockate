@@ -2,27 +2,25 @@ package com.peppeosmio.lockate.di
 
 import android.util.Log
 import androidx.room.Room
-import com.peppeosmio.lockate.utils.SendLoopLog
-import java.io.File
-import com.google.android.gms.location.DeviceOrientation
 import com.google.android.gms.location.LocationServices
 import com.peppeosmio.lockate.AppDatabase
 import com.peppeosmio.lockate.dao.AnonymousGroupDao
 import com.peppeosmio.lockate.dao.ConnectionDao
+import com.peppeosmio.lockate.platform_service.ActivityService
 import com.peppeosmio.lockate.platform_service.ConnectivityService
 import com.peppeosmio.lockate.platform_service.DeviceOrientationService
 import com.peppeosmio.lockate.platform_service.KeyStoreService
-import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
-import com.peppeosmio.lockate.service.anonymous_group.PayloadCodec
+import com.peppeosmio.lockate.platform_service.LocationService
 import com.peppeosmio.lockate.service.ConnectionService
 import com.peppeosmio.lockate.service.MapStyleService
 import com.peppeosmio.lockate.service.PermissionsService
 import com.peppeosmio.lockate.service.PlaceSearchService
+import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
+import com.peppeosmio.lockate.service.anonymous_group.PayloadCodec
 import com.peppeosmio.lockate.service.crypto.CryptoService
 import com.peppeosmio.lockate.service.invite.InviteService
-import com.peppeosmio.lockate.platform_service.LocationService
-import com.peppeosmio.lockate.platform_service.ActivityService
 import com.peppeosmio.lockate.service.location.PositionProvider
+import com.peppeosmio.lockate.utils.SendLoopLog
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -31,6 +29,7 @@ import io.ktor.client.plugins.logging.Logging
 import io.ktor.client.plugins.sse.SSE
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.serialization.kotlinx.json.json
+import java.io.File
 import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.module
 
@@ -39,8 +38,12 @@ val appModule = module {
     // Singleton AppDatabase
     single<AppDatabase> {
         Room.databaseBuilder(
-            androidContext(), AppDatabase::class.java, "lockate.db"
-        ).addMigrations(AppDatabase.MIGRATION_2_3).build()
+                androidContext(),
+                AppDatabase::class.java,
+                "lockate.db",
+            )
+            .addMigrations(AppDatabase.MIGRATION_2_3)
+            .build()
     }
 
     // DAO from the database
@@ -73,11 +76,12 @@ val appModule = module {
             }
 
             install(Logging) {
-                logger = object : Logger {
-                    override fun log(message: String) {
-                        Log.d("HttpLogging", message)
+                logger =
+                    object : Logger {
+                        override fun log(message: String) {
+                            Log.d("HttpLogging", message)
+                        }
                     }
-                }
             }
         }
     }
@@ -91,7 +95,7 @@ val appModule = module {
             context = androidContext(),
             httpClient = get(),
             connectionDao = get(),
-            keyStoreService = get()
+            keyStoreService = get(),
         )
     }
 
@@ -126,16 +130,16 @@ val appModule = module {
     single<LocationService> {
         LocationService(
             context = androidContext(),
-            fusedLocationClient = LocationServices.getFusedLocationProviderClient(
-                androidContext()
-            ),
-            permissionsService = get<PermissionsService>()
+            fusedLocationClient = LocationServices.getFusedLocationProviderClient(androidContext()),
+            permissionsService = get<PermissionsService>(),
         )
     }
 
     single<ActivityService> {
         ActivityService(
-            context = androidContext(), permissionsService = get(), sendLoopLog = get()
+            context = androidContext(),
+            permissionsService = get(),
+            sendLoopLog = get(),
         )
     }
 
@@ -145,16 +149,15 @@ val appModule = module {
         PositionProvider(
             gpsFixes = locationService::getLocationUpdates,
             passiveFixes = locationService::getPassiveLocationUpdates,
-            activities = activityService::getActivityUpdates
+            activities = activityService::getActivityUpdates,
         )
     }
 
     single<DeviceOrientationService> {
         DeviceOrientationService(
             context = androidContext(),
-            fusedOrientationProviderClient = LocationServices.getFusedOrientationProviderClient(
-                androidContext()
-            )
+            fusedOrientationProviderClient =
+                LocationServices.getFusedOrientationProviderClient(androidContext()),
         )
     }
 
@@ -169,7 +172,7 @@ val appModule = module {
             connectivityService = get(),
             keyStoreService = get(),
             payloadCodec = get(),
-            sendLoopLog = get()
+            sendLoopLog = get(),
         )
     }
 

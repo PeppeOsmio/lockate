@@ -1,14 +1,14 @@
 package com.peppeosmio.lockate.ui.screens.anonymous_group_details
 
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.ExperimentalTime
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
 import org.junit.Assert.assertEquals
 import org.junit.Test
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.minutes
-import kotlin.time.Duration.Companion.seconds
-import kotlin.time.ExperimentalTime
 
 @OptIn(ExperimentalTime::class)
 class LastSeenFreshnessTest {
@@ -37,7 +37,10 @@ class LastSeenFreshnessTest {
 
     @Test
     fun `never seen is stale`() {
-        assertEquals(LastSeenFreshness.Stale, lastSeenFreshness(null, lastSeen.toInstant(TimeZone.UTC)))
+        assertEquals(
+            LastSeenFreshness.Stale,
+            lastSeenFreshness(null, lastSeen.toInstant(TimeZone.UTC)),
+        )
     }
 
     @Test

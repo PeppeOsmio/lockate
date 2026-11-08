@@ -1,8 +1,8 @@
 package com.peppeosmio.lockate.domain
 
+import java.util.Locale
 import org.junit.Assert.assertEquals
 import org.junit.Test
-import java.util.Locale
 
 class CoordinatesTest {
 
@@ -105,7 +105,7 @@ class CoordinatesTest {
     fun `toGeoUri pins the point with a neutral label`() {
         assertEquals(
             "geo:40.851775,14.268124?q=40.851775,14.268124(Location)",
-            Coordinates.NAPOLI.toGeoUri()
+            Coordinates.NAPOLI.toGeoUri(),
         )
     }
 
@@ -115,7 +115,7 @@ class CoordinatesTest {
 
         assertEquals(
             "geo:-33.868820,-70.669266?q=-33.868820,-70.669266(Location)",
-            coordinates.toGeoUri()
+            coordinates.toGeoUri(),
         )
     }
 
@@ -126,7 +126,7 @@ class CoordinatesTest {
         try {
             assertEquals(
                 "geo:40.851775,14.268124?q=40.851775,14.268124(Location)",
-                Coordinates.NAPOLI.toGeoUri()
+                Coordinates.NAPOLI.toGeoUri(),
             )
         } finally {
             Locale.setDefault(previous)

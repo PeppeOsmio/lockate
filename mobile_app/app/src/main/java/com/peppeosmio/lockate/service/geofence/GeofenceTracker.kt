@@ -62,11 +62,12 @@ class GeofenceTracker {
             val distance = coordinates.distanceMetersTo(circle.center)
             val margin = min(HYSTERESIS_MAX_METERS, circle.radiusMeters * 0.2)
             val wasInside = inside.getValue(circle.id)
-            val isInside = if (wasInside) {
-                distance <= circle.radiusMeters + margin
-            } else {
-                distance < circle.radiusMeters - margin
-            }
+            val isInside =
+                if (wasInside) {
+                    distance <= circle.radiusMeters + margin
+                } else {
+                    distance < circle.radiusMeters - margin
+                }
             if (isInside == wasInside) return@mapNotNull null
             inside[circle.id] = isInside
             CircleTransition(circle.id, if (isInside) TransitionKind.Enter else TransitionKind.Exit)

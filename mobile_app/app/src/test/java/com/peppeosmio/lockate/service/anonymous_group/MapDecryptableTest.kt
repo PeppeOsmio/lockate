@@ -15,8 +15,10 @@ class MapDecryptableTest {
     fun `elements that can't be decrypted are skipped and reported`() = runTest {
         val skipped = mutableListOf<String>()
 
-        val result = listOf("a", "bad1", "b", "bad2").mapDecryptable(
-            onUndecryptable = { skipped += it }) { decrypt(it) }
+        val result =
+            listOf("a", "bad1", "b", "bad2").mapDecryptable(onUndecryptable = { skipped += it }) {
+                decrypt(it)
+            }
 
         assertEquals(listOf("A", "B"), result)
         assertEquals(listOf("bad1", "bad2"), skipped)
@@ -26,9 +28,10 @@ class MapDecryptableTest {
     fun `a list with nothing to skip maps as usual`() = runTest {
         val skipped = mutableListOf<String>()
 
-        val result = listOf("a", "b").mapDecryptable(onUndecryptable = { skipped += it }) {
-            decrypt(it)
-        }
+        val result =
+            listOf("a", "b").mapDecryptable(onUndecryptable = { skipped += it }) {
+                decrypt(it)
+            }
 
         assertEquals(listOf("A", "B"), result)
         assertEquals(emptyList<String>(), skipped)

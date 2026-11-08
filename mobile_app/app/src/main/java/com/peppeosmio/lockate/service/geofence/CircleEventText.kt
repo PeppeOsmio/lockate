@@ -10,7 +10,7 @@ fun circleEventTexts(
     memberName: String,
     transitions: List<CircleTransition>,
     circles: Map<String, Circle>,
-    mutedTargets: Set<String>
+    mutedTargets: Set<String>,
 ): List<String> {
     if (memberId in mutedTargets) return emptyList()
     return transitions.mapNotNull { transition ->

@@ -10,8 +10,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Button
@@ -39,7 +39,11 @@ import com.peppeosmio.lockate.utils.LoadingState
 
 /** [hasBody]: whether there's more than the header to reveal by dragging the sheet up */
 enum class SheetContentKind(val hasBody: Boolean) {
-    Loading(false), NoGroups(false), BrokenGroup(false), Members(true), MemberDetails(true)
+    Loading(false),
+    NoGroups(false),
+    BrokenGroup(false),
+    Members(true),
+    MemberDetails(true),
 }
 
 fun sheetContentKind(mapState: MapState, details: AGDetailsState): SheetContentKind {
@@ -50,7 +54,8 @@ fun sheetContentKind(mapState: MapState, details: AGDetailsState): SheetContentK
         groups.isEmpty() -> SheetContentKind.NoGroups
         !selectedGroup!!.isMember || !selectedGroup.existsRemote -> SheetContentKind.BrokenGroup
         details.members == null || details.anonymousGroup == null -> SheetContentKind.Loading
-        details.selectedMemberId?.let { details.members[it] } != null -> SheetContentKind.MemberDetails
+        details.selectedMemberId?.let { details.members[it] } != null ->
+            SheetContentKind.MemberDetails
         else -> SheetContentKind.Members
     }
 }
@@ -68,12 +73,14 @@ fun MembersSheetHeader(
     onJoinGroup: () -> Unit,
     onRemoveGroup: () -> Unit,
     onBackToMembers: () -> Unit,
-    onToggleFollow: (Boolean) -> Unit
+    onToggleFollow: (Boolean) -> Unit,
 ) {
     when (kind) {
         SheetContentKind.Loading -> Loading()
-        SheetContentKind.NoGroups -> EmptyGroupsState(onCreate = onCreateGroup, onJoin = onJoinGroup)
-        SheetContentKind.BrokenGroup -> BrokenGroupState(group = mapState.selectedGroup!!, onRemove = onRemoveGroup)
+        SheetContentKind.NoGroups ->
+            EmptyGroupsState(onCreate = onCreateGroup, onJoin = onJoinGroup)
+        SheetContentKind.BrokenGroup ->
+            BrokenGroupState(group = mapState.selectedGroup!!, onRemove = onRemoveGroup)
         SheetContentKind.MemberDetails -> {
             val selectedMember = details.members!![details.selectedMemberId!!]!!
             MemberDetailsHeader(
@@ -81,19 +88,22 @@ fun MembersSheetHeader(
                 isMe = selectedMember.id == details.anonymousGroup!!.memberId,
                 isFollowing = details.isFollowingSelectedMember,
                 onBack = onBackToMembers,
-                onToggleFollow = onToggleFollow
+                onToggleFollow = onToggleFollow,
             )
         }
 
-        SheetContentKind.Members -> MembersHeader(
-            membersCount = details.members!!.size,
-            isSharing = details.anonymousGroup!!.sendLocation,
-            isLoading = details.remoteDataLoadingState == LoadingState.IsLoading
-        )
+        SheetContentKind.Members ->
+            MembersHeader(
+                membersCount = details.members!!.size,
+                isSharing = details.anonymousGroup!!.sendLocation,
+                isLoading = details.remoteDataLoadingState == LoadingState.IsLoading,
+            )
     }
 }
 
-/** The part of the sheet revealed by dragging it up, for the kinds where [SheetContentKind.hasBody] */
+/**
+ * The part of the sheet revealed by dragging it up, for the kinds where [SheetContentKind.hasBody]
+ */
 @Composable
 fun MembersSheetBody(
     kind: SheetContentKind,
@@ -102,22 +112,26 @@ fun MembersSheetBody(
     onCopyCoordinates: (AGMember) -> Unit,
     onOpenInMaps: (AGMember) -> Unit,
     onCopyMemberId: (AGMember) -> Unit,
-    onMakeAdmin: (memberId: String) -> Unit
+    onMakeAdmin: (memberId: String) -> Unit,
 ) {
     when (kind) {
         SheetContentKind.MemberDetails -> {
             val group = details.anonymousGroup!!
             val selectedMember = details.members!![details.selectedMemberId!!]!!
             MemberDetailsBody(
-                modifier = Modifier
-                    .verticalScroll(rememberScrollState())
-                    .padding(bottom = SHEET_BODY_BOTTOM_PADDING),
+                modifier =
+                    Modifier.verticalScroll(rememberScrollState())
+                        .padding(bottom = SHEET_BODY_BOTTOM_PADDING),
                 member = selectedMember,
-                canMakeAdmin = group.memberIsAGAdmin && selectedMember.id != group.memberId && !selectedMember.isAGAdmin,
+                canMakeAdmin =
+                    group.memberIsAGAdmin &&
+                        selectedMember.id != group.memberId &&
+                        !selectedMember.isAGAdmin,
                 onCopyCoordinates = { onCopyCoordinates(selectedMember) },
                 onOpenInMaps = { onOpenInMaps(selectedMember) },
                 onCopyId = { onCopyMemberId(selectedMember) },
-                onMakeAdmin = { onMakeAdmin(selectedMember.id) })
+                onMakeAdmin = { onMakeAdmin(selectedMember.id) },
+            )
         }
 
         SheetContentKind.Members -> {
@@ -126,10 +140,14 @@ fun MembersSheetBody(
                 modifier = Modifier.padding(bottom = SHEET_BODY_BOTTOM_PADDING),
                 authenticatedMemberId = group.memberId,
                 circles = details.circles,
-                members = details.members!!.values.sortedWith(
-                    compareByDescending<AGMember> { it.id == group.memberId }.thenBy { it.name.lowercase() }
-                ),
-                onTapMember = onSelectMember
+                members =
+                    details.members!!
+                        .values
+                        .sortedWith(
+                            compareByDescending<AGMember> { it.id == group.memberId }
+                                .thenBy { it.name.lowercase() }
+                        ),
+                onTapMember = onSelectMember,
             )
         }
 
@@ -140,31 +158,32 @@ fun MembersSheetBody(
 @Composable
 private fun MembersHeader(membersCount: Int, isSharing: Boolean, isLoading: Boolean) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 8.dp),
+        modifier =
+            Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
             modifier = Modifier.weight(1f),
             text = if (membersCount == 1) "1 member" else "$membersCount members",
-            style = MaterialTheme.typography.titleMedium
+            style = MaterialTheme.typography.titleMedium,
         )
         if (isLoading) {
             SmallCircularProgressIndicator()
         }
-        val color = if (isSharing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+        val color =
+            if (isSharing) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.onSurfaceVariant
         Icon(
             painter = painterResource(R.drawable.outline_location_searching_24),
             contentDescription = null,
             modifier = Modifier.size(14.dp),
-            tint = color
+            tint = color,
         )
         Text(
             text = if (isSharing) "Sharing your location" else "Not sharing",
             style = MaterialTheme.typography.bodySmall,
-            color = color
+            color = color,
         )
     }
 }
@@ -172,9 +191,8 @@ private fun MembersHeader(membersCount: Int, isSharing: Boolean, isLoading: Bool
 @Composable
 private fun Loading() {
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(32.dp), contentAlignment = Alignment.Center
+        modifier = Modifier.fillMaxWidth().padding(32.dp),
+        contentAlignment = Alignment.Center,
     ) {
         CircularProgressIndicator()
     }
@@ -183,62 +201,65 @@ private fun Loading() {
 @Composable
 private fun EmptyGroupsState(onCreate: () -> Unit, onJoin: () -> Unit) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
-            modifier = Modifier
-                .size(48.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center
+            modifier =
+                Modifier.size(48.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = Icons.Default.Person,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
             )
         }
         Spacer(Modifier.size(12.dp))
         Text(
             text = "Create your first group",
             style = MaterialTheme.typography.titleMedium,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
         )
         Spacer(Modifier.size(4.dp))
         Text(
-            text = "Share your location with the people you choose. Everything is end-to-end encrypted: the server never sees names or coordinates.",
+            text =
+                "Share your location with the people you choose. Everything is end-to-end encrypted: the server never sees names or coordinates.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
         )
         Spacer(Modifier.size(16.dp))
         Button(modifier = Modifier.fillMaxWidth(), onClick = onCreate) { Text("Create group") }
-        OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = onJoin) { Text("Join with an invite code") }
+        OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = onJoin) {
+            Text("Join with an invite code")
+        }
     }
 }
 
 @Composable
 private fun BrokenGroupState(group: AnonymousGroup, onRemove: () -> Unit) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 32.dp, vertical = 16.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
-            text = if (!group.existsRemote) "This group no longer exists" else "You were removed from this group",
+            text =
+                if (!group.existsRemote) "This group no longer exists"
+                else "You were removed from this group",
             style = MaterialTheme.typography.titleLarge,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
         )
         Text(
             text = "You can remove it from this device.",
             style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
         )
-        Button(modifier = Modifier.fillMaxWidth(), onClick = onRemove) { Text("Remove from device") }
+        Button(modifier = Modifier.fillMaxWidth(), onClick = onRemove) {
+            Text("Remove from device")
+        }
     }
 }

@@ -3,8 +3,6 @@ package com.peppeosmio.lockate.service
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.doublePreferencesKey
-import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -18,5 +16,6 @@ object ConfigSettings {
     val MAP_STYLE_URL_DARK = stringPreferencesKey("map_style_url_dark")
     val GEOCODER_URL = stringPreferencesKey("geocoder_url")
 
-    fun lastAGInternalId(connectionId: Long) = longPreferencesKey("last_ag_internal_id_$connectionId")
+    fun lastAGInternalId(connectionId: Long) =
+        longPreferencesKey("last_ag_internal_id_$connectionId")
 }

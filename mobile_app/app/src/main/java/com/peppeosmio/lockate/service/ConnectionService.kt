@@ -20,8 +20,8 @@ import io.ktor.client.request.url
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
 import io.ktor.http.Url
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.first
@@ -32,7 +32,7 @@ class ConnectionService(
     private val context: Context,
     private val httpClient: HttpClient,
     private val connectionDao: ConnectionDao,
-    private val keyStoreService: KeyStoreService
+    private val keyStoreService: KeyStoreService,
 ) {
     // tryEmit drops what doesn't fit, and a lost ConnectionDeletedEvent leaves the map on a deleted
     // connection
@@ -46,22 +46,24 @@ class ConnectionService(
     }
 
     @Throws
-    suspend fun checkRequireApiKey(url: String): Boolean = withContext(Dispatchers.IO) {
-        val response = httpClient.get {
-            url(Url("${url.trimEnd('/')}/api/api-key/required"))
-            headers {
-                append(HttpHeaders.ContentType, "application/json")
+    suspend fun checkRequireApiKey(url: String): Boolean =
+        withContext(Dispatchers.IO) {
+            val response = httpClient.get {
+                url(Url("${url.trimEnd('/')}/api/api-key/required"))
+                headers {
+                    append(HttpHeaders.ContentType, "application/json")
+                }
             }
+            Log.d("", response.bodyAsText())
+            when (response.status.value) {
+                200 -> Unit
+                401,
+                403 -> ErrorHandler.handleUnauthorized(response)
+                else -> ErrorHandler.handleGeneric(response)
+            }
+            val responseBody = response.body<ApiKeyRequiredResDto>()
+            responseBody.required
         }
-        Log.d("", response.bodyAsText())
-        when (response.status.value) {
-            200 -> Unit
-            401, 403 -> ErrorHandler.handleUnauthorized(response)
-            else -> ErrorHandler.handleGeneric(response)
-        }
-        val responseBody = response.body<ApiKeyRequiredResDto>()
-        responseBody.required
-    }
 
     @Throws(InvalidApiKeyException::class, UnauthorizedException::class)
     suspend fun testConnectionSettings(credentials: Connection) =
@@ -77,27 +79,32 @@ class ConnectionService(
             Log.d("", response.bodyAsText())
             when (response.status.value) {
                 200 -> Unit
-                401, 403 -> ErrorHandler.handleUnauthorized(response)
+                401,
+                403 -> ErrorHandler.handleUnauthorized(response)
                 else -> ErrorHandler.handleGeneric(response)
             }
         }
 
     @Throws(ConnectionSettingsNotFoundException::class)
-    suspend fun getSelectedConnectionSettings(): Connection = withContext(Dispatchers.IO) {
-        val selectedConnectionId = context.dataStore.data.map {
-            it[ConfigSettings.SELECTED_CONNECTION_SETTINGS_ID]
-        }.first()
-        var connectionEntity = selectedConnectionId?.let {
-            connectionDao.getConnectionSettingsById(it)
+    suspend fun getSelectedConnectionSettings(): Connection =
+        withContext(Dispatchers.IO) {
+            val selectedConnectionId =
+                context.dataStore.data
+                    .map {
+                        it[ConfigSettings.SELECTED_CONNECTION_SETTINGS_ID]
+                    }
+                    .first()
+            var connectionEntity = selectedConnectionId?.let {
+                connectionDao.getConnectionSettingsById(it)
+            }
+            if (connectionEntity == null) {
+                connectionEntity = connectionDao.getFirstConnection()
+            }
+            if (connectionEntity == null) {
+                throw ConnectionSettingsNotFoundException()
+            }
+            ConnectionMapper.toDomain(connectionEntity)
         }
-        if (connectionEntity == null) {
-            connectionEntity = connectionDao.getFirstConnection()
-        }
-        if (connectionEntity == null) {
-            throw ConnectionSettingsNotFoundException()
-        }
-        ConnectionMapper.toDomain(connectionEntity)
-    }
 
     @Throws(ConnectionSettingsNotFoundException::class)
     suspend fun getConnectionSettingsById(connectionSettingsId: Long): Connection =
@@ -114,9 +121,10 @@ class ConnectionService(
             }
         }
 
-    suspend fun getLastAGInternalId(connectionId: Long): Long? = withContext(Dispatchers.IO) {
-        context.dataStore.data.map { it[ConfigSettings.lastAGInternalId(connectionId)] }.first()
-    }
+    suspend fun getLastAGInternalId(connectionId: Long): Long? =
+        withContext(Dispatchers.IO) {
+            context.dataStore.data.map { it[ConfigSettings.lastAGInternalId(connectionId)] }.first()
+        }
 
     suspend fun saveLastAGInternalId(connectionId: Long, anonymousGroupInternalId: Long) =
         withContext(Dispatchers.IO) {
@@ -131,24 +139,28 @@ class ConnectionService(
                 throw IllegalArgumentException("id must be null")
             }
             val id = connectionDao.insertConnection(ConnectionMapper.toEntity(connection))
-            val connectionSettingsEntity = connectionDao.getConnectionSettingsById(id)
-                ?: throw ConnectionSettingsNotFoundException()
+            val connectionSettingsEntity =
+                connectionDao.getConnectionSettingsById(id)
+                    ?: throw ConnectionSettingsNotFoundException()
             ConnectionMapper.toDomain(connectionSettingsEntity)
         }
 
-    suspend fun updateConnection(connection: Connection): Connection = withContext(Dispatchers.IO) {
-        connectionDao.updateConnection(ConnectionMapper.toEntity(connection))
-        connection
-    }
-
-    suspend fun listConnectionSettings(): List<Connection> = withContext(Dispatchers.IO) {
-        connectionDao.listConnections().map {
-            ConnectionMapper.toDomain(it)
+    suspend fun updateConnection(connection: Connection): Connection =
+        withContext(Dispatchers.IO) {
+            connectionDao.updateConnection(ConnectionMapper.toEntity(connection))
+            connection
         }
-    }
 
-    suspend fun deleteConnection(connectionSettingsId: Long) = withContext(Dispatchers.IO) {
-        connectionDao.deleteConnectionSettings(connectionSettingsId)
-        _events.tryEmit(ConnectionEvent.ConnectionDeletedEvent(connectionSettingsId))
-    }
+    suspend fun listConnectionSettings(): List<Connection> =
+        withContext(Dispatchers.IO) {
+            connectionDao.listConnections().map {
+                ConnectionMapper.toDomain(it)
+            }
+        }
+
+    suspend fun deleteConnection(connectionSettingsId: Long) =
+        withContext(Dispatchers.IO) {
+            connectionDao.deleteConnectionSettings(connectionSettingsId)
+            _events.tryEmit(ConnectionEvent.ConnectionDeletedEvent(connectionSettingsId))
+        }
 }

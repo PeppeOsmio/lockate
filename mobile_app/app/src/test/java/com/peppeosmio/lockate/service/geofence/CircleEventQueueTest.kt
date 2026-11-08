@@ -45,7 +45,7 @@ class CircleEventQueueTest {
 
         assertEquals(
             listOf(exitHome, enterSchool),
-            queue.drainTransitions(CircleEventQueue.MAX_AGE_MILLIS)
+            queue.drainTransitions(CircleEventQueue.MAX_AGE_MILLIS),
         )
     }
 }

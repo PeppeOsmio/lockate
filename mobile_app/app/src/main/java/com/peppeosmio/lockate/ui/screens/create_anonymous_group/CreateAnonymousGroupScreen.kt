@@ -1,6 +1,5 @@
 package com.peppeosmio.lockate.ui.screens.create_anonymous_group
 
-import com.peppeosmio.lockate.ui.composables.ErrorDialog
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -26,12 +25,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import kotlinx.coroutines.launch
+import com.peppeosmio.lockate.ui.composables.ErrorDialog
 import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -39,7 +37,7 @@ import org.koin.compose.viewmodel.koinViewModel
 fun CreateAnonymousGroupScreen(
     connectionSettingsId: Long,
     navigateBack: () -> Unit,
-    viewModel: CreateAnonymousGroupViewModel = koinViewModel()
+    viewModel: CreateAnonymousGroupViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -51,7 +49,8 @@ fun CreateAnonymousGroupScreen(
                 viewModel.showErrorDialog(snackbarMessage)
             } else {
                 snackbarHostState.showSnackbar(
-                    message = snackbarMessage.text, withDismissAction = true
+                    message = snackbarMessage.text,
+                    withDismissAction = true,
                 )
             }
         }
@@ -71,36 +70,50 @@ fun CreateAnonymousGroupScreen(
         }
     }
 
-    Scaffold(snackbarHost = {
-        SnackbarHost(hostState = snackbarHostState)
-    }, topBar = {
-        TopAppBar(title = { Text("Create anonymous group") }, navigationIcon = {
-            IconButton(onClick = {
-                navigateBack()
-            }) {
-                Icon(
-                    imageVector = Icons.Default.Close, contentDescription = "Back"
-                )
-            }
-        }, actions = {
-            IconButton(onClick = {
-                focusManager.clearFocus()
-                viewModel.createAnonymousGroup(connectionSettingsId)
-            }) {
-                Icon(
-                    imageVector = Icons.Default.Done, contentDescription = "Done"
-                )
-            }
-        })
-    }) { innerPadding ->
+    Scaffold(
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState)
+        },
+        topBar = {
+            TopAppBar(
+                title = { Text("Create anonymous group") },
+                navigationIcon = {
+                    IconButton(
+                        onClick = {
+                            navigateBack()
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Back",
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = {
+                            focusManager.clearFocus()
+                            viewModel.createAnonymousGroup(connectionSettingsId)
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Done,
+                            contentDescription = "Done",
+                        )
+                    }
+                },
+            )
+        },
+    ) { innerPadding ->
         Column(
-            modifier = Modifier
-                .padding(innerPadding)
-                .padding(horizontal = 16.dp)
-                .fillMaxSize()
-                .clickable(interactionSource = null, indication = null) {
+            modifier =
+                Modifier.padding(innerPadding).padding(horizontal = 16.dp).fillMaxSize().clickable(
+                    interactionSource = null,
+                    indication = null,
+                ) {
                     focusManager.clearFocus()
-                }, verticalArrangement = Arrangement.spacedBy(8.dp)
+                },
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             OutlinedTextField(
                 modifier = Modifier.fillMaxWidth(),
@@ -111,10 +124,12 @@ fun CreateAnonymousGroupScreen(
                 supportingText = {
                     if (state.groupNameError != null) {
                         Text(
-                            text = state.groupNameError!!, color = MaterialTheme.colorScheme.error,
+                            text = state.groupNameError!!,
+                            color = MaterialTheme.colorScheme.error,
                         )
                     }
-                })
+                },
+            )
             OutlinedTextField(
                 modifier = Modifier.fillMaxWidth(),
                 value = state.userNameText,
@@ -124,10 +139,12 @@ fun CreateAnonymousGroupScreen(
                 supportingText = {
                     if (state.userNameError != null) {
                         Text(
-                            text = state.userNameError!!, color = MaterialTheme.colorScheme.error
+                            text = state.userNameError!!,
+                            color = MaterialTheme.colorScheme.error,
                         )
                     }
-                })
+                },
+            )
         }
     }
 }

@@ -6,5 +6,5 @@ import kotlinx.serialization.Serializable
 data class AGJoinReqDto(
     val joinToken: String,
     val memberId: String,
-    val encryptedMemberName: EncryptedDataDto
+    val encryptedMemberName: EncryptedDataDto,
 )

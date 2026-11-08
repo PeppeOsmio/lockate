@@ -35,12 +35,13 @@ class CircleEditorRadiusTest {
         assertNull(parseRadiusMeters("-100"))
     }
 
-    private fun readyState(radiusText: String) = CircleEditorState(
-        isLoading = false,
-        name = "Home",
-        center = Coordinates(40.0, 14.0),
-        radiusText = radiusText
-    )
+    private fun readyState(radiusText: String) =
+        CircleEditorState(
+            isLoading = false,
+            name = "Home",
+            center = Coordinates(40.0, 14.0),
+            radiusText = radiusText,
+        )
 
     @Test
     fun `a circle with a valid radius can be saved`() {

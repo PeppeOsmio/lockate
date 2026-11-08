@@ -18,7 +18,7 @@ data class AnonymousGroup(
     val existsRemote: Boolean,
     val sendLocation: Boolean,
     val key: ByteArray,
-    val connectionId: Long
+    val connectionId: Long,
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -61,5 +61,4 @@ data class AnonymousGroup(
         result = 31 * result + key.contentHashCode()
         return result
     }
-
 }

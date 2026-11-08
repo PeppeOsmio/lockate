@@ -13,7 +13,8 @@ object WordPassphrase {
     const val DEFAULT_JOINER = "-"
 
     fun generate(
-        count: Int = DEFAULT_WORD_COUNT, wordlist: List<String> = EFF_SHORT_WORDLIST
+        count: Int = DEFAULT_WORD_COUNT,
+        wordlist: List<String> = EFF_SHORT_WORDLIST,
     ): List<String> {
         require(count >= 1) { "count must be at least 1" }
         require(wordlist.isNotEmpty()) { "wordlist is empty" }

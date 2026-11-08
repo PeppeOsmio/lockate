@@ -8,22 +8,23 @@ import org.junit.Test
 
 class GroupSelectionTest {
 
-    private fun group(internalId: Long, name: String) = AnonymousGroup(
-        internalId = internalId,
-        id = "id-$internalId",
-        name = name,
-        createdAt = LocalDateTime(2026, 1, 1, 0, 0, 0),
-        joinedAt = LocalDateTime(2026, 1, 1, 0, 0, 0),
-        memberName = "me",
-        memberId = "member-$internalId",
-        memberToken = ByteArray(0),
-        memberIsAGAdmin = false,
-        isMember = true,
-        existsRemote = true,
-        sendLocation = true,
-        key = ByteArray(0),
-        connectionId = 1
-    )
+    private fun group(internalId: Long, name: String) =
+        AnonymousGroup(
+            internalId = internalId,
+            id = "id-$internalId",
+            name = name,
+            createdAt = LocalDateTime(2026, 1, 1, 0, 0, 0),
+            joinedAt = LocalDateTime(2026, 1, 1, 0, 0, 0),
+            memberName = "me",
+            memberId = "member-$internalId",
+            memberToken = ByteArray(0),
+            memberIsAGAdmin = false,
+            isMember = true,
+            existsRemote = true,
+            sendLocation = true,
+            key = ByteArray(0),
+            connectionId = 1,
+        )
 
     private val groups = listOf(group(1, "palestra"), group(2, "Famiglia"), group(3, "Amici"))
 

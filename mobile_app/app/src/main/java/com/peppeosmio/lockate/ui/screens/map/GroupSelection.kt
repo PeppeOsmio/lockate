@@ -2,8 +2,9 @@ package com.peppeosmio.lockate.ui.screens.map
 
 import com.peppeosmio.lockate.domain.anonymous_group.AnonymousGroup
 
-fun sortGroups(groups: List<AnonymousGroup>): List<AnonymousGroup> =
-    groups.sortedBy { it.name.lowercase() }
+fun sortGroups(groups: List<AnonymousGroup>): List<AnonymousGroup> = groups.sortedBy {
+    it.name.lowercase()
+}
 
 fun filterGroups(groups: List<AnonymousGroup>, query: String): List<AnonymousGroup> {
     val trimmed = query.trim()

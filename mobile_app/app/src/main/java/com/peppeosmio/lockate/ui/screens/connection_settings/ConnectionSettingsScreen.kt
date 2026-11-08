@@ -1,15 +1,12 @@
 package com.peppeosmio.lockate.ui.screens.connection_settings
 
-import com.peppeosmio.lockate.ui.composables.ErrorDialog
-import com.peppeosmio.lockate.ui.composables.PasswordTextField
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Done
@@ -34,8 +31,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import com.peppeosmio.lockate.ui.composables.ErrorDialog
+import com.peppeosmio.lockate.ui.composables.PasswordTextField
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -46,7 +46,7 @@ fun ConnectionSettingsScreen(
     showBackButton: Boolean,
     navigateToHome: () -> Unit,
     navigateBack: () -> Unit,
-    viewModel: ConnectionSettingsViewModel = koinViewModel()
+    viewModel: ConnectionSettingsViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -70,7 +70,8 @@ fun ConnectionSettingsScreen(
                 viewModel.showErrorDialog(snackbarMessage)
             } else {
                 snackbarHostState.showSnackbar(
-                    message = snackbarMessage.text, withDismissAction = true
+                    message = snackbarMessage.text,
+                    withDismissAction = true,
                 )
             }
         }
@@ -84,47 +85,54 @@ fun ConnectionSettingsScreen(
         }
     }
 
-    Scaffold(snackbarHost = {
-        SnackbarHost(
-            hostState = snackbarHostState
-        )
-    }, topBar = {
-        if (!showBackButton) {
-            return@Scaffold
-        }
-        TopAppBar(title = {}, navigationIcon = {
-            IconButton(onClick = {
-                navigateBack()
-            }) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Default.ArrowBack,
-                    contentDescription = "Navigate back"
-                )
+    Scaffold(
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState)
+        },
+        topBar = {
+            if (!showBackButton) {
+                return@Scaffold
             }
-        })
-    }) { paddingValues ->
+            TopAppBar(
+                title = {},
+                navigationIcon = {
+                    IconButton(
+                        onClick = {
+                            navigateBack()
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Default.ArrowBack,
+                            contentDescription = "Navigate back",
+                        )
+                    }
+                },
+            )
+        },
+    ) { paddingValues ->
         Column(
-            modifier = Modifier
-                .padding(paddingValues)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            modifier = Modifier.padding(paddingValues).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Spacer(modifier = Modifier.weight(1.0f))
-            Text(if(initialConnectionId != null) {
-                "Edit connection"
-            } else {
-                "Welcome to Lockate"
-            }, style = MaterialTheme.typography.titleLarge)
+            Text(
+                if (initialConnectionId != null) {
+                    "Edit connection"
+                } else {
+                    "Welcome to Lockate"
+                },
+                style = MaterialTheme.typography.titleLarge,
+            )
             Text(
                 "Lockate groups live on a server that only relays encrypted data. Enter a name for it and its URL.",
-                style = MaterialTheme.typography.bodyMedium
+                style = MaterialTheme.typography.bodyMedium,
             )
             OutlinedTextField(
                 value = state.name,
                 onValueChange = { text -> viewModel.onNameChanged(text) },
                 label = { Text("Name") },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             )
             OutlinedTextField(
                 value = state.url,
@@ -133,14 +141,14 @@ fun ConnectionSettingsScreen(
                 placeholder = { Text("https://") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             )
             if (state.requireApiKey) {
                 PasswordTextField(
                     value = state.apiKey,
                     onValueChange = { text -> viewModel.onApiKeyChanged(text) },
                     label = "API Key",
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
             FilledTonalButton(
@@ -149,7 +157,9 @@ fun ConnectionSettingsScreen(
                         viewModel.onConnectClicked(initialConnectionId)
                         focusManager.clearFocus()
                     }
-                }, enabled = !state.showLoadingOverlay, modifier = Modifier.align(Alignment.End)
+                },
+                enabled = !state.showLoadingOverlay,
+                modifier = Modifier.align(Alignment.End),
             ) {
                 Icon(Icons.Default.Done, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
@@ -158,6 +168,4 @@ fun ConnectionSettingsScreen(
             Spacer(modifier = Modifier.weight(2.0f))
         }
     }
-
-
 }

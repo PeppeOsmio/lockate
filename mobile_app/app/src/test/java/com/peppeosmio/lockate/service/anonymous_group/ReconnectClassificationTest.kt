@@ -5,11 +5,9 @@ import com.peppeosmio.lockate.exceptions.APIException
 import com.peppeosmio.lockate.exceptions.InvalidApiKeyException
 import com.peppeosmio.lockate.exceptions.RemoteAGNotFoundException
 import io.ktor.client.plugins.sse.SSEClientException
+import java.io.IOException
 import org.junit.Assert.assertEquals
 import org.junit.Test
-import java.io.IOException
-import java.net.ConnectException
-import java.net.SocketTimeoutException
 
 class ReconnectClassificationTest {
 
@@ -32,13 +30,17 @@ class ReconnectClassificationTest {
 
     @Test
     fun `stream closed normally while network is up backs off`() {
-        assertEquals(StreamRetryAction.Backoff, classifyStreamFailure(null, isNetworkAvailable = true))
+        assertEquals(
+            StreamRetryAction.Backoff,
+            classifyStreamFailure(null, isNetworkAvailable = true),
+        )
     }
 
     @Test
     fun `stream closed normally with no network waits for the network`() {
         assertEquals(
-            StreamRetryAction.AwaitNetwork, classifyStreamFailure(null, isNetworkAvailable = false)
+            StreamRetryAction.AwaitNetwork,
+            classifyStreamFailure(null, isNetworkAvailable = false),
         )
     }
 
@@ -46,7 +48,7 @@ class ReconnectClassificationTest {
     fun `member unauthorized stops the stream, even with no network`() {
         assertEquals(
             StreamRetryAction.Stop,
-            classifyStreamFailure(AGMemberUnauthorizedException(), isNetworkAvailable = false)
+            classifyStreamFailure(AGMemberUnauthorizedException(), isNetworkAvailable = false),
         )
     }
 
@@ -54,7 +56,7 @@ class ReconnectClassificationTest {
     fun `group not found stops the stream`() {
         assertEquals(
             StreamRetryAction.Stop,
-            classifyStreamFailure(RemoteAGNotFoundException(), isNetworkAvailable = true)
+            classifyStreamFailure(RemoteAGNotFoundException(), isNetworkAvailable = true),
         )
     }
 
@@ -62,7 +64,7 @@ class ReconnectClassificationTest {
     fun `invalid api key stops the stream`() {
         assertEquals(
             StreamRetryAction.Stop,
-            classifyStreamFailure(InvalidApiKeyException(), isNetworkAvailable = true)
+            classifyStreamFailure(InvalidApiKeyException(), isNetworkAvailable = true),
         )
     }
 
@@ -70,7 +72,7 @@ class ReconnectClassificationTest {
     fun `SSE client error without a response backs off`() {
         assertEquals(
             StreamRetryAction.Backoff,
-            classifyStreamFailure(SSEClientException(message = "boom"), isNetworkAvailable = true)
+            classifyStreamFailure(SSEClientException(message = "boom"), isNetworkAvailable = true),
         )
     }
 
@@ -78,11 +80,14 @@ class ReconnectClassificationTest {
     fun `backend API error backs off and IO error with no network waits`() {
         assertEquals(
             StreamRetryAction.Backoff,
-            classifyStreamFailure(APIException(statusCode = 500, body = "boom"), isNetworkAvailable = true)
+            classifyStreamFailure(
+                APIException(statusCode = 500, body = "boom"),
+                isNetworkAvailable = true,
+            ),
         )
         assertEquals(
             StreamRetryAction.AwaitNetwork,
-            classifyStreamFailure(IOException("boom"), isNetworkAvailable = false)
+            classifyStreamFailure(IOException("boom"), isNetworkAvailable = false),
         )
     }
 }

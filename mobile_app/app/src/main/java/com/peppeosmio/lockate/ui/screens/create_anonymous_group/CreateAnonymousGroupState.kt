@@ -8,5 +8,5 @@ data class CreateAnonymousGroupState(
     val groupNameError: String? = null,
     val userNameText: String = "",
     val userNameError: String? = null,
-    val dialogError: SnackbarErrorMessage? = null
+    val dialogError: SnackbarErrorMessage? = null,
 )

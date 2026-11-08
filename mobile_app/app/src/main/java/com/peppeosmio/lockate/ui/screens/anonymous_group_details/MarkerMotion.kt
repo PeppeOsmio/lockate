@@ -34,7 +34,8 @@ fun lerpCoordinates(from: Coordinates, to: Coordinates, fraction: Float): Coordi
     if (longitude > 180.0) longitude -= 360.0
     if (longitude < -180.0) longitude += 360.0
     return Coordinates(
-        latitude = from.latitude + (to.latitude - from.latitude) * fraction, longitude = longitude
+        latitude = from.latitude + (to.latitude - from.latitude) * fraction,
+        longitude = longitude,
     )
 }
 

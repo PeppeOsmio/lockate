@@ -1,14 +1,13 @@
 package com.peppeosmio.lockate.ui.screens.join_anonymous_group
 
-import com.peppeosmio.lockate.ui.composables.ErrorDialog
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Done
@@ -37,6 +36,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.peppeosmio.lockate.ui.composables.ErrorDialog
 import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -44,7 +44,7 @@ import org.koin.compose.viewmodel.koinViewModel
 fun JoinAnonymousGroupScreen(
     connectionId: Long,
     navigateBack: () -> Unit,
-    viewModel: JoinAnonymousGroupViewModel = koinViewModel()
+    viewModel: JoinAnonymousGroupViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -58,7 +58,7 @@ fun JoinAnonymousGroupScreen(
                 snackbarHostState.showSnackbar(
                     message = snackbarMessage.text,
                     withDismissAction = true,
-                    duration = SnackbarDuration.Long
+                    duration = SnackbarDuration.Long,
                 )
             }
         }
@@ -79,52 +79,66 @@ fun JoinAnonymousGroupScreen(
             text = {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     CircularProgressIndicator()
                     Text("Waiting for the other phone. Keep the invite open on it.")
                 }
             },
             confirmButton = {},
-            dismissButton = { TextButton(onClick = viewModel::cancelJoin) { Text("Cancel") } })
+            dismissButton = { TextButton(onClick = viewModel::cancelJoin) { Text("Cancel") } },
+        )
     }
 
-    Scaffold(snackbarHost = {
-        SnackbarHost(hostState = snackbarHostState)
-    }, topBar = {
-        TopAppBar(title = { Text("Join with an invite code") }, navigationIcon = {
-            IconButton(onClick = {
-                navigateBack()
-            }) {
-                Icon(
-                    imageVector = Icons.Default.Close, contentDescription = "Close"
-                )
-            }
-        }, actions = {
-            IconButton(onClick = {
-                focusManager.clearFocus()
-                viewModel.joinAnonymousGroup(connectionId)
-            }) {
-                Icon(
-                    imageVector = Icons.Default.Done, contentDescription = "Done"
-                )
-            }
-        })
-    }) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .padding(innerPadding)
-                .padding(horizontal = 16.dp)
-                .fillMaxSize()
-                .clickable(interactionSource = null, indication = null) {
-                    focusManager.clearFocus()
+    Scaffold(
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState)
+        },
+        topBar = {
+            TopAppBar(
+                title = { Text("Join with an invite code") },
+                navigationIcon = {
+                    IconButton(
+                        onClick = {
+                            navigateBack()
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close",
+                        )
+                    }
                 },
+                actions = {
+                    IconButton(
+                        onClick = {
+                            focusManager.clearFocus()
+                            viewModel.joinAnonymousGroup(connectionId)
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Done,
+                            contentDescription = "Done",
+                        )
+                    }
+                },
+            )
+        },
+    ) { innerPadding ->
+        Column(
+            modifier =
+                Modifier.padding(innerPadding).padding(horizontal = 16.dp).fillMaxSize().clickable(
+                    interactionSource = null,
+                    indication = null,
+                ) {
+                    focusManager.clearFocus()
+                }
         ) {
             Text(
                 modifier = Modifier.padding(bottom = 16.dp),
                 text = "Ask a member of the group to open Invite and read you the code.",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             OutlinedTextField(
                 modifier = Modifier.fillMaxWidth(),
@@ -133,17 +147,19 @@ fun JoinAnonymousGroupScreen(
                 label = { Text("Invite code") },
                 placeholder = { Text("7-word-word-word") },
                 singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.None,
-                    autoCorrectEnabled = false,
-                    keyboardType = KeyboardType.Ascii
-                ),
+                keyboardOptions =
+                    KeyboardOptions(
+                        capitalization = KeyboardCapitalization.None,
+                        autoCorrectEnabled = false,
+                        keyboardType = KeyboardType.Ascii,
+                    ),
                 isError = state.codeError != null,
                 supportingText = {
                     if (state.codeError != null) {
                         Text(text = state.codeError!!, color = MaterialTheme.colorScheme.error)
                     }
-                })
+                },
+            )
             OutlinedTextField(
                 modifier = Modifier.fillMaxWidth(),
                 value = state.memberNameText,
@@ -153,10 +169,12 @@ fun JoinAnonymousGroupScreen(
                 supportingText = {
                     if (state.memberNameError != null) {
                         Text(
-                            text = state.memberNameError!!, color = MaterialTheme.colorScheme.error
+                            text = state.memberNameError!!,
+                            color = MaterialTheme.colorScheme.error,
                         )
                     }
-                })
+                },
+            )
         }
     }
 }

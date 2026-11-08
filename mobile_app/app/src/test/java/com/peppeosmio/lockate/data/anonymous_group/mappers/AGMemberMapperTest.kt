@@ -6,6 +6,7 @@ import com.peppeosmio.lockate.data.anonymous_group.remote.EncryptedDataDto
 import com.peppeosmio.lockate.service.anonymous_group.PayloadCodec
 import io.mockk.coEvery
 import io.mockk.mockk
+import kotlin.time.ExperimentalTime
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
@@ -13,7 +14,6 @@ import kotlinx.datetime.toInstant
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
-import kotlin.time.ExperimentalTime
 
 class AGMemberMapperTest {
 
@@ -21,18 +21,19 @@ class AGMemberMapperTest {
     @Test
     fun `entityToDomain then domainToEntity round trip preserves scalar fields`() {
         val createdAt = LocalDateTime(2026, 7, 12, 14, 30, 5)
-        val entity = AGMemberEntity(
-            internalId = 1L,
-            id = "member-1",
-            name = "Alice",
-            createdAt = createdAt.toInstant(TimeZone.UTC).toEpochMilliseconds(),
-            lastLatitude = 40.8517746,
-            lastLongitude = 14.2681244,
-            lastSeen = createdAt.toInstant(TimeZone.UTC).toEpochMilliseconds(),
-            lastActivity = "InVehicle",
-            isAGAdmin = true,
-            anonymousGroupInternalId = 2L
-        )
+        val entity =
+            AGMemberEntity(
+                internalId = 1L,
+                id = "member-1",
+                name = "Alice",
+                createdAt = createdAt.toInstant(TimeZone.UTC).toEpochMilliseconds(),
+                lastLatitude = 40.8517746,
+                lastLongitude = 14.2681244,
+                lastSeen = createdAt.toInstant(TimeZone.UTC).toEpochMilliseconds(),
+                lastActivity = "InVehicle",
+                isAGAdmin = true,
+                anonymousGroupInternalId = 2L,
+            )
 
         val domain = AGMemberMapper.entityToDomain(entity)
         val roundTripped = AGMemberMapper.domainToEntity(domain, anonymousGroupInternalId = 2L)
@@ -42,18 +43,19 @@ class AGMemberMapperTest {
 
     @Test
     fun `entityToDomain maps a null lastLatitude to a null lastLocationRecord`() {
-        val entity = AGMemberEntity(
-            internalId = 1L,
-            id = "member-1",
-            name = "Alice",
-            createdAt = 0L,
-            lastLatitude = null,
-            lastLongitude = null,
-            lastSeen = null,
-            lastActivity = "Unknown",
-            isAGAdmin = false,
-            anonymousGroupInternalId = 2L
-        )
+        val entity =
+            AGMemberEntity(
+                internalId = 1L,
+                id = "member-1",
+                name = "Alice",
+                createdAt = 0L,
+                lastLatitude = null,
+                lastLongitude = null,
+                lastSeen = null,
+                lastActivity = "Unknown",
+                isAGAdmin = false,
+                anonymousGroupInternalId = 2L,
+            )
 
         val domain = AGMemberMapper.entityToDomain(entity)
 
@@ -64,15 +66,17 @@ class AGMemberMapperTest {
     fun `dtoToDomain decrypts the member name and internalId is always 0`() = runTest {
         val payloadCodec = mockk<PayloadCodec>()
         val key = "key".toByteArray()
-        coEvery { payloadCodec.decryptMemberName(any(), key, "group-1", "member-1") } returns "Alice"
+        coEvery { payloadCodec.decryptMemberName(any(), key, "group-1", "member-1") } returns
+            "Alice"
         val createdAt = LocalDateTime(2026, 7, 12, 14, 30, 5)
-        val dto = EncryptedAGMemberDto(
-            id = "member-1",
-            encryptedName = EncryptedDataDto(cipherText = "", iv = ""),
-            createdAt = createdAt,
-            encryptedLastLocationRecord = null,
-            isAGAdmin = true
-        )
+        val dto =
+            EncryptedAGMemberDto(
+                id = "member-1",
+                encryptedName = EncryptedDataDto(cipherText = "", iv = ""),
+                createdAt = createdAt,
+                encryptedLastLocationRecord = null,
+                isAGAdmin = true,
+            )
 
         val result = AGMemberMapper.dtoToDomain(dto, payloadCodec, key, groupId = "group-1")
 

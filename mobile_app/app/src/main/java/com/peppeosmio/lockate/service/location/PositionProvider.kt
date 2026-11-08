@@ -2,6 +2,7 @@ package com.peppeosmio.lockate.service.location
 
 import com.peppeosmio.lockate.domain.LocationFix
 import com.peppeosmio.lockate.domain.UserActivity
+import kotlin.random.Random
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -12,7 +13,6 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.launch
-import kotlin.random.Random
 
 internal const val GOOD_ACCURACY_METERS = 30f
 internal const val STALE_FIX_MILLIS = 60_000L
@@ -21,16 +21,18 @@ internal const val STILL_JITTER_MILLIS = 2_000L
 internal const val WARM_UP_MILLIS = 20_000L
 internal const val STILL_ACQUIRE_MILLIS = 20_000L
 
-private val LocationFix.isAccurate get() = accuracyMeters <= GOOD_ACCURACY_METERS
+private val LocationFix.isAccurate
+    get() = accuracyMeters <= GOOD_ACCURACY_METERS
 
 /** The fix to send while still: the newest accurate one, or the best of the last minute */
-internal fun pickGoodFix(current: LocationFix?, candidate: LocationFix): LocationFix = when {
-    current == null -> candidate
-    candidate.isAccurate -> candidate
-    candidate.atMillis - current.atMillis > STALE_FIX_MILLIS -> candidate
-    candidate.accuracyMeters <= current.accuracyMeters -> candidate
-    else -> current
-}
+internal fun pickGoodFix(current: LocationFix?, candidate: LocationFix): LocationFix =
+    when {
+        current == null -> candidate
+        candidate.isAccurate -> candidate
+        candidate.atMillis - current.atMillis > STALE_FIX_MILLIS -> candidate
+        candidate.accuracyMeters <= current.accuracyMeters -> candidate
+        else -> current
+    }
 
 /** [isFresh] is false when [fix] is the remembered one and not a new GPS fix */
 data class Position(val fix: LocationFix, val isFresh: Boolean, val activity: UserActivity)
@@ -41,7 +43,9 @@ data class Position(val fix: LocationFix, val isFresh: Boolean, val activity: Us
  * receivers together and wake their radio once.
  */
 internal fun millisToNextStillTick(nowMillis: Long, jitterMillis: Long): Long {
-    val next = ((nowMillis + STILL_INTERVAL_MILLIS / 2) / STILL_INTERVAL_MILLIS + 1) * STILL_INTERVAL_MILLIS
+    val next =
+        ((nowMillis + STILL_INTERVAL_MILLIS / 2) / STILL_INTERVAL_MILLIS + 1) *
+            STILL_INTERVAL_MILLIS
     return next + jitterMillis - nowMillis
 }
 
@@ -61,8 +65,7 @@ class PositionProvider(
     private val stillJitterMillis: () -> Long = { Random.nextLong(STILL_JITTER_MILLIS) },
 ) {
     // shared by the groups' send loops, so a group that starts later is still right away
-    @Volatile
-    private var lastGoodFix: LocationFix? = null
+    @Volatile private var lastGoodFix: LocationFix? = null
 
     private fun remember(fix: LocationFix) {
         lastGoodFix = pickGoodFix(lastGoodFix, fix)
@@ -71,13 +74,18 @@ class PositionProvider(
     @OptIn(ExperimentalCoroutinesApi::class)
     fun positions(): Flow<Position> = flow {
         var previous: UserActivity? = null
-        emitAll(activities().distinctUntilChanged().flatMapLatest { activity ->
-            val resumedFromStill = previous == UserActivity.Still
-            previous = activity
-            if (activity == UserActivity.Still) stillPositions() else movingPositions(
-                activity, resumedFromStill
-            )
-        })
+        emitAll(
+            activities().distinctUntilChanged().flatMapLatest { activity ->
+                val resumedFromStill = previous == UserActivity.Still
+                previous = activity
+                if (activity == UserActivity.Still) stillPositions()
+                else
+                    movingPositions(
+                        activity,
+                        resumedFromStill,
+                    )
+            }
+        )
     }
 
     // a fix from before the send loop stopped may be somewhere else
@@ -87,19 +95,23 @@ class PositionProvider(
     private fun stillPositions(): Flow<Position> = flow {
         if (!hasRecentAccurateFix()) {
             val giveUpAt = now() + STILL_ACQUIRE_MILLIS
-            emitAll(gpsFixes().transformWhile { fix ->
-                remember(fix)
-                emit(Position(fix, isFresh = true, UserActivity.Still))
-                !fix.isAccurate && now() < giveUpAt
-            })
+            emitAll(
+                gpsFixes().transformWhile { fix ->
+                    remember(fix)
+                    emit(Position(fix, isFresh = true, UserActivity.Still))
+                    !fix.isAccurate && now() < giveUpAt
+                }
+            )
         }
-        emitAll(channelFlow {
-            launch { passiveFixes().collect { remember(it) } }
-            while (true) {
-                send(Position(lastGoodFix!!, isFresh = false, UserActivity.Still))
-                delay(millisToNextStillTick(now(), stillJitterMillis()))
+        emitAll(
+            channelFlow {
+                launch { passiveFixes().collect { remember(it) } }
+                while (true) {
+                    send(Position(lastGoodFix!!, isFresh = false, UserActivity.Still))
+                    delay(millisToNextStillTick(now(), stillJitterMillis()))
+                }
             }
-        })
+        )
     }
 
     private fun movingPositions(activity: UserActivity, resumedFromStill: Boolean): Flow<Position> =
@@ -113,8 +125,10 @@ class PositionProvider(
             gpsFixes().collect { fix ->
                 remember(fix)
                 if (fix.isAccurate || now() >= warmUpEnd) held = null
-                send(held?.let { Position(it, isFresh = false, activity) }
-                    ?: Position(fix, isFresh = true, activity))
+                send(
+                    held?.let { Position(it, isFresh = false, activity) }
+                        ?: Position(fix, isFresh = true, activity)
+                )
             }
         }
 }

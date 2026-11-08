@@ -2,5 +2,4 @@ package com.peppeosmio.lockate.data.anonymous_group.remote
 
 import kotlinx.serialization.Serializable
 
-@Serializable
-data class ApiKeyRequiredResDto(val required: Boolean)
+@Serializable data class ApiKeyRequiredResDto(val required: Boolean)

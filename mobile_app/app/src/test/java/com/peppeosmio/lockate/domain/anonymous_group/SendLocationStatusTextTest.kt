@@ -11,20 +11,21 @@ class SendLocationStatusTextTest {
         receivingAGCount: Int = 0,
         isLocationDisabled: Boolean = false,
         isLocationUnavailable: Boolean = false,
-    ) = SendLocationStatus(
-        totalAGCount = totalAGCount,
-        activeAGCount = activeAGCount,
-        receivingAGCount = receivingAGCount,
-        isLocationDisabled = isLocationDisabled,
-        isLocationUnavailable = isLocationUnavailable,
-    )
+    ) =
+        SendLocationStatus(
+            totalAGCount = totalAGCount,
+            activeAGCount = activeAGCount,
+            receivingAGCount = receivingAGCount,
+            isLocationDisabled = isLocationDisabled,
+            isLocationUnavailable = isLocationUnavailable,
+        )
 
     @Test
     fun `no groups takes precedence over everything`() {
         assertEquals(
             SendLocationStatus.TEXT_NO_GROUPS,
             status(totalAGCount = 0, isLocationDisabled = true, isLocationUnavailable = true)
-                .notificationText()
+                .notificationText(),
         )
     }
 
@@ -32,7 +33,7 @@ class SendLocationStatusTextTest {
     fun `location disabled beats location unavailable`() {
         assertEquals(
             SendLocationStatus.TEXT_LOCATION_DISABLED,
-            status(isLocationDisabled = true, isLocationUnavailable = true).notificationText()
+            status(isLocationDisabled = true, isLocationUnavailable = true).notificationText(),
         )
     }
 
@@ -40,25 +41,31 @@ class SendLocationStatusTextTest {
     fun `location unavailable shown when not disabled`() {
         assertEquals(
             SendLocationStatus.TEXT_LOCATION_UNAVAILABLE,
-            status(isLocationUnavailable = true).notificationText()
+            status(isLocationUnavailable = true).notificationText(),
         )
     }
 
     @Test
     fun `no active connections shows server unreachable`() {
-        assertEquals(SendLocationStatus.TEXT_SERVER_UNREACHABLE, status(activeAGCount = 0).notificationText())
+        assertEquals(
+            SendLocationStatus.TEXT_SERVER_UNREACHABLE,
+            status(activeAGCount = 0).notificationText(),
+        )
     }
 
     @Test
     fun `one active connection`() {
-        assertEquals(SendLocationStatus.TEXT_SHARING_ONE, status(activeAGCount = 1).notificationText())
+        assertEquals(
+            SendLocationStatus.TEXT_SHARING_ONE,
+            status(activeAGCount = 1).notificationText(),
+        )
     }
 
     @Test
     fun `multiple active connections`() {
         assertEquals(
             "${SendLocationStatus.TEXT_SHARING_MANY_PREFIX}3${SendLocationStatus.TEXT_SHARING_MANY_SUFFIX}",
-            status(totalAGCount = 3, activeAGCount = 3).notificationText()
+            status(totalAGCount = 3, activeAGCount = 3).notificationText(),
         )
     }
 
@@ -66,7 +73,7 @@ class SendLocationStatusTextTest {
     fun `only watching one group is shown when nothing is shared`() {
         assertEquals(
             SendLocationStatus.TEXT_RECEIVING_ONE,
-            status(totalAGCount = 0, receivingAGCount = 1).notificationText()
+            status(totalAGCount = 0, receivingAGCount = 1).notificationText(),
         )
     }
 
@@ -74,7 +81,7 @@ class SendLocationStatusTextTest {
     fun `only watching many groups is shown when nothing is shared`() {
         assertEquals(
             "Watching the circles of 3 groups",
-            status(totalAGCount = 0, receivingAGCount = 3).notificationText()
+            status(totalAGCount = 0, receivingAGCount = 3).notificationText(),
         )
     }
 }

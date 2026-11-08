@@ -18,11 +18,13 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
-            LockateApp(startLocationService = {
-                val intent = Intent(applicationContext, AndroidSendLocationService::class.java)
-                intent.action = AndroidSendLocationService.ACTION_START
-                startForegroundService(intent)
-            })
+            LockateApp(
+                startLocationService = {
+                    val intent = Intent(applicationContext, AndroidSendLocationService::class.java)
+                    intent.action = AndroidSendLocationService.ACTION_START
+                    startForegroundService(intent)
+                }
+            )
         }
     }
 

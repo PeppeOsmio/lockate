@@ -2,23 +2,23 @@ package com.peppeosmio.lockate.di
 
 import com.peppeosmio.lockate.platform_service.ConnectivityService
 import com.peppeosmio.lockate.platform_service.DeviceOrientationService
-import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
+import com.peppeosmio.lockate.platform_service.LocationService
 import com.peppeosmio.lockate.service.ConnectionService
 import com.peppeosmio.lockate.service.MapStyleService
 import com.peppeosmio.lockate.service.PermissionsService
 import com.peppeosmio.lockate.service.PlaceSearchService
+import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
 import com.peppeosmio.lockate.service.invite.InviteService
-import com.peppeosmio.lockate.platform_service.LocationService
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.AGDetailsViewModel
 import com.peppeosmio.lockate.ui.screens.circles.CircleEditorViewModel
 import com.peppeosmio.lockate.ui.screens.circles.CirclesViewModel
 import com.peppeosmio.lockate.ui.screens.connection_settings.ConnectionSettingsViewModel
 import com.peppeosmio.lockate.ui.screens.create_anonymous_group.CreateAnonymousGroupViewModel
 import com.peppeosmio.lockate.ui.screens.invite.InviteViewModel
-import com.peppeosmio.lockate.ui.screens.map.MapViewModel
 import com.peppeosmio.lockate.ui.screens.join_anonymous_group.JoinAnonymousGroupViewModel
 import com.peppeosmio.lockate.ui.screens.loading.LoadingViewModel
 import com.peppeosmio.lockate.ui.screens.manage_connections.ManageConnectionsViewModel
+import com.peppeosmio.lockate.ui.screens.map.MapViewModel
 import com.peppeosmio.lockate.ui.screens.settings.SettingsViewModel
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
@@ -37,7 +37,7 @@ val viewModelModule = module {
             connectionService = get<ConnectionService>(),
             anonymousGroupService = get<AnonymousGroupService>(),
             permissionsService = get<PermissionsService>(),
-            mapStyleService = get<MapStyleService>()
+            mapStyleService = get<MapStyleService>(),
         )
     }
 
@@ -52,7 +52,7 @@ val viewModelModule = module {
     viewModel<InviteViewModel> {
         InviteViewModel(
             anonymousGroupService = get<AnonymousGroupService>(),
-            inviteService = get<InviteService>()
+            inviteService = get<InviteService>(),
         )
     }
 
@@ -65,7 +65,7 @@ val viewModelModule = module {
             anonymousGroupService = get<AnonymousGroupService>(),
             locationService = get<LocationService>(),
             mapStyleService = get<MapStyleService>(),
-            placeSearchService = get<PlaceSearchService>()
+            placeSearchService = get<PlaceSearchService>(),
         )
     }
 
@@ -74,20 +74,21 @@ val viewModelModule = module {
             anonymousGroupService = get<AnonymousGroupService>(),
             locationService = get<LocationService>(),
             connectivityService = get<ConnectivityService>(),
-            deviceOrientationService = get<DeviceOrientationService>()
+            deviceOrientationService = get<DeviceOrientationService>(),
         )
     }
 
     viewModel<SettingsViewModel> {
         SettingsViewModel(
-            mapStyleService = get<MapStyleService>(), placeSearchService = get<PlaceSearchService>()
+            mapStyleService = get<MapStyleService>(),
+            placeSearchService = get<PlaceSearchService>(),
         )
     }
 
     viewModel<ManageConnectionsViewModel> {
         ManageConnectionsViewModel(
             connectionService = get<ConnectionService>(),
-            anonymousGroupService = get<AnonymousGroupService>()
+            anonymousGroupService = get<AnonymousGroupService>(),
         )
     }
 }

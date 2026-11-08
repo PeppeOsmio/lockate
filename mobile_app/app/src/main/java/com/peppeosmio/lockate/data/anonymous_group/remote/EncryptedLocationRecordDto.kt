@@ -9,4 +9,3 @@ data class EncryptedLocationRecordDto(
     val encryptedActivity: EncryptedDataDto,
     val timestamp: LocalDateTime,
 )
-

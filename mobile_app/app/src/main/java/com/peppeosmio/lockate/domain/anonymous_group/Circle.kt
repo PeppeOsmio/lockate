@@ -10,12 +10,15 @@ data class Circle(
     val radiusMeters: Double,
 )
 
-/** The circle [point] is inside whose centre is the closest to it, so overlapping circles pick one. */
-fun List<Circle>.nearestContaining(point: Coordinates): Circle? =
-    mapNotNull { circle ->
-        val distance = point.distanceMetersTo(circle.center)
-        if (distance <= circle.radiusMeters) circle to distance else null
-    }.minByOrNull { it.second }?.first
+/**
+ * The circle [point] is inside whose centre is the closest to it, so overlapping circles pick one.
+ */
+fun List<Circle>.nearestContaining(point: Coordinates): Circle? = mapNotNull { circle ->
+    val distance = point.distanceMetersTo(circle.center)
+    if (distance <= circle.radiusMeters) circle to distance else null
+}
+    .minByOrNull { it.second }
+    ?.first
 
 data class EncryptedCircle(
     val coordinates: EncryptedData,
@@ -23,6 +26,9 @@ data class EncryptedCircle(
     val name: EncryptedData,
 )
 
-enum class TransitionKind { Enter, Exit }
+enum class TransitionKind {
+    Enter,
+    Exit,
+}
 
 data class CircleTransition(val circleId: String, val kind: TransitionKind)

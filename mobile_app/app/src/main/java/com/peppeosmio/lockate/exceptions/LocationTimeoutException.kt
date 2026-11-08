@@ -1,4 +1,3 @@
 package com.peppeosmio.lockate.exceptions
 
-class LocationTimeoutException : Exception() {
-}
+class LocationTimeoutException : Exception() {}

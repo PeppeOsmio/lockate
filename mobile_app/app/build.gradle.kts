@@ -17,13 +17,16 @@ android {
         targetSdk = 36
         versionCode = (findProperty("versionCode") as String?)?.toInt() ?: 1
         versionName = findProperty("versionName") as String? ?: "1.0"
-
     }
 
     signingConfigs {
         create("release") {
             val local = Properties()
-            rootProject.file("local.properties").takeIf { it.exists() }?.reader()?.use { local.load(it) }
+            rootProject
+                .file("local.properties")
+                .takeIf { it.exists() }
+                ?.reader()
+                ?.use { local.load(it) }
             fun cfg(prop: String, env: String) = local.getProperty(prop) ?: System.getenv(env)
             cfg("lockate.keystore.path", "LOCKATE_KEYSTORE_PATH")?.let { storeFile = file(it) }
             storePassword = cfg("lockate.keystore.password", "LOCKATE_KEYSTORE_PASSWORD")
@@ -40,7 +43,8 @@ android {
         release {
             isMinifyEnabled = false
             proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
             )
             signingConfig = signingConfigs.getByName("release")
         }
@@ -64,7 +68,6 @@ android {
 }
 
 dependencies {
-
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -78,7 +81,8 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockk)
     testImplementation(libs.ktor.client.mock)
-    // The unit tests run the invite exchange on the host, with the jna jar's native part and libjpake
+    // The unit tests run the invite exchange on the host, with the jna jar's native part and
+    // libjpake
     testImplementation(libs.jna)
 
     implementation(libs.androidx.datastore.preferences)
@@ -108,19 +112,19 @@ dependencies {
     implementation(libs.cryptography.core)
     implementation(libs.cryptography.provider.optimal)
 
-
     implementation(libs.play.services.location)
 
     implementation(libs.maplibre.compose)
     implementation(libs.maplibre.composeMaterial3)
-    // maplibre-compose ships no renderer: the app picks one. OpenGL is what Compose draws with on Android
+    // maplibre-compose ships no renderer: the app picks one. OpenGL is what Compose draws with on
+    // Android
     implementation(libs.maplibre.nativeFfi.runtime.opengl)
-
 }
 
 tasks.withType<Test>().configureEach {
     dependsOn(":jpake:buildJpakeHost")
     systemProperty(
-        "jna.library.path", project(":jpake").layout.buildDirectory.dir("jpake-host").get().asFile.absolutePath
+        "jna.library.path",
+        project(":jpake").layout.buildDirectory.dir("jpake-host").get().asFile.absolutePath,
     )
 }

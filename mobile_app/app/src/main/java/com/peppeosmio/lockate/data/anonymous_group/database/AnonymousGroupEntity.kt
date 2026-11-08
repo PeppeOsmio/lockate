@@ -6,12 +6,17 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 @Entity(
-    tableName = "anonymous_group", foreignKeys = [ForeignKey(
-        entity = ConnectionEntity::class,
-        parentColumns = ["id"],
-        childColumns = ["connectionId"],
-        onDelete = ForeignKey.CASCADE
-    )], indices = [Index("connectionId", name = "idx_anonymous_group_connectionId")]
+    tableName = "anonymous_group",
+    foreignKeys =
+        [
+            ForeignKey(
+                entity = ConnectionEntity::class,
+                parentColumns = ["id"],
+                childColumns = ["connectionId"],
+                onDelete = ForeignKey.CASCADE,
+            )
+        ],
+    indices = [Index("connectionId", name = "idx_anonymous_group_connectionId")],
 )
 data class AnonymousGroupEntity(
     @PrimaryKey(autoGenerate = true) val internalId: Long,
@@ -19,18 +24,15 @@ data class AnonymousGroupEntity(
     val name: String,
     val createdAt: Long,
     val joinedAt: Long,
-
     val isMember: Boolean,
     val existsRemote: Boolean,
     val sendLocation: Boolean,
     val connectionId: Long,
-
     val memberName: String,
     val memberId: String,
     val memberTokenCipher: ByteArray,
     val memberTokenIv: ByteArray,
-    val memberIsAGAdmin : Boolean,
-
+    val memberIsAGAdmin: Boolean,
     val keyCipher: ByteArray,
     val keyIv: ByteArray,
 ) {
@@ -79,5 +81,4 @@ data class AnonymousGroupEntity(
         result = 31 * result + keyIv.contentHashCode()
         return result
     }
-
 }

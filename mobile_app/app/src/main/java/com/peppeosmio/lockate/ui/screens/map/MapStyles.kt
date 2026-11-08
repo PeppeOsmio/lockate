@@ -13,10 +13,11 @@ fun resolveMapStyleUrl(isDarkTheme: Boolean, customLight: String?, customDark: S
 }
 
 fun isValidStyleJson(json: String): Boolean {
-    val style = try {
-        Json.parseToJsonElement(json) as? JsonObject
-    } catch (_: Exception) {
-        null
-    } ?: return false
+    val style =
+        try {
+            Json.parseToJsonElement(json) as? JsonObject
+        } catch (_: Exception) {
+            null
+        } ?: return false
     return "version" in style && "sources" in style
 }

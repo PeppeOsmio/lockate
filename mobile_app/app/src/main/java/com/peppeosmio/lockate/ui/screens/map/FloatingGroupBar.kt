@@ -69,44 +69,55 @@ fun FloatingGroupBar(
     onSelectGroup: (anonymousGroupInternalId: Long) -> Unit,
     onCreateGroup: () -> Unit,
     onJoinGroup: () -> Unit,
-    groupMenu: @Composable (onDismiss: () -> Unit) -> Unit
+    groupMenu: @Composable (onDismiss: () -> Unit) -> Unit,
 ) {
     Surface(
-        modifier = modifier
-            .statusBarsPadding()
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-            .fillMaxWidth(),
+        modifier =
+            modifier
+                .statusBarsPadding()
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .fillMaxWidth(),
         shape = RoundedCornerShape(28.dp),
         tonalElevation = 3.dp,
-        shadowElevation = 6.dp
+        shadowElevation = 6.dp,
     ) {
         Column(modifier = Modifier.animateContentSize()) {
             if (isPickerOpen) {
                 PickerHeader(query = query, onQueryChange = onQueryChange, onClose = onClosePicker)
                 HorizontalDivider()
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     FilledTonalButton(onClick = onCreateGroup, modifier = Modifier.weight(1f)) {
-                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
                         Spacer(Modifier.size(8.dp))
                         Text("Create")
                     }
                     FilledTonalButton(onClick = onJoinGroup, modifier = Modifier.weight(1f)) {
-                        Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(
+                            Icons.Default.Person,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
                         Spacer(Modifier.size(8.dp))
                         Text("Join")
                     }
                 }
-                LazyColumn(modifier = Modifier.heightIn(max = LocalConfiguration.current.screenHeightDp.dp * 0.6f)) {
+                LazyColumn(
+                    modifier =
+                        Modifier.heightIn(max = LocalConfiguration.current.screenHeightDp.dp * 0.6f)
+                ) {
                     items(groups, key = { it.internalId }) { group ->
                         GroupRow(
                             group = group,
                             isSelected = group.internalId == selectedGroup?.internalId,
-                            onClick = { onSelectGroup(group.internalId) })
+                            onClick = { onSelectGroup(group.internalId) },
+                        )
                     }
                 }
             } else {
@@ -114,7 +125,7 @@ fun FloatingGroupBar(
                     selectedGroup = selectedGroup,
                     onOpenDrawer = onOpenDrawer,
                     onOpenPicker = onOpenPicker,
-                    groupMenu = groupMenu
+                    groupMenu = groupMenu,
                 )
             }
         }
@@ -126,32 +137,28 @@ private fun CollapsedBar(
     selectedGroup: AnonymousGroup?,
     onOpenDrawer: () -> Unit,
     onOpenPicker: () -> Unit,
-    groupMenu: @Composable (onDismiss: () -> Unit) -> Unit
+    groupMenu: @Composable (onDismiss: () -> Unit) -> Unit,
 ) {
     var isMenuOpen by remember { mutableStateOf(false) }
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = onOpenDrawer) {
             Icon(Icons.Default.Menu, contentDescription = "Open menu")
         }
         Row(
-            modifier = Modifier
-                .weight(1f)
-                .clickable(onClick = onOpenPicker)
-                .padding(vertical = 12.dp),
+            modifier =
+                Modifier.weight(1f).clickable(onClick = onOpenPicker).padding(vertical = 12.dp),
             horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
                 modifier = Modifier.weight(1f, fill = false),
                 text = selectedGroup?.name ?: "No groups",
                 style = MaterialTheme.typography.titleMedium,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
             Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Choose group")
         }
@@ -175,28 +182,25 @@ private fun PickerHeader(query: String, onQueryChange: (String) -> Unit, onClose
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = onClose) {
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Close")
         }
         TextField(
-            modifier = Modifier
-                .weight(1f)
-                .focusRequester(focusRequester),
+            modifier = Modifier.weight(1f).focusRequester(focusRequester),
             value = query,
             onValueChange = onQueryChange,
             singleLine = true,
             placeholder = { Text("Search groups") },
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
-                unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent
-            )
+            colors =
+                TextFieldDefaults.colors(
+                    focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                    unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                    focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
+                    unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
+                ),
         )
         if (query.isNotEmpty()) {
             IconButton(onClick = { onQueryChange("") }) {
@@ -211,14 +215,19 @@ private fun GroupRow(group: AnonymousGroup, isSelected: Boolean, onClick: () -> 
     ListItem(
         modifier = Modifier.clickable(onClick = onClick),
         headlineContent = { Text(group.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        supportingContent = when {
-            !group.existsRemote -> ({ Text("Group no longer exists") })
-            !group.isMember -> ({ Text("You were removed") })
-            else -> null
-        },
-        trailingContent = if (isSelected) {
-            { Icon(Icons.Default.Check, contentDescription = "Selected") }
-        } else null,
-        colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent)
+        supportingContent =
+            when {
+                !group.existsRemote -> ({ Text("Group no longer exists") })
+                !group.isMember -> ({ Text("You were removed") })
+                else -> null
+            },
+        trailingContent =
+            if (isSelected) {
+                { Icon(Icons.Default.Check, contentDescription = "Selected") }
+            } else null,
+        colors =
+            ListItemDefaults.colors(
+                containerColor = androidx.compose.ui.graphics.Color.Transparent
+            ),
     )
 }

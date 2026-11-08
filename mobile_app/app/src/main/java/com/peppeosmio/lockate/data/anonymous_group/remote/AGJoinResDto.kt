@@ -6,5 +6,5 @@ import kotlinx.serialization.Serializable
 data class AGJoinResDto(
     val anonymousGroup: EncryptedAGDto,
     val authenticatedMemberInfo: AGMemberWithTokenDto,
-    val members: List<EncryptedAGMemberDto>
+    val members: List<EncryptedAGMemberDto>,
 )

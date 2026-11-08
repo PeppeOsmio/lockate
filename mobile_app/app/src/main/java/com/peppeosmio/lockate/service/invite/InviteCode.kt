@@ -16,10 +16,12 @@ class InviteCode(val nameplate: Int, val words: List<String>) {
 
         /** Accepts any case and dashes, spaces or dots between the parts */
         fun parse(input: String): InviteCode? {
-            val parts = input.trim().split(WordPassphrase.DEFAULT_SEPARATORS).filter { it.isNotEmpty() }
+            val parts =
+                input.trim().split(WordPassphrase.DEFAULT_SEPARATORS).filter { it.isNotEmpty() }
             if (parts.size != WORD_COUNT + 1) return null
             val nameplate = parts[0].toIntOrNull()?.takeIf { it in 1..MAX_NAMEPLATE } ?: return null
-            val words = WordPassphrase.parse(parts.drop(1).joinToString(" "), WORD_COUNT) ?: return null
+            val words =
+                WordPassphrase.parse(parts.drop(1).joinToString(" "), WORD_COUNT) ?: return null
             return InviteCode(nameplate, words)
         }
     }

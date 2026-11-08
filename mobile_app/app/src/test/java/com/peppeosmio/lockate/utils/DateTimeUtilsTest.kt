@@ -1,15 +1,15 @@
 package com.peppeosmio.lockate.utils
 
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import org.junit.Assert.assertEquals
 import org.junit.Test
-import kotlin.time.Duration.Companion.days
-import kotlin.time.Duration.Companion.seconds
-import kotlin.time.ExperimentalTime
-import kotlin.time.Instant
 
 class DateTimeUtilsTest {
 
@@ -26,8 +26,8 @@ class DateTimeUtilsTest {
     @Test
     fun `utcToCurrentTimeZone converts the UTC-interpreted instant to the system default zone`() {
         val localDateTime = LocalDateTime(2026, 7, 12, 14, 30, 5)
-        val expected = localDateTime.toInstant(TimeZone.UTC)
-            .toLocalDateTime(TimeZone.currentSystemDefault())
+        val expected =
+            localDateTime.toInstant(TimeZone.UTC).toLocalDateTime(TimeZone.currentSystemDefault())
 
         val actual = DateTimeUtils.utcToCurrentTimeZone(localDateTime)
 

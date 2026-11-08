@@ -5,13 +5,13 @@ import com.peppeosmio.lockate.domain.crypto.EncryptedData
 import com.peppeosmio.lockate.platform_service.KeyStoreService
 import io.mockk.coEvery
 import io.mockk.mockk
+import kotlin.time.ExperimentalTime
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
 import org.junit.Assert.assertEquals
 import org.junit.Test
-import kotlin.time.ExperimentalTime
 
 class AnonymousGroupMapperTest {
 
@@ -31,22 +31,23 @@ class AnonymousGroupMapperTest {
 
         val createdAt = LocalDateTime(2026, 7, 12, 14, 30, 5)
         val joinedAt = LocalDateTime(2026, 7, 12, 15, 0, 0)
-        val anonymousGroup = AnonymousGroup(
-            internalId = 1L,
-            id = "ag-1",
-            name = "Test Group",
-            createdAt = createdAt,
-            joinedAt = joinedAt,
-            memberName = "Alice",
-            memberId = "member-1",
-            memberToken = memberToken,
-            memberIsAGAdmin = true,
-            isMember = true,
-            existsRemote = true,
-            sendLocation = true,
-            key = key,
-            connectionId = 2L
-        )
+        val anonymousGroup =
+            AnonymousGroup(
+                internalId = 1L,
+                id = "ag-1",
+                name = "Test Group",
+                createdAt = createdAt,
+                joinedAt = joinedAt,
+                memberName = "Alice",
+                memberId = "member-1",
+                memberToken = memberToken,
+                memberIsAGAdmin = true,
+                isMember = true,
+                existsRemote = true,
+                sendLocation = true,
+                key = key,
+                connectionId = 2L,
+            )
 
         val entity = AnonymousGroupMapper.toEntity(anonymousGroup, keyStoreService)
         val roundTripped = AnonymousGroupMapper.toDomain(entity, keyStoreService)
@@ -58,27 +59,30 @@ class AnonymousGroupMapperTest {
     @Test
     fun `toEntity converts createdAt and joinedAt to UTC epoch millis`() = runTest {
         val keyStoreService = mockk<KeyStoreService>()
-        coEvery { keyStoreService.encrypt(any()) } returns EncryptedData(
-            cipherText = ByteArray(0), iv = ByteArray(0)
-        )
+        coEvery { keyStoreService.encrypt(any()) } returns
+            EncryptedData(
+                cipherText = ByteArray(0),
+                iv = ByteArray(0),
+            )
         val createdAt = LocalDateTime(2026, 7, 12, 14, 30, 5)
         val joinedAt = LocalDateTime(2026, 7, 12, 15, 0, 0)
-        val anonymousGroup = AnonymousGroup(
-            internalId = 1L,
-            id = "ag-1",
-            name = "Test Group",
-            createdAt = createdAt,
-            joinedAt = joinedAt,
-            memberName = "Alice",
-            memberId = "member-1",
-            memberToken = ByteArray(0),
-            memberIsAGAdmin = false,
-            isMember = true,
-            existsRemote = true,
-            sendLocation = true,
-            key = ByteArray(0),
-            connectionId = 2L
-        )
+        val anonymousGroup =
+            AnonymousGroup(
+                internalId = 1L,
+                id = "ag-1",
+                name = "Test Group",
+                createdAt = createdAt,
+                joinedAt = joinedAt,
+                memberName = "Alice",
+                memberId = "member-1",
+                memberToken = ByteArray(0),
+                memberIsAGAdmin = false,
+                isMember = true,
+                existsRemote = true,
+                sendLocation = true,
+                key = ByteArray(0),
+                connectionId = 2L,
+            )
 
         val entity = AnonymousGroupMapper.toEntity(anonymousGroup, keyStoreService)
 
