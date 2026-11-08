@@ -49,7 +49,7 @@ class ConnectionService(
     suspend fun checkRequireApiKey(url: String): Boolean =
         withContext(Dispatchers.IO) {
             val response = httpClient.get {
-                url(Url("${url.trimEnd('/')}/api/api-key/required"))
+                url(Url("${url.trimEnd('/')}/api/v1/api-key/required"))
                 headers {
                     append(HttpHeaders.ContentType, "application/json")
                 }
@@ -69,7 +69,7 @@ class ConnectionService(
     suspend fun testConnectionSettings(credentials: Connection) =
         withContext(Dispatchers.IO) {
             val response = httpClient.get {
-                url(Url("${credentials.url.trimEnd('/')}/api/api-key/test"))
+                url(Url("${credentials.url.trimEnd('/')}/api/v1/api-key/test"))
                 headers {
                     credentials.apiKey?.let {
                         append("X-API-KEY", it)

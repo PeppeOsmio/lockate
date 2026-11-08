@@ -272,7 +272,7 @@ class InviteService(
     }
 
     private fun groupInvitesUrl(connection: Connection, anonymousGroup: AnonymousGroup) =
-        "${connection.url}/api/anonymous-groups/${anonymousGroup.id}/invites"
+        "${connection.url}/api/v1/anonymous-groups/${anonymousGroup.id}/invites"
 
     private suspend fun createInvite(
         connection: Connection,
@@ -363,7 +363,7 @@ class InviteService(
 
     private suspend fun getInviterHello(connection: Connection, nameplate: Int): InviterHello {
         val response = httpClient.get {
-            url("${connection.url}/api/invites/$nameplate")
+            url("${connection.url}/api/v1/invites/$nameplate")
             commonHeaders(connection)
         }
         response.checkStatus { InviteNotFoundException() }
@@ -378,7 +378,7 @@ class InviteService(
         reply: InviteeReply,
     ): String {
         val response = httpClient.post {
-            url("${connection.url}/api/invites/$nameplate/invitee-message")
+            url("${connection.url}/api/v1/invites/$nameplate/invitee-message")
             commonHeaders(connection, json = true)
             setBody(
                 InviteeMessageDto(
@@ -400,7 +400,7 @@ class InviteService(
         claimToken: String,
     ): InviterMessageDto {
         val response = httpClient.get {
-            url("${connection.url}/api/invites/$nameplate/inviter-message")
+            url("${connection.url}/api/v1/invites/$nameplate/inviter-message")
             claimHeaders(connection, claimToken)
         }
         response.checkStatus { InviteRejectedException() }
@@ -414,7 +414,7 @@ class InviteService(
         tb: ByteArray,
     ) {
         val response = httpClient.post {
-            url("${connection.url}/api/invites/$nameplate/confirm")
+            url("${connection.url}/api/v1/invites/$nameplate/confirm")
             claimHeaders(connection, claimToken, json = true)
             setBody(InviteeConfirmDto(tb = Base64.encode(tb)))
         }
