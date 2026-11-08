@@ -36,6 +36,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -1258,10 +1259,12 @@ class AnonymousGroupService(
                 anonymousGroupDao.getAGByInternalId(anonymousGroupInternalId)?.let { start(it) }
             }
 
-            anonymousGroupDao.listAGsToHold().forEach { start(it) }
-            emitStatus()
-
-            events.collect { event ->
+            // Listed once subscribed, so a group created, left or toggled meanwhile isn't missed; an
+            // event about a group the listing already handled just starts or stops it again
+            events.onSubscription {
+                anonymousGroupDao.listAGsToHold().forEach { start(it) }
+                emitStatus()
+            }.collect { event ->
                 when (event) {
                     is AnonymousGroupEvent.NewAnonymousGroupEvent -> startByInternalId(event.anonymousGroupInternalId)
                     is AnonymousGroupEvent.ReaddedToAnonymousGroupEvent -> startByInternalId(event.anonymousGroupInternalId)
