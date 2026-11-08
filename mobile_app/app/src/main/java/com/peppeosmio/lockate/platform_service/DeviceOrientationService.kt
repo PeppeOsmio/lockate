@@ -5,6 +5,7 @@ import androidx.core.content.ContextCompat
 import com.google.android.gms.location.DeviceOrientationListener
 import com.google.android.gms.location.DeviceOrientationRequest
 import com.google.android.gms.location.FusedOrientationProviderClient
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.emitAll
@@ -21,7 +22,7 @@ class DeviceOrientationService(
 ) {
 
     private val _orientationUpdates =
-        MutableSharedFlow<Float>(extraBufferCapacity = 1)
+        MutableSharedFlow<Float>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
 
     @OptIn(ExperimentalAtomicApi::class)
     private val activeCollectors = AtomicInt(0)

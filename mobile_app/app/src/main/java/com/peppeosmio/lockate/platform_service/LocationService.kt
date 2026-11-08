@@ -60,7 +60,11 @@ class LocationService(
     private val permissionsService: PermissionsService,
 ) {
 
-    private val _locationFixes = MutableSharedFlow<LocationFix>(extraBufferCapacity = 1)
+    // A collector that falls behind (the map, on the main thread) gets the newest fix, and doesn't
+    // make tryEmit drop it for the sending loop too
+    private val _locationFixes = MutableSharedFlow<LocationFix>(
+        extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
 
     @OptIn(ExperimentalAtomicApi::class)
     private val activeCollectors = AtomicInt(0)
