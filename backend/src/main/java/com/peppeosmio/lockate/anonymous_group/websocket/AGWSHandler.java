@@ -197,7 +197,8 @@ public class AGWSHandler extends TextWebSocketHandler {
           }
           presenceService.onLocation(anonymousGroupId, agMemberAuthentication.getId());
         }
-        case MEMBER_PAUSED -> presenceService.pause(anonymousGroupId, agMemberAuthentication.getId());
+        case MEMBER_PAUSED ->
+            presenceService.pause(anonymousGroupId, agMemberAuthentication.getId());
         case CIRCLE_EVENT ->
             anonymousGroupService.relayCircleEvent(
                 anonymousGroupId,

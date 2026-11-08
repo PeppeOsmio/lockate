@@ -13,8 +13,8 @@ import org.springframework.data.redis.connection.MessageListener;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.data.redis.listener.PatternTopic;
 import org.springframework.data.redis.listener.RedisMessageListenerContainer;
@@ -122,9 +122,8 @@ public class RedisService {
   }
 
   /**
-   * Turns on the events of expired keys, keeping the other events already enabled. Done here
-   * rather than in the Valkey config, so a deployment that only updates the backend still gets
-   * them.
+   * Turns on the events of expired keys, keeping the other events already enabled. Done here rather
+   * than in the Valkey config, so a deployment that only updates the backend still gets them.
    */
   public void enableExpiredEvents() {
     try {

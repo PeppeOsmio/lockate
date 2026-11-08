@@ -16,8 +16,7 @@ import tools.jackson.databind.ObjectMapper;
  * member: {@code ag-presence}, refreshed by every location, whose expiry means offline, and {@code
  * ag-online}, which says we announced the member online. Every backend instance hears the expiry,
  * and only the one that deletes {@code ag-online} announces it. A lost expiry event is accepted:
- * {@code ag-online} then expires by itself, so the next location announces the member online
- * again.
+ * {@code ag-online} then expires by itself, so the next location announces the member online again.
  */
 @Service
 public class AGPresenceService {
@@ -85,9 +84,7 @@ public class AGPresenceService {
     var anonymousGroupId = UUID.fromString(ids[0]);
     var memberId = UUID.fromString(ids[1]);
     redisService
-        .runScript(
-            CLAIM_OFFLINE_SCRIPT,
-            List.of(key, onlineKey(anonymousGroupId, memberId)))
+        .runScript(CLAIM_OFFLINE_SCRIPT, List.of(key, onlineKey(anonymousGroupId, memberId)))
         .ifPresent(lastSeen -> announceOffline(anonymousGroupId, memberId, lastSeen));
   }
 

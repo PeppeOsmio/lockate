@@ -91,7 +91,8 @@ class AGPresenceServiceTest {
   @Test
   void presenceExpired_claimed_announcesOfflineWithTheLastSeen() {
     var lastSeen = LocalDateTime.of(2026, 11, 8, 12, 3);
-    when(redisService.runScript(AGPresenceService.CLAIM_OFFLINE_SCRIPT, List.of(presenceKey, onlineKey)))
+    when(redisService.runScript(
+            AGPresenceService.CLAIM_OFFLINE_SCRIPT, List.of(presenceKey, onlineKey)))
         .thenReturn(Optional.of(lastSeen.toString()));
 
     onExpired.accept(presenceKey);
