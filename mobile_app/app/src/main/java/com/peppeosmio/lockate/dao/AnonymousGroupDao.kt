@@ -135,9 +135,6 @@ interface AnonymousGroupDao {
         lastActivity: String
     ): Int
 
-    @Query("DELETE FROM anonymous_group WHERE connectionId = :connectionSettingsId")
-    suspend fun deleteAllAGsOfConnection(connectionSettingsId: Long)
-
     @Query("DELETE FROM ag_member WHERE id = :id AND anonymousGroupInternalId = :agInternalId")
     suspend fun deleteAGMemberById(id: String, agInternalId: Long)
 
