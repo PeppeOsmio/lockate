@@ -20,6 +20,7 @@ import io.ktor.client.request.url
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
 import io.ktor.http.Url
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -33,7 +34,10 @@ class ConnectionService(
     private val connectionDao: ConnectionDao,
     private val keyStoreService: KeyStoreService
 ) {
-    private val _events = MutableSharedFlow<ConnectionEvent>(extraBufferCapacity = 2)
+    // tryEmit drops what doesn't fit, and a lost ConnectionDeletedEvent leaves the map on a deleted
+    // connection
+    private val _events =
+        MutableSharedFlow<ConnectionEvent>(extraBufferCapacity = Channel.UNLIMITED)
     val events = _events.asSharedFlow()
 
     @Throws
