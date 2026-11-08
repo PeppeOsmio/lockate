@@ -21,7 +21,7 @@ public class WebSocketConfig implements WebSocketConfigurer {
   @Override
   public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
     registry
-        .addHandler(agWSHandler, "/api/ws/anonymous-groups/{anonymousGroupId}")
+        .addHandler(agWSHandler, "/api/v1/ws/anonymous-groups/{anonymousGroupId}")
         .addInterceptors(agWSHandshakeInterceptor)
         .setAllowedOriginPatterns("*");
   }

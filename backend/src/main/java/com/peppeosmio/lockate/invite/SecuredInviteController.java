@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.*;
 
 @SecuredAGMember
 @RestController
-@RequestMapping("/api/anonymous-groups/{anonymousGroupId}/invites")
+@RequestMapping("/api/v1/anonymous-groups/{anonymousGroupId}/invites")
 @Validated
 public class SecuredInviteController {
   private final InviteService inviteService;

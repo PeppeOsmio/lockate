@@ -11,6 +11,7 @@ import com.peppeosmio.lockate.common.exceptions.InvalidEncryptedDataException;
 import com.peppeosmio.lockate.common.exceptions.UnauthorizedException;
 import com.peppeosmio.lockate.redis.RedisService;
 import com.peppeosmio.lockate.utils.TTLMap;
+import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -19,6 +20,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.function.LongSupplier;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.connection.MessageListener;
 import org.springframework.stereotype.Component;
@@ -34,6 +39,9 @@ import tools.jackson.databind.ObjectMapper;
  * The realtime channel of a group member: it receives the member's encrypted locations and circle
  * events and sends back the group's state and everything that happens in it. The other members'
  * locations go on the SSE stream instead, open only while the member looks at the map.
+ *
+ * <p>The client pings once a minute, so a socket that has sent nothing for {@link
+ * #IDLE_TIMEOUT_MILLIS} belongs to a phone that died or lost the network without closing it.
  */
 @Slf4j
 @Component
@@ -44,6 +52,10 @@ public class AGWSHandler extends TextWebSocketHandler {
   public static final String MEMBER_LOCATION = "member.location";
   public static final String CIRCLE_EVENT = "circle.event";
   public static final String MEMBER_PAUSED = "member.paused";
+  public static final String PING = "ping";
+  // 2.5 ping intervals, so one lost ping doesn't close a live socket
+  static final long IDLE_TIMEOUT_MILLIS = 150_000;
+  private static final long IDLE_CHECK_SECONDS = 30;
   private static final int SEND_TIME_LIMIT_MS = 10_000;
   private static final int SEND_BUFFER_LIMIT_BYTES = 512 * 1024;
 
@@ -54,6 +66,8 @@ public class AGWSHandler extends TextWebSocketHandler {
   private final TTLMap<UUID, LocalDateTime> lastSavedLocationsCache =
       new TTLMap<>(Duration.ofMinutes(5));
   private final Map<String, Connection> connections = new ConcurrentHashMap<>();
+  private final ScheduledExecutorService idleChecks = Executors.newSingleThreadScheduledExecutor();
+  LongSupplier now = System::currentTimeMillis;
 
   public AGWSHandler(
       ObjectMapper objectMapper,
@@ -64,6 +78,8 @@ public class AGWSHandler extends TextWebSocketHandler {
     this.anonymousGroupService = anonymousGroupService;
     this.redisService = redisService;
     this.presenceService = presenceService;
+    idleChecks.scheduleAtFixedRate(
+        this::closeIdleConnections, IDLE_CHECK_SECONDS, IDLE_CHECK_SECONDS, TimeUnit.SECONDS);
   }
 
   /**
@@ -77,6 +93,7 @@ public class AGWSHandler extends TextWebSocketHandler {
     final List<String> pending = new ArrayList<>();
     boolean snapshotSent = false;
     MessageListener listener;
+    volatile long lastReceivedMillis = now.getAsLong();
 
     Connection(WebSocketSession session, UUID ownMemberId, String channel) {
       this.session = session;
@@ -159,10 +176,7 @@ public class AGWSHandler extends TextWebSocketHandler {
     var sessionAttributes = session.getAttributes();
     var anonymousGroupId = (UUID) sessionAttributes.get("anonymousGroupId");
     var authentication = (AGMemberAuthentication) sessionAttributes.get("authentication");
-    var connection = connections.remove(session.getId());
-    if (connection != null) {
-      redisService.unsubscribe(connection.channel, connection.listener);
-    }
+    release(session.getId());
     log.info(
         "[WS] Disconnected: anonymousGroupId="
             + anonymousGroupId
@@ -172,8 +186,42 @@ public class AGWSHandler extends TextWebSocketHandler {
             + status);
   }
 
+  private void release(String sessionId) {
+    var connection = connections.remove(sessionId);
+    if (connection != null) {
+      redisService.unsubscribe(connection.channel, connection.listener);
+    }
+  }
+
+  // Released before closing: the close of a dead socket may fail and never reach
+  // afterConnectionClosed
+  void closeIdleConnections() {
+    var deadline = now.getAsLong() - IDLE_TIMEOUT_MILLIS;
+    connections.forEach(
+        (sessionId, connection) -> {
+          if (connection.lastReceivedMillis >= deadline) {
+            return;
+          }
+          try {
+            release(sessionId);
+            connection.session.close(CloseStatus.SESSION_NOT_RELIABLE);
+          } catch (Exception e) {
+            log.warn("[WS] Can't close idle socket: " + e.getMessage());
+          }
+        });
+  }
+
+  @PreDestroy
+  public void shutdown() {
+    idleChecks.shutdownNow();
+  }
+
   @Override
   public void handleTextMessage(WebSocketSession session, TextMessage message) throws IOException {
+    var connection = connections.get(session.getId());
+    if (connection != null) {
+      connection.lastReceivedMillis = now.getAsLong();
+    }
     try {
       var sessionAttributes = session.getAttributes();
       var anonymousGroupId = (UUID) sessionAttributes.get("anonymousGroupId");
@@ -197,6 +245,9 @@ public class AGWSHandler extends TextWebSocketHandler {
           }
           presenceService.onLocation(anonymousGroupId, agMemberAuthentication.getId());
         }
+        case PING ->
+            connection.session.sendMessage(
+                new TextMessage(objectMapper.writeValueAsString(AGFrameDto.pong())));
         case MEMBER_PAUSED ->
             presenceService.pause(anonymousGroupId, agMemberAuthentication.getId());
         case CIRCLE_EVENT ->

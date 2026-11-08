@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/api-key")
+@RequestMapping("/api/v1/api-key")
 public class ApiKeyController {
 
   private @Value("${lockate.require-api-key:false}") Boolean requireApiKey;

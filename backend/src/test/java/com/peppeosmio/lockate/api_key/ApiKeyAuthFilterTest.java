@@ -36,7 +36,7 @@ class ApiKeyAuthFilterTest {
 
   @Test
   void doFilterInternal_missingHeader_returns401() throws Exception {
-    request.setRequestURI("/api/anonymous-groups");
+    request.setRequestURI("/api/v1/anonymous-groups");
 
     filter.doFilterInternal(request, response, filterChain);
 
@@ -47,7 +47,7 @@ class ApiKeyAuthFilterTest {
 
   @Test
   void doFilterInternal_invalidHeader_returns401() throws Exception {
-    request.setRequestURI("/api/anonymous-groups");
+    request.setRequestURI("/api/v1/anonymous-groups");
     request.addHeader("X-API-KEY", "not-valid");
     when(apiKeyService.verifyApiKey("not-valid")).thenReturn(false);
 
@@ -60,7 +60,7 @@ class ApiKeyAuthFilterTest {
 
   @Test
   void doFilterInternal_whitelistedPath_bypassesApiKeyCheck() throws Exception {
-    request.setRequestURI("/api/health");
+    request.setRequestURI("/api/v1/health");
 
     filter.doFilterInternal(request, response, filterChain);
 
@@ -71,7 +71,7 @@ class ApiKeyAuthFilterTest {
   @Test
   void doFilterInternal_validKey_callsFilterChain() throws Exception {
     var header = UUID.randomUUID() + ":somesecret";
-    request.setRequestURI("/api/anonymous-groups");
+    request.setRequestURI("/api/v1/anonymous-groups");
     request.addHeader("X-API-KEY", header);
     when(apiKeyService.verifyApiKey(header)).thenReturn(true);
 
@@ -83,7 +83,7 @@ class ApiKeyAuthFilterTest {
   @Test
   void doFilterInternal_invalidKey_returns401() throws Exception {
     var header = UUID.randomUUID() + ":wrongsecret";
-    request.setRequestURI("/api/anonymous-groups");
+    request.setRequestURI("/api/v1/anonymous-groups");
     request.addHeader("X-API-KEY", header);
     when(apiKeyService.verifyApiKey(header)).thenReturn(false);
 

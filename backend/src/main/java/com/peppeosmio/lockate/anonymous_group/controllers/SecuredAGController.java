@@ -25,7 +25,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @SecuredAGMember
 @Slf4j
 @RestController
-@RequestMapping("/api/anonymous-groups")
+@RequestMapping("/api/v1/anonymous-groups")
 @Validated
 public class SecuredAGController {
   private final AnonymousGroupService anonymousGroupService;
