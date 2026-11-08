@@ -18,6 +18,7 @@ import com.peppeosmio.lockate.data.anonymous_group.remote.AGMemberMessageReqDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.CircleUpsertReqDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.EncryptedAGMemberDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.MemberLocationDto
+import com.peppeosmio.lockate.data.apiJson
 import com.peppeosmio.lockate.domain.Connection
 import com.peppeosmio.lockate.domain.LocationRecord
 import com.peppeosmio.lockate.domain.UserActivity
@@ -850,7 +851,7 @@ class AnonymousGroupService(
                         sendCircleEvents(anonymousGroup, this, circleEvents)
                         for (frame in incoming) {
                             if (frame !is Frame.Text) continue
-                            val dto = Json.decodeFromString<AGFrameDto>(frame.readText())
+                            val dto = apiJson.decodeFromString<AGFrameDto>(frame.readText())
                             groupLock(anonymousGroup.id).withLock {
                                 handleFrame(
                                     anonymousGroup = anonymousGroup,
@@ -1318,10 +1319,14 @@ class AnonymousGroupService(
                             val locations =
                                 when (event.event) {
                                     "snapshot" ->
-                                        Json.decodeFromString<List<MemberLocationDto>>(event.data!!)
+                                        apiJson.decodeFromString<List<MemberLocationDto>>(
+                                            event.data!!
+                                        )
                                     "location" ->
                                         listOf(
-                                            Json.decodeFromString<MemberLocationDto>(event.data!!)
+                                            apiJson.decodeFromString<MemberLocationDto>(
+                                                event.data!!
+                                            )
                                         )
                                     else -> return@collect
                                 }

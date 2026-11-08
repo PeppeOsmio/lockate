@@ -6,6 +6,7 @@ import com.google.android.gms.location.LocationServices
 import com.peppeosmio.lockate.AppDatabase
 import com.peppeosmio.lockate.dao.AnonymousGroupDao
 import com.peppeosmio.lockate.dao.ConnectionDao
+import com.peppeosmio.lockate.data.apiJson
 import com.peppeosmio.lockate.platform_service.ActivityService
 import com.peppeosmio.lockate.platform_service.ConnectivityService
 import com.peppeosmio.lockate.platform_service.DeviceOrientationService
@@ -72,7 +73,7 @@ val appModule = module {
             install(SSE)
 
             install(ContentNegotiation) {
-                json()
+                json(apiJson)
             }
 
             install(Logging) {
