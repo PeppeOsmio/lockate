@@ -27,5 +27,6 @@ data class AGFrameDto(
         const val CIRCLE_DELETED = "circle.deleted"
         const val CIRCLE_EVENT = "circle.event"
         const val MEMBER_PRESENCE = "member.presence"
+        const val PONG = "pong"
     }
 }

@@ -148,12 +148,14 @@ internal fun nextBackoffSeconds(retries: Int): Long = min(5L * retries, 60L)
 
 private const val MEMBER_REMOVED_CLOSE_CODE: Short = 4401
 private const val GROUP_DELETED_CLOSE_CODE: Short = 4404
+private val PONG_TIMEOUT = 10.seconds
 
 class AnonymousGroupService(
     private val anonymousGroupDao: AnonymousGroupDao,
     private val cryptoService: CryptoService,
     private val connectionService: ConnectionService,
     private val httpClient: HttpClient,
+    private val webSocketClient: HttpClient,
     private val locationService: LocationService,
     private val positionProvider: PositionProvider,
     private val connectivityService: ConnectivityService,
@@ -161,6 +163,8 @@ class AnonymousGroupService(
     private val payloadCodec: PayloadCodec,
     private val sendLoopLog: SendLoopLog,
 ) {
+    private val pingClock = PingClock()
+
     // tryEmit drops what doesn't fit, and losing a NewAnonymousGroupEvent or a
     // DeleteAnonymousGroupEvent leaves the foreground service holding the wrong groups
     private val _events =
@@ -316,7 +320,7 @@ class AnonymousGroupService(
                 connectionService.getConnectionSettingsById(connectionSettingsId)
             val response = httpClient.post {
                 url(
-                    "${connectionSettings.url}/api/anonymous-groups/${anonymousGroup.id}/members/leave"
+                    "${connectionSettings.url}/api/v1/anonymous-groups/${anonymousGroup.id}/members/leave"
                 )
                 headers {
                     connectionSettings.apiKey?.let { ak -> append(name = "X-API-KEY", ak) }
@@ -373,7 +377,7 @@ class AnonymousGroupService(
                 EncryptedDataMapper.toDto(payloadCodec.encryptGroupName(groupName, key, groupId))
 
             val createResponse = httpClient.post {
-                url("${connectionSettings.url}/api/anonymous-groups")
+                url("${connectionSettings.url}/api/v1/anonymous-groups")
                 headers {
                     connectionSettings.apiKey?.let { ak -> append("X-API-KEY", ak) }
                     append(HttpHeaders.ContentType, "application/json")
@@ -496,7 +500,7 @@ class AnonymousGroupService(
                 payloadCodec.encryptMemberName(memberName, groupKey, anonymousGroupId, memberId)
             val response = httpClient.post {
                 url(
-                    "${connectionSettings.url}/api/anonymous-groups/${anonymousGroupId}/members/join"
+                    "${connectionSettings.url}/api/v1/anonymous-groups/${anonymousGroupId}/members/join"
                 )
                 headers {
                     connectionSettings.apiKey?.let { ak -> append("X-API-KEY", ak) }
@@ -595,7 +599,7 @@ class AnonymousGroupService(
                 )
             val response = httpClient.get {
                 url(
-                    "${connectionSettings.url}/api/anonymous-groups/${anonymousGroup.id}/members/auth/verify"
+                    "${connectionSettings.url}/api/v1/anonymous-groups/${anonymousGroup.id}/members/auth/verify"
                 )
                 headers {
                     connectionSettings.apiKey?.let { ak -> append("X-API-KEY", ak) }
@@ -814,10 +818,10 @@ class AnonymousGroupService(
             try {
                 sendLoopLog.log("$tag connecting")
                 var removed = false
-                httpClient.webSocket(
+                webSocketClient.webSocket(
                     request = {
                         url(
-                            "${connectionSettings.getWebSocketUrl()}/api/ws/anonymous-groups/${anonymousGroup.id}"
+                            "${connectionSettings.getWebSocketUrl()}/api/v1/ws/anonymous-groups/${anonymousGroup.id}"
                         )
                         headers {
                             connectionSettings.apiKey?.let { ak -> append("X-API-KEY", ak) }
@@ -837,16 +841,25 @@ class AnonymousGroupService(
                     session.value = this
                     try {
                         sendCircleEvents(anonymousGroup, this, circleEvents)
-                        for (frame in incoming) {
-                            if (frame !is Frame.Text) continue
-                            val dto = apiJson.decodeFromString<AGFrameDto>(frame.readText())
-                            groupLock(anonymousGroup.id).withLock {
-                                handleFrame(
-                                    anonymousGroup = anonymousGroup,
-                                    dto = dto,
-                                    tracker = tracker,
-                                )
+                        val pongs = Channel<Unit>(Channel.CONFLATED)
+                        coroutineScope {
+                            val pinger = launch { pingUntilSilent(this@webSocket, pongs, tag) }
+                            for (frame in incoming) {
+                                if (frame !is Frame.Text) continue
+                                val dto = apiJson.decodeFromString<AGFrameDto>(frame.readText())
+                                if (dto.type == AGFrameDto.PONG) {
+                                    pongs.trySend(Unit)
+                                    continue
+                                }
+                                groupLock(anonymousGroup.id).withLock {
+                                    handleFrame(
+                                        anonymousGroup = anonymousGroup,
+                                        dto = dto,
+                                        tracker = tracker,
+                                    )
+                                }
                             }
+                            pinger.cancel()
                         }
                     } finally {
                         session.value = null
@@ -984,6 +997,27 @@ class AnonymousGroupService(
             if (e is CancellationException) currentCoroutineContext().ensureActive()
             false
         }
+
+    /**
+     * Pings on every tick of [pingClock] and throws when no pong comes back, so the channel
+     * reconnects: a socket can die without closing, and the server closes it on its side when the
+     * pings stop.
+     */
+    private suspend fun pingUntilSilent(
+        session: DefaultClientWebSocketSession,
+        pongs: Channel<Unit>,
+        tag: String,
+    ) {
+        pingClock.ticks().collect {
+            // a failed send means the socket is already closing, the incoming loop ends by itself
+            if (!trySend(session, AGMemberMessageReqDto.Ping)) return@collect
+            withTimeoutOrNull(PONG_TIMEOUT) { pongs.receive() }
+                ?: run {
+                    sendLoopLog.log("$tag no pong")
+                    throw IOException("No pong in $PONG_TIMEOUT")
+                }
+        }
+    }
 
     /** False when the socket died: the events that didn't go out wait for the next one. */
     private suspend fun sendCircleEvents(
@@ -1311,7 +1345,7 @@ class AnonymousGroupService(
                     httpClient.sse(
                         request = {
                             url(
-                                "${connectionSettings.url}/api/anonymous-groups/${anonymousGroup.id}/locations"
+                                "${connectionSettings.url}/api/v1/anonymous-groups/${anonymousGroup.id}/locations"
                             )
                             headers {
                                 connectionSettings.apiKey?.let { ak -> append("X-API-KEY", ak) }
@@ -1533,7 +1567,7 @@ class AnonymousGroupService(
         val response = httpClient.request {
             this.method = method
             url(
-                "${connectionSettings.url}/api/anonymous-groups/${anonymousGroup.id}/circles/$circleId"
+                "${connectionSettings.url}/api/v1/anonymous-groups/${anonymousGroup.id}/circles/$circleId"
             )
             headers {
                 connectionSettings.apiKey?.let { ak -> append("X-API-KEY", ak) }
@@ -1715,7 +1749,7 @@ class AnonymousGroupService(
                     keyStoreService = keyStoreService,
                 )
             val response = httpClient.delete {
-                url("${connectionSettings.url}/api/anonymous-groups/${anonymousGroup.id}")
+                url("${connectionSettings.url}/api/v1/anonymous-groups/${anonymousGroup.id}")
                 headers {
                     connectionSettings.apiKey?.let { ak -> append("X-API-KEY", ak) }
                     append(
@@ -1752,7 +1786,7 @@ class AnonymousGroupService(
                 )
             val response = httpClient.post {
                 url(
-                    "${connectionSettings.url}/api/anonymous-groups/${anonymousGroup.id}/members/$agMemberId/promote"
+                    "${connectionSettings.url}/api/v1/anonymous-groups/${anonymousGroup.id}/members/$agMemberId/promote"
                 )
                 headers {
                     connectionSettings.apiKey?.let { ak -> append("X-API-KEY", ak) }

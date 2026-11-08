@@ -20,4 +20,6 @@ sealed interface AGMemberMessageReqDto {
     data class CircleEvent(val encryptedEvent: EncryptedDataDto) : AGMemberMessageReqDto
 
     @Serializable @SerialName("member.paused") data object Paused : AGMemberMessageReqDto
+
+    @Serializable @SerialName("ping") data object Ping : AGMemberMessageReqDto
 }

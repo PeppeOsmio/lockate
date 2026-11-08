@@ -32,7 +32,17 @@ import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.serialization.kotlinx.json.json
 import java.io.File
 import org.koin.android.ext.koin.androidContext
+import org.koin.core.qualifier.named
 import org.koin.dsl.module
+
+private const val WEB_SOCKET_CLIENT = "webSocket"
+
+private val httpLogger =
+    object : Logger {
+        override fun log(message: String) {
+            Log.d("HttpLogging", message)
+        }
+    }
 
 val appModule = module {
 
@@ -60,30 +70,28 @@ val appModule = module {
     single<HttpClient> {
         HttpClient(OkHttp) {
             engine {
-                // OkHttp native ping: fails the socket if no pong arrives within the interval,
-                // regardless of whether the network dropped or the backend is hung. The ktor
-                // WebSockets-plugin pingIntervalMillis is ignored by the OkHttp engine.
                 config {
-                    pingInterval(15, java.util.concurrent.TimeUnit.SECONDS)
-                    // OkHttp's default 10s would time the channel out whenever nobody sends
+                    // the SSE heartbeats come every 15 s
                     readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
                 }
             }
-            install(WebSockets)
             install(SSE)
 
             install(ContentNegotiation) {
                 json(apiJson)
             }
 
-            install(Logging) {
-                logger =
-                    object : Logger {
-                        override fun log(message: String) {
-                            Log.d("HttpLogging", message)
-                        }
-                    }
-            }
+            install(Logging) { logger = httpLogger }
+        }
+    }
+
+    // The group sockets ping on their own, aligned to the minute, so no OkHttp ping here: its
+    // timer would wake the radio at other times. The read timeout only backs up the pong timeout.
+    single<HttpClient>(named(WEB_SOCKET_CLIENT)) {
+        HttpClient(OkHttp) {
+            engine { config { readTimeout(90, java.util.concurrent.TimeUnit.SECONDS) } }
+            install(WebSockets)
+            install(Logging) { logger = httpLogger }
         }
     }
 
@@ -168,6 +176,7 @@ val appModule = module {
             cryptoService = get(),
             connectionService = get(),
             httpClient = get(),
+            webSocketClient = get(named(WEB_SOCKET_CLIENT)),
             locationService = get(),
             positionProvider = get(),
             connectivityService = get(),
