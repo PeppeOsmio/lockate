@@ -3,11 +3,11 @@ package com.peppeosmio.lockate.anonymous_group.entity;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.peppeosmio.lockate.common.classes.EncryptedString;
+import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import org.springframework.security.crypto.bcrypt.BCrypt;
 
 class AGMemberEntityTest {
 
@@ -16,7 +16,7 @@ class AGMemberEntityTest {
           UUID.randomUUID(), new EncryptedString("groupname".getBytes(), "groupiv".getBytes()));
 
   @Test
-  void constructor_hashesTokenAndSetsUtcCreatedAt() {
+  void constructor_hashesTokenAndSetsUtcCreatedAt() throws Exception {
     var before = LocalDateTime.now(ZoneOffset.UTC);
 
     var entity =
@@ -29,11 +29,24 @@ class AGMemberEntityTest {
 
     var after = LocalDateTime.now(ZoneOffset.UTC);
 
-    assertThat(entity.getTokenHash()).isNotEqualTo("raw-token");
-    assertThat(BCrypt.checkpw("raw-token", entity.getTokenHash())).isTrue();
-    assertThat(BCrypt.checkpw("wrong-token", entity.getTokenHash())).isFalse();
+    assertThat(entity.getTokenHash())
+        .isEqualTo(MessageDigest.getInstance("SHA-256").digest("raw-token".getBytes()));
     assertThat(entity.getCreatedAt()).isBetween(before, after);
     assertThat(entity.isAGAdmin()).isTrue();
     assertThat(entity.getAnonymousGroupId()).isEqualTo(anonymousGroupEntity.getId());
+  }
+
+  @Test
+  void hasToken_matchesOnlyTheTokenItWasCreatedWith() {
+    var entity =
+        new AGMemberEntity(
+            UUID.randomUUID(),
+            new EncryptedString("name".getBytes(), "iv".getBytes()),
+            "raw-token".getBytes(),
+            false,
+            anonymousGroupEntity);
+
+    assertThat(entity.hasToken("raw-token".getBytes())).isTrue();
+    assertThat(entity.hasToken("wrong-token".getBytes())).isFalse();
   }
 }
