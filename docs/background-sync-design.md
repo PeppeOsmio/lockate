@@ -1,6 +1,6 @@
 # Background sync redesign
 
-Status: direction agreed. Steps 1, 2, 3 and 4a done, not yet released; 4b next (see Timeline).
+Status: direction agreed. Steps 1, 2, 3, 4a and 4b done, not yet released; 4c next (see Timeline).
 
 This document is the reference for how background sync works and why: every decision and its
 reasons are here, and it is updated together with the code.
@@ -316,9 +316,14 @@ replaces it.
        forge notifications for that member, as a leak already exposes the member tokens' hashes
        and every ciphertext.
      - Gives real FCM tokens to test the relay with.
-   - **4b, relay.** New `push_relay/` module (Quarkus native, see "Push relay"), its Docker image
-     and release with the backend, `checks-push-relay.yml`. Testable alone with a token from 4a.
-     Hosting decided here.
+   - **4b, relay.** New `push_relay/` module (Quarkus native, see "Push relay" and
+     `push_relay/README.md`), its Docker image (`lockate-push-relay`, released with the backend
+     by the same tag), `checks-push-relay.yml`. `POST /v1/push {token, data}`: 200 sent, 400 bad
+     request (no token or data, more than 8 entries or 3072 characters), 404 token unregistered
+     (FCM 404), 429 over 30 a minute per token or 1200 per IP (in memory, so a restart starts
+     over), 502 any other FCM failure. FCM HTTP v1 with `android.priority = HIGH`; the access
+     token from the metadata server or a JWT signed with a key file. Testable alone with a token
+     from 4a. Hosting still to decide: the image runs on both.
    - **4c, pushes.** Backend: payload encryption (`{r, iv, c}`), pushes through the relay for
      circle events, started/stopped sharing (Redis claim), removed / group deleted;
      registration deleted when the relay answers 404. App: `FirebaseMessagingService` decrypts
