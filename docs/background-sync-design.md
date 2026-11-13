@@ -1,6 +1,6 @@
 # Background sync redesign
 
-Status: direction agreed. Steps 1, 2 and 3a done (not yet released), 3b next (see Timeline).
+Status: direction agreed. Steps 1, 2, 3a and 3b done (not yet released), 3c next (see Timeline).
 
 This document is the reference for how background sync works and why: every decision and its
 reasons are here, and it is updated together with the code.
@@ -247,7 +247,8 @@ replaces it.
    can't be converted without the tokens, so a Liquibase changeset deletes every group (with its
    members, locations and circles); users create their groups again. The app needs no change: the
    404 it then gets marks each group as deleted, as for any deleted group.
-3. **Sending over REST**, in two PRs so the backend can ship first without breaking any app.
+3. **Sending over REST**, in three PRs, so each side ships without breaking the other: 3a adds the
+   endpoints, 3b moves the app to them, 3c removes the old way.
    - **3a, backend only.** Old apps keep working: the socket still accepts `member.location`,
      `circle.event` and `member.paused`.
      - `POST /api/v1/anonymous-groups/{id}/locations` (`@SecuredAGMember`, same path as the SSE
@@ -263,23 +264,31 @@ replaces it.
        429 above. The app sends at most one every 1.5 s (40 a minute), so only a broken or
        malicious client hits it. The socket isn't limited, as today.
      - Both live in `AGMemberMessageService`, which keeps its own save-throttle cache. The socket
-       keeps its own until 3b removes that path; a member uses one or the other, never both.
+       keeps its own until 3c removes that path; a member uses one or the other, never both.
      - Sharing timer: `ag-presence` 30 min, `ag-online` 31 min (from 5 and 6). Old apps, which
        still send every minute while still, are then reported "stopped sharing" after 30 min
        instead of 5.
-   - **3b, app, and the socket stops accepting member messages.**
-     - App: every send goes over REST, one post at a time on the shared `HttpClient`, a failed
-       post dropped (the next fix replaces it). Moving: each fix posted. Still: Fused high
-       accuracy every 10 min + `POST` + short wake lock; `PingClock` no longer times the still
-       heartbeat. Circle events ride with the position, against the server-confirmed state;
-       `CircleEventQueue` removed. Pause: `POST …/members/pause`. Colours 15 / 30 min.
-     - Backend: the socket accepts only `ping`; `member.location`, `circle.event` and
-       `member.paused` close it with BAD_DATA like any unknown type.
+   - **3b, app only.** Works against a 3a backend; the socket still accepts the old messages, but
+     the app no longer sends them.
+     - Every send goes over REST, one post at a time on the shared `HttpClient`; a failed post is
+       dropped (the next fix replaces it). Moving: each fix posted (1.5 s throttle, skipped when
+       circle events are waiting). Still: Fused high accuracy every 10 min
+       (`STILL_FIX_INTERVAL_MILLIS`), a 10 s wake lock taken in the location callback so the post
+       goes out before the CPU sleeps again; the first still position is sent at once.
+       `PingClock` now only times the socket pings.
+     - Circle events ride with the position, against the server-confirmed state (see "Positions
+       and circle events in one request"); `CircleEventQueue` removed.
+     - Pause: `POST …/members/pause` when sharing stops, best effort (10 s timeout); if it fails
+       the 30-min timer tells the others.
+     - Colours 15 / 30 min.
      - The socket stays, with its current ping, only to receive group events for notifications,
        held by the foreground service as today, until step 5. While still, the ping is late in
        Doze as today and the server may close the socket after 150 s; the app reconnects at the
        next fix (within 10 min) and a notification may be missed meanwhile. Accepted, since FCM
        replaces this in step 4.
+   - **3c, backend only, released once the 3b app is out.** The socket accepts only `ping`;
+     `member.location`, `circle.event` and `member.paused` close it with BAD_DATA like any
+     unknown type, and the socket's own save-throttle cache goes.
 4. **Push relay + FCM.**
    - New `push_relay/` service.
    - Backend: registration endpoint (token, registration id, AES key), payload encryption

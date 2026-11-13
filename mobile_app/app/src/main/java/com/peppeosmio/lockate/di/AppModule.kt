@@ -21,6 +21,7 @@ import com.peppeosmio.lockate.service.anonymous_group.PayloadCodec
 import com.peppeosmio.lockate.service.crypto.CryptoService
 import com.peppeosmio.lockate.service.invite.InviteService
 import com.peppeosmio.lockate.service.location.PositionProvider
+import com.peppeosmio.lockate.service.location.STILL_FIX_INTERVAL_MILLIS
 import com.peppeosmio.lockate.utils.SendLoopLog
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
@@ -157,6 +158,7 @@ val appModule = module {
         val activityService = get<ActivityService>()
         PositionProvider(
             gpsFixes = locationService::getLocationUpdates,
+            stillFixes = { locationService.getStillLocationUpdates(STILL_FIX_INTERVAL_MILLIS) },
             passiveFixes = locationService::getPassiveLocationUpdates,
             activities = activityService::getActivityUpdates,
         )

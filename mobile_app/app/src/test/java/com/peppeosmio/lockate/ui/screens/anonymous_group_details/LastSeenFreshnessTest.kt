@@ -19,20 +19,20 @@ class LastSeenFreshnessTest {
         lastSeenFreshness(lastSeen, lastSeen.toInstant(TimeZone.UTC) + elapsed)
 
     @Test
-    fun `within the last minute is live`() {
+    fun `within the last 15 minutes is live`() {
         assertEquals(LastSeenFreshness.Live, freshnessAfter(0.seconds))
-        assertEquals(LastSeenFreshness.Live, freshnessAfter(1.minutes))
+        assertEquals(LastSeenFreshness.Live, freshnessAfter(15.minutes))
     }
 
     @Test
-    fun `within the last 5 minutes is recent`() {
-        assertEquals(LastSeenFreshness.Recent, freshnessAfter(1.minutes + 1.seconds))
-        assertEquals(LastSeenFreshness.Recent, freshnessAfter(5.minutes))
+    fun `within the last 30 minutes is recent`() {
+        assertEquals(LastSeenFreshness.Recent, freshnessAfter(15.minutes + 1.seconds))
+        assertEquals(LastSeenFreshness.Recent, freshnessAfter(30.minutes))
     }
 
     @Test
-    fun `older than 5 minutes is stale`() {
-        assertEquals(LastSeenFreshness.Stale, freshnessAfter(5.minutes + 1.seconds))
+    fun `older than 30 minutes is stale`() {
+        assertEquals(LastSeenFreshness.Stale, freshnessAfter(30.minutes + 1.seconds))
     }
 
     @Test

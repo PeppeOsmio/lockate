@@ -8,6 +8,7 @@ import android.content.IntentFilter
 import android.location.LocationManager
 import android.os.Build
 import android.os.Looper
+import android.os.PowerManager
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.FusedLocationProviderClient
@@ -49,6 +50,8 @@ internal suspend fun awaitSignal(signal: Flow<Unit>, condition: suspend () -> Bo
     signal.first { condition() }
 }
 
+private const val STILL_FIX_WAKE_LOCK_MILLIS = 10_000L
+
 class LocationService(
     private val context: Context,
     private val fusedLocationClient: FusedLocationProviderClient,
@@ -65,6 +68,13 @@ class LocationService(
 
     @OptIn(ExperimentalAtomicApi::class) private val activeCollectors = AtomicInt(0)
     private var locationCallback: LocationCallback? = null
+
+    // shared by every group's post, so it's never released by hand: it times out
+    private val stillFixWakeLock =
+        context
+            .getSystemService(PowerManager::class.java)
+            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "lockate:still-fix")
+            .apply { setReferenceCounted(false) }
 
     private fun checkPermissions() {
         if (
@@ -152,6 +162,39 @@ class LocationService(
 
     /** The fixes requested by the other collectors, without turning the GPS on */
     fun getPassiveLocationUpdates(): Flow<LocationFix> = _locationFixes
+
+    /**
+     * High-accuracy fixes every [intervalMillis], for when we are still. Fused delivers them in
+     * Doze to a location foreground service, so the request is also what wakes the phone; the CPU
+     * is then held for [STILL_FIX_WAKE_LOCK_MILLIS] so the fix gets posted before it sleeps again.
+     */
+    fun getStillLocationUpdates(intervalMillis: Long): Flow<LocationFix> = callbackFlow {
+        val request =
+            LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, intervalMillis)
+                .setMaxUpdateDelayMillis(0)
+                .build()
+        val callback =
+            object : LocationCallback() {
+                override fun onLocationResult(result: LocationResult) {
+                    result.lastLocation?.let { loc ->
+                        stillFixWakeLock.acquire(STILL_FIX_WAKE_LOCK_MILLIS)
+                        trySend(
+                            LocationFix(
+                                coordinates = Coordinates(loc.latitude, loc.longitude),
+                                accuracyMeters = loc.accuracy,
+                                atMillis = loc.time,
+                            )
+                        )
+                    }
+                }
+            }
+        try {
+            fusedLocationClient.requestLocationUpdates(request, callback, Looper.getMainLooper())
+        } catch (e: SecurityException) {
+            throw NoPermissionException("")
+        }
+        awaitClose { fusedLocationClient.removeLocationUpdates(callback) }
+    }
 
     @OptIn(ExperimentalAtomicApi::class)
     private fun onCollectorAdded() {

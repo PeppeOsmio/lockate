@@ -33,8 +33,9 @@ enum class LastSeenFreshness {
     Stale,
 }
 
-private val LIVE_WINDOW = 1.minutes
-private val RECENT_WINDOW = 5.minutes
+// a still phone posts every 10 minutes, and the server says it stopped sharing after 30
+private val LIVE_WINDOW = 15.minutes
+private val RECENT_WINDOW = 30.minutes
 
 @OptIn(ExperimentalTime::class)
 fun lastSeenFreshness(lastSeen: LocalDateTime?, now: Instant): LastSeenFreshness {
