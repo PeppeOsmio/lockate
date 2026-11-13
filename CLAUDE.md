@@ -44,7 +44,7 @@ Three core domain entities:
 - No unused code, dead branches, or backwards-compatibility shims
 - No error handling for scenarios that cannot happen; trust framework guarantees
 - Validate only at system boundaries (user input, external APIs)
-- Before committing, run `make all` in each module you changed (`backend`, `mobile_app`, `admin_ui`): it formats the code, then checks formatting, lints and tests. CI runs `make ci`, the same without formatting
+- Before committing, run `make all` in each module you changed (`backend`, `mobile_app`, `admin_ui`, `push_relay`): it formats the code, then checks formatting, lints and tests. CI runs `make ci`, the same without formatting
 
 ### Backend (Java / Spring Boot)
 - Follow existing package structure: one package per domain concern under `com.peppeosmio.lockate`
@@ -59,7 +59,7 @@ Three core domain entities:
 
 ## Releases
 
-- `backend-vX.Y.Z` tag → `.github/workflows/release-backend.yml` publishes both `lockate-backend` and `lockate-admin-ui` to Docker Hub with the same version, so the two always match (`prod-docker-compose.yml` pins both with `LOCKATE_VERSION`).
+- `backend-vX.Y.Z` tag → `.github/workflows/release-backend.yml` publishes `lockate-backend`, `lockate-admin-ui` and `lockate-push-relay` to Docker Hub with the same version, so they always match (`prod-docker-compose.yml` pins the backend and the admin UI with `LOCKATE_VERSION`).
 - `mobile-vX.Y.Z` tag → `.github/workflows/release-mobile.yml` builds the signed APKs and attaches them to a GitHub release.
 - Release workflows only build and publish; the `checks-*` workflows run on pull requests only.
 
@@ -98,6 +98,20 @@ The `@SecuredAGMember` annotation marks endpoints that require a valid member to
 The `AnonymousGroupService` is the main orchestration point.
 
 Member messages are always relayed, but saved only if the member's last saved record is older than the interval: the server throttles saves via a `TTLMap` - a member cannot write a new location record more often than `lockate.retention.anonymous-group.location.save-interval` (default `PT2M`).
+
+## Push relay
+
+`push_relay/` is a small Quarkus app compiled native (not Spring Boot: it has no state and must start in milliseconds to scale to zero) that forwards pushes from any backend to FCM with our Firebase project's credentials. `POST /v1/push` `{token, data}`, no authentication (the token is the permission), rate limits per token and per IP in memory, 404 when FCM says the token is gone. The access token comes from the metadata server on Google Cloud or from a service-account key file (`GOOGLE_APPLICATION_CREDENTIALS`), signed by hand: no Firebase Admin SDK. See `push_relay/README.md`.
+
+```bash
+cd push_relay
+
+# Format, check formatting, lint and test (CI runs `make ci`: the same without formatting)
+make all
+
+# Dev mode
+FCM_PROJECT_ID=my-project ./mvnw quarkus:dev
+```
 
 ## Mobile
 
