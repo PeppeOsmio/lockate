@@ -1,6 +1,6 @@
 # Background sync redesign
 
-Status: direction agreed. Steps 1 and 2 done (not yet released), 3 next (see Timeline).
+Status: direction agreed. Steps 1, 2 and 3a done (not yet released), 3b next (see Timeline).
 
 This document is the reference for how background sync works and why: every decision and its
 reasons are here, and it is updated together with the code.
