@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
@@ -14,27 +13,25 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.peppeosmio.lockate.anonymous_group.dto.AGCircleEventReqDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGFrameDto;
-import com.peppeosmio.lockate.anonymous_group.dto.AGMemberMessageReqDto;
 import com.peppeosmio.lockate.anonymous_group.dto.CircleEventDto;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
-import com.peppeosmio.lockate.anonymous_group.presence.AGPresenceService;
 import com.peppeosmio.lockate.anonymous_group.security.AGMemberAuthentication;
 import com.peppeosmio.lockate.anonymous_group.service.AnonymousGroupService;
 import com.peppeosmio.lockate.common.dto.EncryptedDataDto;
-import com.peppeosmio.lockate.common.exceptions.InvalidEncryptedDataException;
 import com.peppeosmio.lockate.common.exceptions.UnauthorizedException;
 import com.peppeosmio.lockate.redis.RedisService;
+import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -49,7 +46,6 @@ class AGWSHandlerTest {
 
   @Mock private AnonymousGroupService anonymousGroupService;
   @Mock private RedisService redisService;
-  @Mock private AGPresenceService presenceService;
   @Mock private WebSocketSession session;
   @Mock private MessageListener redisListener;
 
@@ -61,7 +57,7 @@ class AGWSHandlerTest {
 
   @BeforeEach
   void setUp() {
-    handler = new AGWSHandler(objectMapper, anonymousGroupService, redisService, presenceService);
+    handler = new AGWSHandler(objectMapper, anonymousGroupService, redisService);
     sessionAttributes = new HashMap<>();
     sessionAttributes.put("anonymousGroupId", groupId);
     sessionAttributes.put("authentication", new AGMemberAuthentication(memberId));
@@ -73,21 +69,6 @@ class AGWSHandlerTest {
     return new EncryptedDataDto(
         java.util.Base64.getEncoder().encodeToString(text.getBytes()),
         java.util.Base64.getEncoder().encodeToString("iv".getBytes()));
-  }
-
-  private TextMessage locationMessage() throws Exception {
-    return new TextMessage(
-        objectMapper.writeValueAsString(
-            Map.of(
-                "type", "member.location",
-                "encryptedCoordinates", blob("coord"),
-                "encryptedActivity", blob("activity"))));
-  }
-
-  private TextMessage circleEventMessage() throws Exception {
-    return new TextMessage(
-        objectMapper.writeValueAsString(
-            Map.of("type", "circle.event", "encryptedEvent", blob("event"))));
   }
 
   @SuppressWarnings("unchecked")
@@ -313,136 +294,34 @@ class AGWSHandlerTest {
   }
 
   @Test
-  void handleTextMessage_firstMessage_passesNullLastSavedTimestamp() throws Exception {
-    when(anonymousGroupService.relayMemberMessage(eq(groupId), any(), any(), any()))
-        .thenReturn(Optional.of(LocalDateTime.now()));
-
-    handler.handleTextMessage(session, locationMessage());
-
-    verify(anonymousGroupService).relayMemberMessage(eq(groupId), any(), any(), isNull());
-  }
-
-  @Test
-  void handleTextMessage_rapidSecondMessage_passesPreviouslySavedTimestampFromCache()
-      throws Exception {
-    var firstTimestamp = LocalDateTime.now();
-    when(anonymousGroupService.relayMemberMessage(eq(groupId), any(), any(), isNull()))
-        .thenReturn(Optional.of(firstTimestamp));
-    handler.handleTextMessage(session, locationMessage());
-
-    when(anonymousGroupService.relayMemberMessage(eq(groupId), any(), any(), eq(firstTimestamp)))
-        .thenReturn(Optional.empty());
-    handler.handleTextMessage(session, locationMessage());
-
-    var timestampCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
-    verify(anonymousGroupService, times(2))
-        .relayMemberMessage(eq(groupId), any(), any(), timestampCaptor.capture());
-    assertThat(timestampCaptor.getAllValues()).containsExactly(null, firstTimestamp);
-  }
-
-  @Test
-  void handleTextMessage_agNotFoundException_closesWithBadData() throws Exception {
-    when(anonymousGroupService.relayMemberMessage(any(), any(), any(), any()))
-        .thenThrow(new AGNotFoundException(groupId));
-
-    handler.handleTextMessage(session, locationMessage());
-
-    verify(session).close(CloseStatus.BAD_DATA);
-  }
-
-  @Test
-  void handleTextMessage_unauthorizedException_closesWithBadData() throws Exception {
-    when(anonymousGroupService.relayMemberMessage(any(), any(), any(), any()))
-        .thenThrow(new UnauthorizedException());
-
-    handler.handleTextMessage(session, locationMessage());
-
-    verify(session).close(CloseStatus.BAD_DATA);
-  }
-
-  @Test
-  void handleTextMessage_invalidEncryptedData_closesWithBadData() throws Exception {
-    when(anonymousGroupService.relayMemberMessage(any(), any(), any(), any()))
-        .thenThrow(new InvalidEncryptedDataException());
-
-    handler.handleTextMessage(session, locationMessage());
-
-    verify(session).close(CloseStatus.BAD_DATA);
-  }
-
-  @Test
   void handleTextMessage_missingAuthentication_closesWithBadData() throws Exception {
     sessionAttributes.remove("authentication");
 
-    handler.handleTextMessage(session, locationMessage());
+    handler.handleTextMessage(session, pingMessage());
 
     verify(session).close(CloseStatus.BAD_DATA);
   }
 
   @Test
-  void handleTextMessage_unexpectedException_closesWithServerError() throws Exception {
-    when(anonymousGroupService.relayMemberMessage(any(), any(), any(), any()))
-        .thenThrow(new RuntimeException("boom"));
+  void handleTextMessage_pongThatCantBeSent_closesWithServerError() throws Exception {
+    connect();
+    doThrow(new IOException("gone")).when(session).sendMessage(any());
 
-    handler.handleTextMessage(session, locationMessage());
+    handler.handleTextMessage(session, pingMessage());
 
     verify(session).close(CloseStatus.SERVER_ERROR);
   }
 
-  @Test
-  void handleTextMessage_memberLocation_relaysTheEncryptedFields() throws Exception {
-    when(anonymousGroupService.relayMemberMessage(eq(groupId), any(), any(), any()))
-        .thenReturn(Optional.empty());
-
-    handler.handleTextMessage(session, locationMessage());
-
-    var captor = ArgumentCaptor.forClass(AGMemberMessageReqDto.class);
-    verify(anonymousGroupService).relayMemberMessage(eq(groupId), any(), captor.capture(), any());
-    assertThat(captor.getValue())
-        .isEqualTo(new AGMemberMessageReqDto(blob("coord"), blob("activity")));
-    verify(presenceService).onLocation(groupId, memberId);
-  }
-
-  @Test
-  void handleTextMessage_memberPaused_pausesThePresence() throws Exception {
+  @ParameterizedTest
+  @ValueSource(strings = {"member.location", "circle.event", "member.paused"})
+  void handleTextMessage_memberMessagesGoOverRest_closeWithBadData(String type) throws Exception {
     handler.handleTextMessage(
-        session, new TextMessage(objectMapper.writeValueAsString(Map.of("type", "member.paused"))));
-
-    verify(presenceService).pause(groupId, memberId);
-    verify(session, never()).close(any());
-  }
-
-  @Test
-  void handleTextMessage_invalidLocation_doesntTouchThePresence() throws Exception {
-    when(anonymousGroupService.relayMemberMessage(eq(groupId), any(), any(), any()))
-        .thenThrow(new InvalidEncryptedDataException());
-
-    handler.handleTextMessage(session, locationMessage());
-
-    verifyNoInteractions(presenceService);
-  }
-
-  @Test
-  void handleTextMessage_circleEvent_relaysIt() throws Exception {
-    handler.handleTextMessage(session, circleEventMessage());
-
-    var authentication = ArgumentCaptor.forClass(AGMemberAuthentication.class);
-    verify(anonymousGroupService)
-        .relayCircleEvent(
-            eq(groupId), authentication.capture(), eq(new AGCircleEventReqDto(blob("event"))));
-    assertThat(authentication.getValue().getId()).isEqualTo(memberId);
-    verify(session, never()).close(any());
-  }
-
-  @Test
-  void handleTextMessage_invalidCircleEvent_closesWithBadData() throws Exception {
-    doThrow(new InvalidEncryptedDataException())
-        .when(anonymousGroupService)
-        .relayCircleEvent(any(), any(), any());
-
-    handler.handleTextMessage(session, circleEventMessage());
+        session,
+        new TextMessage(
+            objectMapper.writeValueAsString(Map.of("type", type, "encryptedEvent", blob("e")))));
 
     verify(session).close(CloseStatus.BAD_DATA);
+    verifyNoInteractions(anonymousGroupService);
   }
 
   @Test
@@ -459,7 +338,7 @@ class AGWSHandlerTest {
   }
 
   @Test
-  void handleTextMessage_ping_answersPongAndLeavesThePresenceAlone() throws Exception {
+  void handleTextMessage_ping_answersPong() throws Exception {
     connect();
 
     handler.handleTextMessage(session, pingMessage());
@@ -468,7 +347,6 @@ class AGWSHandlerTest {
     assertThat(sent).hasSize(2);
     assertThat(objectMapper.readValue(sent.get(1), AGFrameDto.class).type())
         .isEqualTo(AGFrameDto.PONG);
-    verifyNoInteractions(presenceService);
     verify(session, never()).close(any());
   }
 
@@ -497,12 +375,11 @@ class AGWSHandlerTest {
   }
 
   @Test
-  void closeIdleConnections_anyFrameRefreshesTheDeadline() throws Exception {
+  void closeIdleConnections_aPingRefreshesTheDeadline() throws Exception {
     handler.now = () -> 0L;
     connect();
     handler.now = () -> 100_000L;
-    handler.handleTextMessage(
-        session, new TextMessage(objectMapper.writeValueAsString(Map.of("type", "member.paused"))));
+    handler.handleTextMessage(session, pingMessage());
 
     handler.now = () -> AGWSHandler.IDLE_TIMEOUT_MILLIS + 1;
     handler.closeIdleConnections();
