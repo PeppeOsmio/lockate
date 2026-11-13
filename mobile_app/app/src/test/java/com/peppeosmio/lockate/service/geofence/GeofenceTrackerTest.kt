@@ -28,8 +28,15 @@ class GeofenceTrackerTest {
             it.replaceCircles(circles.toList())
         }
 
-    private fun GeofenceTracker.update(position: Coordinates, accuracy: Float = 10f) =
-        update(LocationFix(position, accuracy, 0))
+    // a fix whose transitions the server gets at once
+    private fun GeofenceTracker.update(
+        position: Coordinates,
+        accuracy: Float = 10f,
+        nowMillis: Long = 0,
+    ) = update(LocationFix(position, accuracy, 0), nowMillis).also { confirm(it, nowMillis) }
+
+    private fun GeofenceTracker.unsent(position: Coordinates, nowMillis: Long = 0) =
+        update(LocationFix(position, 10f, 0), nowMillis)
 
     private fun enter(circle: String) = CircleTransition(circle, TransitionKind.Enter)
 
@@ -181,5 +188,74 @@ class GeofenceTrackerTest {
 
         assertTrue(tracker.update(north(300.0)).isEmpty())
         assertEquals(listOf(enter("home")), tracker.update(north(10.0)))
+    }
+
+    @Test
+    fun `an unconfirmed transition comes back with the next fix`() {
+        val tracker = tracker(home)
+        tracker.update(north(10.0))
+
+        assertEquals(listOf(exit("home")), tracker.unsent(north(300.0)))
+        assertEquals(listOf(exit("home")), tracker.unsent(north(310.0), nowMillis = 2_000))
+    }
+
+    @Test
+    fun `an inaccurate fix still returns the unconfirmed transitions`() {
+        val tracker = tracker(home)
+        tracker.update(north(10.0))
+        tracker.unsent(north(300.0))
+
+        assertEquals(
+            listOf(exit("home")),
+            tracker.update(LocationFix(north(10.0), 80f, 0), nowMillis = 1_000),
+        )
+    }
+
+    @Test
+    fun `an exit and an entry both unconfirmed cancel out`() {
+        val tracker = tracker(home)
+        tracker.update(north(10.0))
+        tracker.unsent(north(300.0))
+
+        assertTrue(tracker.unsent(north(10.0), nowMillis = 1_000).isEmpty())
+    }
+
+    @Test
+    fun `a transition unconfirmed for too long is dropped`() {
+        val tracker = tracker(home)
+        tracker.update(north(10.0))
+        tracker.unsent(north(300.0), nowMillis = 0)
+
+        assertTrue(
+            tracker.unsent(north(310.0), nowMillis = GeofenceTracker.MAX_PENDING_MILLIS).isEmpty()
+        )
+        assertEquals(
+            listOf(enter("home")),
+            tracker.unsent(north(10.0), nowMillis = GeofenceTracker.MAX_PENDING_MILLIS + 1),
+        )
+    }
+
+    @Test
+    fun `a confirmation that a later fix overtook leaves the new transition pending`() {
+        val tracker = tracker(home)
+        tracker.update(north(10.0))
+        val sent = tracker.unsent(north(300.0))
+        tracker.unsent(north(10.0), nowMillis = 1_000)
+
+        tracker.confirm(sent, nowMillis = 2_000)
+
+        assertEquals(listOf(enter("home")), tracker.unsent(north(10.0), nowMillis = 3_000))
+    }
+
+    @Test
+    fun `confirming a removed circle does nothing`() {
+        val tracker = tracker(home)
+        tracker.update(north(10.0))
+        val sent = tracker.unsent(north(300.0))
+        tracker.removeCircle("home")
+
+        tracker.confirm(sent, nowMillis = 1_000)
+
+        assertTrue(tracker.unsent(north(10.0), nowMillis = 2_000).isEmpty())
     }
 }

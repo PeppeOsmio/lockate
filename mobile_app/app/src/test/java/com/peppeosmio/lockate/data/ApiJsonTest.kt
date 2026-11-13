@@ -2,6 +2,8 @@ package com.peppeosmio.lockate.data
 
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGFrameDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGMemberMessageReqDto
+import com.peppeosmio.lockate.data.anonymous_group.remote.AGPostLocationReqDto
+import com.peppeosmio.lockate.data.anonymous_group.remote.EncryptedDataDto
 import kotlinx.datetime.LocalDateTime
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -29,10 +31,20 @@ class ApiJsonTest {
     }
 
     @Test
-    fun `the pause message is only its type`() {
+    fun `the ping is only its type`() {
         assertEquals(
-            """{"type":"member.paused"}""",
-            apiJson.encodeToString<AGMemberMessageReqDto>(AGMemberMessageReqDto.Paused),
+            """{"type":"ping"}""",
+            apiJson.encodeToString<AGMemberMessageReqDto>(AGMemberMessageReqDto.Ping),
+        )
+    }
+
+    @Test
+    fun `a location post carries its circle events as encrypted fields`() {
+        val blob = EncryptedDataDto(cipherText = "c", iv = "i")
+
+        assertEquals(
+            """{"encryptedCoordinates":{"cipherText":"c","iv":"i"},"encryptedActivity":{"cipherText":"c","iv":"i"},"circleEvents":[{"cipherText":"c","iv":"i"}]}""",
+            apiJson.encodeToString(AGPostLocationReqDto(blob, blob, listOf(blob))),
         )
     }
 }

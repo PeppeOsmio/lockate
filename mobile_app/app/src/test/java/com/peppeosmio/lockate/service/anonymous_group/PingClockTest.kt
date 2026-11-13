@@ -35,4 +35,15 @@ class PingClockTest {
 
         assertEquals(first.await(), later.await())
     }
+
+    @Test
+    fun `the tick falls on the next minute plus the jitter`() {
+        assertEquals(59_000L + 500, millisToNextTick(61_000, 500))
+        assertEquals(60_000L, millisToNextTick(120_000, 0))
+    }
+
+    @Test
+    fun `the tick skips a minute that is too close`() {
+        assertEquals(61_000L, millisToNextTick(59_000, 0))
+    }
 }

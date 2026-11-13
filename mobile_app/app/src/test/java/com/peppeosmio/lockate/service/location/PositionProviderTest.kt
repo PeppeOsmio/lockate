@@ -53,19 +53,23 @@ class PositionProviderTest {
 
     private class Fakes {
         val gps = MutableSharedFlow<LocationFix>()
+        val still = MutableSharedFlow<LocationFix>()
         val passive = MutableSharedFlow<LocationFix>()
         val activity = MutableStateFlow(UserActivity.Unknown)
         var gpsCollectors = 0
+        var stillCollectors = 0
 
         fun provider(scope: TestScope) =
             PositionProvider(
                 gpsFixes = {
                     gps.onStart { gpsCollectors++ }.onCompletion { gpsCollectors-- }
                 },
+                stillFixes = {
+                    still.onStart { stillCollectors++ }.onCompletion { stillCollectors-- }
+                },
                 passiveFixes = { passive },
                 activities = { activity },
                 now = { scope.testScheduler.currentTime },
-                stillJitterMillis = { 0 },
             )
     }
 
@@ -74,17 +78,6 @@ class PositionProviderTest {
         backgroundScope.launch { flow.collect { positions += it } }
         runCurrent()
         return positions
-    }
-
-    @Test
-    fun `the still tick falls on the next minute plus the jitter`() {
-        assertEquals(59_000L + 500, millisToNextStillTick(61_000, 500))
-        assertEquals(60_000L, millisToNextStillTick(120_000, 0))
-    }
-
-    @Test
-    fun `the still tick skips a minute that is too close`() {
-        assertEquals(61_000L, millisToNextStillTick(59_000, 0))
     }
 
     @Test
@@ -101,7 +94,7 @@ class PositionProviderTest {
     }
 
     @Test
-    fun `while still the GPS is off and the last good fix is repeated`() = runTest {
+    fun `while still only the slow request runs and the last good fix is sent at once`() = runTest {
         val fakes = Fakes()
         val positions = collect(fakes.provider(this).positions())
         fakes.gps.emit(fix(1.0, 5f, 0))
@@ -110,14 +103,32 @@ class PositionProviderTest {
 
         fakes.activity.value = UserActivity.Still
         runCurrent()
-        advanceTimeBy(STILL_INTERVAL_MILLIS * 3)
-        runCurrent()
 
         assertEquals(0, fakes.gpsCollectors)
-        val still = positions.drop(2)
-        assertEquals(4, still.size)
-        assertTrue(still.all { !it.isFresh && it.fix.coordinates.latitude == 1.0 })
-        assertTrue(still.all { it.activity == UserActivity.Still })
+        assertEquals(1, fakes.stillCollectors)
+        val still = positions.drop(2).single()
+        assertFalse(still.isFresh)
+        assertEquals(1.0, still.fix.coordinates.latitude, 0.0)
+        assertEquals(UserActivity.Still, still.activity)
+    }
+
+    @Test
+    fun `while still every slow fix sends a position, the last good one if it's worse`() = runTest {
+        val fakes = Fakes()
+        val positions = collect(fakes.provider(this).positions())
+        fakes.gps.emit(fix(1.0, 5f, 0))
+        runCurrent()
+        fakes.activity.value = UserActivity.Still
+        runCurrent()
+        positions.clear()
+
+        fakes.still.emit(fix(2.0, 80f, 0))
+        fakes.still.emit(fix(3.0, 5f, 0))
+        runCurrent()
+
+        assertEquals(listOf(1.0, 3.0), positions.map { it.fix.coordinates.latitude })
+        assertEquals(listOf(false, true), positions.map { it.isFresh })
+        assertTrue(positions.all { it.activity == UserActivity.Still })
     }
 
     @Test
@@ -154,8 +165,6 @@ class PositionProviderTest {
             advanceTimeBy(STILL_ACQUIRE_MILLIS)
             fakes.gps.emit(fix(3.0, 70f, currentTime))
             runCurrent()
-            advanceTimeBy(STILL_INTERVAL_MILLIS)
-            runCurrent()
 
             assertEquals(0, fakes.gpsCollectors)
             val repeated = positions.last()
@@ -187,7 +196,7 @@ class PositionProviderTest {
         runCurrent()
 
         fakes.passive.emit(fix(3.0, 5f, 1000))
-        advanceTimeBy(STILL_INTERVAL_MILLIS * 2)
+        fakes.still.emit(fix(4.0, 80f, 1000))
         runCurrent()
 
         assertEquals(3.0, positions.last().fix.coordinates.latitude, 0.0)
@@ -216,22 +225,6 @@ class PositionProviderTest {
     }
 
     @Test
-    fun `while still the last good fix is sent once a minute`() = runTest {
-        val fakes = Fakes()
-        val positions = collect(fakes.provider(this).positions())
-        fakes.gps.emit(fix(1.0, 5f, currentTime))
-        runCurrent()
-        fakes.activity.value = UserActivity.Still
-        runCurrent()
-        positions.clear()
-
-        advanceTimeBy(STILL_INTERVAL_MILLIS * 5 - 1)
-        runCurrent()
-
-        assertEquals(4, positions.size)
-    }
-
-    @Test
     fun `after being still the activity change is sent at once and the fix is not repeated`() =
         runTest {
             val fakes = Fakes()
@@ -244,8 +237,7 @@ class PositionProviderTest {
             runCurrent()
             positions.clear()
 
-            advanceTimeBy(STILL_INTERVAL_MILLIS * 2)
-            runCurrent()
+            assertEquals(0, fakes.stillCollectors)
             assertTrue(positions.isEmpty())
 
             fakes.gps.emit(fix(2.0, 5f, 0))

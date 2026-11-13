@@ -2,9 +2,7 @@ package com.peppeosmio.lockate.service.location
 
 import com.peppeosmio.lockate.domain.LocationFix
 import com.peppeosmio.lockate.domain.UserActivity
-import kotlin.random.Random
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -16,8 +14,8 @@ import kotlinx.coroutines.launch
 
 internal const val GOOD_ACCURACY_METERS = 30f
 internal const val STALE_FIX_MILLIS = 60_000L
-internal const val STILL_INTERVAL_MILLIS = 60_000L
-internal const val STILL_JITTER_MILLIS = 2_000L
+// see docs/background-sync-design.md for why 10 minutes
+const val STILL_FIX_INTERVAL_MILLIS = 10 * 60_000L
 internal const val WARM_UP_MILLIS = 20_000L
 internal const val STILL_ACQUIRE_MILLIS = 20_000L
 
@@ -38,31 +36,20 @@ internal fun pickGoodFix(current: LocationFix?, candidate: LocationFix): Locatio
 data class Position(val fix: LocationFix, val isFresh: Boolean, val activity: UserActivity)
 
 /**
- * Waits from [nowMillis] until the next wall-clock minute plus [jitterMillis], skipping a minute
- * that is less than half an interval away, so the heartbeats of a group's still members reach the
- * receivers together and wake their radio once.
- */
-internal fun millisToNextStillTick(nowMillis: Long, jitterMillis: Long): Long {
-    val next =
-        ((nowMillis + STILL_INTERVAL_MILLIS / 2) / STILL_INTERVAL_MILLIS + 1) *
-            STILL_INTERVAL_MILLIS
-    return next + jitterMillis - nowMillis
-}
-
-/**
- * The positions to send. While the user is still the GPS is released and the last good fix is
- * repeated about every [STILL_INTERVAL_MILLIS]; without a recent accurate fix the GPS stays on
- * until one arrives, or for at most [STILL_ACQUIRE_MILLIS] if any fix came, since indoors an
- * accurate one may never come. When the user moves again the GPS is back, and the last good fix is
- * held until an accurate one arrives (at most [WARM_UP_MILLIS]). A change of activity is sent at
- * once, with the last good fix if the GPS hasn't answered yet.
+ * The positions to send. While the user is still the 2 s GPS requests are released, the last good
+ * fix is sent at once and then again on every fix of [stillFixes], a high-accuracy request every
+ * [STILL_FIX_INTERVAL_MILLIS] that also wakes the phone in Doze; without a recent accurate fix the
+ * GPS stays on until one arrives, or for at most [STILL_ACQUIRE_MILLIS] if any fix came, since
+ * indoors an accurate one may never come. When the user moves again the GPS is back, and the last
+ * good fix is held until an accurate one arrives (at most [WARM_UP_MILLIS]). A change of activity
+ * is sent at once, with the last good fix if the GPS hasn't answered yet.
  */
 class PositionProvider(
     private val gpsFixes: () -> Flow<LocationFix>,
+    private val stillFixes: () -> Flow<LocationFix>,
     private val passiveFixes: () -> Flow<LocationFix>,
     private val activities: () -> Flow<UserActivity>,
     private val now: () -> Long = System::currentTimeMillis,
-    private val stillJitterMillis: () -> Long = { Random.nextLong(STILL_JITTER_MILLIS) },
 ) {
     // shared by the groups' send loops, so a group that starts later is still right away
     @Volatile private var lastGoodFix: LocationFix? = null
@@ -106,9 +93,11 @@ class PositionProvider(
         emitAll(
             channelFlow {
                 launch { passiveFixes().collect { remember(it) } }
-                while (true) {
-                    send(Position(lastGoodFix!!, isFresh = false, UserActivity.Still))
-                    delay(millisToNextStillTick(now(), stillJitterMillis()))
+                send(Position(lastGoodFix!!, isFresh = false, UserActivity.Still))
+                stillFixes().collect { fix ->
+                    remember(fix)
+                    val good = lastGoodFix!!
+                    send(Position(good, isFresh = good == fix, UserActivity.Still))
                 }
             }
         )
