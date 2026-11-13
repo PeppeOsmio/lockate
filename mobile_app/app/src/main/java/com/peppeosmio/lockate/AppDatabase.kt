@@ -15,9 +15,10 @@ import com.peppeosmio.lockate.data.anonymous_group.database.AGMemberEntity
 import com.peppeosmio.lockate.data.anonymous_group.database.AnonymousGroupEntity
 import com.peppeosmio.lockate.data.anonymous_group.database.ConnectionEntity
 import com.peppeosmio.lockate.data.anonymous_group.database.MutedTargetEntity
+import com.peppeosmio.lockate.data.anonymous_group.database.PushRegistrationEntity
 
 @Database(
-    version = 6,
+    version = 7,
     entities =
         [
             ConnectionEntity::class,
@@ -25,6 +26,7 @@ import com.peppeosmio.lockate.data.anonymous_group.database.MutedTargetEntity
             AGMemberEntity::class,
             AGCircleEntity::class,
             MutedTargetEntity::class,
+            PushRegistrationEntity::class,
         ],
     exportSchema = true,
     autoMigrations =
@@ -33,6 +35,7 @@ import com.peppeosmio.lockate.data.anonymous_group.database.MutedTargetEntity
             AutoMigration(from = 3, to = 4),
             AutoMigration(from = 4, to = 5),
             AutoMigration(from = 5, to = 6, spec = AppDatabase.DropCircleSelfInside::class),
+            AutoMigration(from = 6, to = 7),
         ],
 )
 abstract class AppDatabase : RoomDatabase() {

@@ -7,6 +7,7 @@ import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotAdminExcepti
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.Base64Exception;
+import com.peppeosmio.lockate.anonymous_group.push.InvalidPushRegistrationException;
 import com.peppeosmio.lockate.common.dto.ErrorResponseDto;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -49,6 +50,13 @@ public class AGExceptionHandler {
   @ExceptionHandler(AGCircleConflictException.class)
   public ResponseEntity<ErrorResponseDto> handleAGCircleConflict(AGCircleConflictException e) {
     return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponseDto(e.getMessage()));
+  }
+
+  @ExceptionHandler(InvalidPushRegistrationException.class)
+  public ResponseEntity<ErrorResponseDto> handleInvalidPushRegistration(
+      InvalidPushRegistrationException e) {
+    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        .body(new ErrorResponseDto("invalid_push_registration"));
   }
 
   @ExceptionHandler(AGIdTakenException.class)

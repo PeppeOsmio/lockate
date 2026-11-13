@@ -26,6 +26,13 @@
         android:theme="@style/Theme.Lockate"
         android:usesCleartextTraffic="true">
         <service android:name=".android_service.AndroidSendLocationService" android:foregroundServiceType="location" />
+        <service
+            android:name=".android_service.LockateMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
         <receiver
             android:name=".android_service.BootReceiver"
             android:enabled="true"

@@ -9,6 +9,9 @@ import com.peppeosmio.lockate.anonymous_group.exceptions.AGCircleNotFoundExcepti
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotAdminException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
+import com.peppeosmio.lockate.anonymous_group.push.AGPushRegistrationReqDto;
+import com.peppeosmio.lockate.anonymous_group.push.AGPushService;
+import com.peppeosmio.lockate.anonymous_group.push.InvalidPushRegistrationException;
 import com.peppeosmio.lockate.anonymous_group.security.AGMemberAuthentication;
 import com.peppeosmio.lockate.anonymous_group.service.AGMemberMessageService;
 import com.peppeosmio.lockate.anonymous_group.service.AnonymousGroupService;
@@ -34,14 +37,27 @@ public class SecuredAGController {
   private final AnonymousGroupService anonymousGroupService;
   private final AGLocationStreams agLocationStreams;
   private final AGMemberMessageService agMemberMessageService;
+  private final AGPushService agPushService;
 
   public SecuredAGController(
       AnonymousGroupService anonymousGroupService,
       AGLocationStreams agLocationStreams,
-      AGMemberMessageService agMemberMessageService) {
+      AGMemberMessageService agMemberMessageService,
+      AGPushService agPushService) {
     this.anonymousGroupService = anonymousGroupService;
     this.agLocationStreams = agLocationStreams;
     this.agMemberMessageService = agMemberMessageService;
+    this.agPushService = agPushService;
+  }
+
+  @PutMapping("/{anonymousGroupId}/members/push-registration")
+  @ResponseStatus(HttpStatus.OK)
+  void registerPush(
+      @PathVariable UUID anonymousGroupId,
+      @Valid @RequestBody AGPushRegistrationReqDto dto,
+      AGMemberAuthentication authentication)
+      throws InvalidPushRegistrationException, UnauthorizedException {
+    agPushService.register(anonymousGroupId, authentication, dto);
   }
 
   @GetMapping("/{anonymousGroupId}/members/auth/verify")

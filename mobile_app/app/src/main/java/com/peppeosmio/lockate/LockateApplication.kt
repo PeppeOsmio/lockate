@@ -7,6 +7,10 @@ import android.content.Context
 import com.peppeosmio.lockate.android_service.AndroidSendLocationService
 import com.peppeosmio.lockate.di.appModule
 import com.peppeosmio.lockate.di.viewModelModule
+import com.peppeosmio.lockate.platform_service.FirebaseSetup
+import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
+import com.peppeosmio.lockate.service.push.PushRegistrationService
+import org.koin.android.ext.android.get
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.GlobalContext.startKoin
 
@@ -37,5 +41,7 @@ class LockateApplication : Application() {
                 )
             )
         }
+        FirebaseSetup.init(this)
+        get<PushRegistrationService>().start(get<AnonymousGroupService>().events)
     }
 }
