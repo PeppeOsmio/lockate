@@ -1,20 +1,14 @@
 package com.peppeosmio.lockate.anonymous_group.websocket;
 
-import com.peppeosmio.lockate.anonymous_group.dto.AGCircleEventReqDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGFrameDto;
-import com.peppeosmio.lockate.anonymous_group.dto.AGMemberMessageReqDto;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
-import com.peppeosmio.lockate.anonymous_group.presence.AGPresenceService;
 import com.peppeosmio.lockate.anonymous_group.security.AGMemberAuthentication;
 import com.peppeosmio.lockate.anonymous_group.service.AnonymousGroupService;
 import com.peppeosmio.lockate.common.exceptions.InvalidEncryptedDataException;
 import com.peppeosmio.lockate.common.exceptions.UnauthorizedException;
 import com.peppeosmio.lockate.redis.RedisService;
-import com.peppeosmio.lockate.utils.TTLMap;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
-import java.time.Duration;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -36,9 +30,10 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * The realtime channel of a group member: it receives the member's encrypted locations and circle
- * events and sends back the group's state and everything that happens in it. The other members'
- * locations go on the SSE stream instead, open only while the member looks at the map.
+ * The realtime channel of a group member: it sends the group's state and everything that happens in
+ * it. The member sends only pings: its locations, circle events and pause are posted over REST
+ * ({@code AGMemberMessageService}). The other members' locations go on the SSE stream instead, open
+ * only while the member looks at the map.
  *
  * <p>The client pings once a minute, so a socket that has sent nothing for {@link
  * #IDLE_TIMEOUT_MILLIS} belongs to a phone that died or lost the network without closing it.
@@ -49,9 +44,6 @@ public class AGWSHandler extends TextWebSocketHandler {
 
   public static final CloseStatus MEMBER_REMOVED = new CloseStatus(4401, "member_removed");
   public static final CloseStatus GROUP_DELETED = new CloseStatus(4404, "group_deleted");
-  public static final String MEMBER_LOCATION = "member.location";
-  public static final String CIRCLE_EVENT = "circle.event";
-  public static final String MEMBER_PAUSED = "member.paused";
   public static final String PING = "ping";
   // 2.5 ping intervals, so one lost ping doesn't close a live socket
   static final long IDLE_TIMEOUT_MILLIS = 150_000;
@@ -62,9 +54,6 @@ public class AGWSHandler extends TextWebSocketHandler {
   private final ObjectMapper objectMapper;
   private final AnonymousGroupService anonymousGroupService;
   private final RedisService redisService;
-  private final AGPresenceService presenceService;
-  private final TTLMap<UUID, LocalDateTime> lastSavedLocationsCache =
-      new TTLMap<>(Duration.ofMinutes(5));
   private final Map<String, Connection> connections = new ConcurrentHashMap<>();
   private final ScheduledExecutorService idleChecks = Executors.newSingleThreadScheduledExecutor();
   LongSupplier now = System::currentTimeMillis;
@@ -72,12 +61,10 @@ public class AGWSHandler extends TextWebSocketHandler {
   public AGWSHandler(
       ObjectMapper objectMapper,
       AnonymousGroupService anonymousGroupService,
-      RedisService redisService,
-      AGPresenceService presenceService) {
+      RedisService redisService) {
     this.objectMapper = objectMapper;
     this.anonymousGroupService = anonymousGroupService;
     this.redisService = redisService;
-    this.presenceService = presenceService;
     idleChecks.scheduleAtFixedRate(
         this::closeIdleConnections, IDLE_CHECK_SECONDS, IDLE_CHECK_SECONDS, TimeUnit.SECONDS);
   }
@@ -223,44 +210,16 @@ public class AGWSHandler extends TextWebSocketHandler {
       connection.lastReceivedMillis = now.getAsLong();
     }
     try {
-      var sessionAttributes = session.getAttributes();
-      var anonymousGroupId = (UUID) sessionAttributes.get("anonymousGroupId");
-      if (!(sessionAttributes.get("authentication")
-          instanceof AGMemberAuthentication agMemberAuthentication)) {
+      if (!(session.getAttributes().get("authentication") instanceof AGMemberAuthentication)) {
         throw new UnauthorizedException();
       }
       var tree = objectMapper.readTree(message.getPayload());
-      switch (tree.path("type").asString("")) {
-        case MEMBER_LOCATION -> {
-          var dto = objectMapper.treeToValue(tree, AGMemberMessageReqDto.class);
-          var lastSavedLocationTimestamp =
-              lastSavedLocationsCache.get(agMemberAuthentication.getId()).orElse(null);
-          var timestampSaved =
-              anonymousGroupService
-                  .relayMemberMessage(
-                      anonymousGroupId, agMemberAuthentication, dto, lastSavedLocationTimestamp)
-                  .orElse(null);
-          if (timestampSaved != null) {
-            lastSavedLocationsCache.put(agMemberAuthentication.getId(), timestampSaved);
-          }
-          presenceService.onLocation(anonymousGroupId, agMemberAuthentication.getId());
-        }
-        case PING ->
-            connection.session.sendMessage(
-                new TextMessage(objectMapper.writeValueAsString(AGFrameDto.pong())));
-        case MEMBER_PAUSED ->
-            presenceService.pause(anonymousGroupId, agMemberAuthentication.getId());
-        case CIRCLE_EVENT ->
-            anonymousGroupService.relayCircleEvent(
-                anonymousGroupId,
-                agMemberAuthentication,
-                objectMapper.treeToValue(tree, AGCircleEventReqDto.class));
-        default -> throw new InvalidEncryptedDataException();
+      if (!PING.equals(tree.path("type").asString(""))) {
+        throw new InvalidEncryptedDataException();
       }
-    } catch (AGNotFoundException
-        | UnauthorizedException
-        | InvalidEncryptedDataException
-        | JacksonException e) {
+      connection.session.sendMessage(
+          new TextMessage(objectMapper.writeValueAsString(AGFrameDto.pong())));
+    } catch (UnauthorizedException | InvalidEncryptedDataException | JacksonException e) {
       session.close(CloseStatus.BAD_DATA);
     } catch (Exception e) {
       session.close(CloseStatus.SERVER_ERROR);
