@@ -7,9 +7,11 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.peppeosmio.lockate.anonymous_group.dto.AGFrameDto;
+import com.peppeosmio.lockate.anonymous_group.push.AGPushService;
 import com.peppeosmio.lockate.redis.RedisService;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -29,6 +31,7 @@ import tools.jackson.databind.ObjectMapper;
 class AGPresenceServiceTest {
 
   @Mock private RedisService redisService;
+  @Mock private AGPushService pushService;
 
   private final ObjectMapper objectMapper = new ObjectMapper();
   private AGPresenceService service;
@@ -42,7 +45,7 @@ class AGPresenceServiceTest {
   @BeforeEach
   @SuppressWarnings("unchecked")
   void setUp() {
-    service = new AGPresenceService(redisService, objectMapper);
+    service = new AGPresenceService(redisService, objectMapper, pushService);
     var captor = ArgumentCaptor.forClass(Consumer.class);
     verify(redisService).enableExpiredEvents();
     verify(redisService).subscribePattern(eq("__keyevent@*__:expired"), captor.capture());
@@ -72,6 +75,7 @@ class AGPresenceServiceTest {
     assertThat(frame.type()).isEqualTo(AGFrameDto.MEMBER_PRESENCE);
     assertThat(frame.memberId()).isEqualTo(memberId);
     assertThat(frame.online()).isTrue();
+    verify(pushService).notifyGroup(groupId, memberId, frame);
   }
 
   @Test
@@ -82,6 +86,7 @@ class AGPresenceServiceTest {
     service.onLocation(groupId, memberId);
 
     verify(redisService, never()).publish(anyString(), anyString());
+    verifyNoInteractions(pushService);
   }
 
   @Test
@@ -107,6 +112,7 @@ class AGPresenceServiceTest {
     var frame = published();
     assertThat(frame.online()).isFalse();
     assertThat(frame.lastSeen()).isEqualTo(lastSeen);
+    verify(pushService).notifyGroup(groupId, memberId, frame);
   }
 
   @Test
@@ -116,6 +122,7 @@ class AGPresenceServiceTest {
     onExpired.accept(presenceKey);
 
     verify(redisService, never()).publish(anyString(), anyString());
+    verifyNoInteractions(pushService);
   }
 
   @Test
@@ -136,6 +143,7 @@ class AGPresenceServiceTest {
     var frame = published();
     assertThat(frame.online()).isFalse();
     assertThat(frame.lastSeen()).isEqualTo(lastSeen);
+    verify(pushService).notifyGroup(groupId, memberId, frame);
   }
 
   @Test

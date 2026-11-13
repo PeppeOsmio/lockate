@@ -34,6 +34,7 @@ import com.peppeosmio.lockate.domain.anonymous_group.Circle
 import com.peppeosmio.lockate.domain.anonymous_group.GroupFrame
 import com.peppeosmio.lockate.domain.anonymous_group.MemberMessage
 import com.peppeosmio.lockate.domain.anonymous_group.SendLocationStatus
+import com.peppeosmio.lockate.domain.crypto.EncryptedData
 import com.peppeosmio.lockate.exceptions.AGMemberNotAdminException
 import com.peppeosmio.lockate.exceptions.AGMemberUnauthorizedException
 import com.peppeosmio.lockate.exceptions.APIException
@@ -57,6 +58,7 @@ import com.peppeosmio.lockate.service.geofence.GeofenceTracker
 import com.peppeosmio.lockate.service.geofence.circleEventTexts
 import com.peppeosmio.lockate.service.geofence.presenceText
 import com.peppeosmio.lockate.service.location.PositionProvider
+import com.peppeosmio.lockate.service.push.openPushPayload
 import com.peppeosmio.lockate.utils.ErrorHandler
 import com.peppeosmio.lockate.utils.SendLoopLog
 import io.ktor.client.HttpClient
@@ -1720,6 +1722,76 @@ class AnonymousGroupService(
                     else -> return@withContext null
                 }
             if (texts.isEmpty()) null else CircleEvents(group.id, group.name, member.id, texts)
+        }
+
+    /**
+     * A push from a server, `{r, iv, c}`: the frame sealed with the key of the registration [r]
+     * names (see `PushRegistrationService`). Applies a removal or a deleted group, and returns what
+     * to notify for a circle event or a sharing change. Null for anything that doesn't open: an
+     * unknown registration (a group we left) or a push that wasn't sealed with our key.
+     */
+    suspend fun openPush(data: Map<String, String>): CircleEvents? =
+        withContext(Dispatchers.IO) {
+            val r = data["r"] ?: return@withContext null
+            val iv = data["iv"] ?: return@withContext null
+            val c = data["c"] ?: return@withContext null
+            val dto =
+                try {
+                    val registration =
+                        anonymousGroupDao.getPushRegistrationById(Base64.decode(r))
+                            ?: return@withContext null
+                    val key =
+                        keyStoreService.decrypt(
+                            EncryptedData(registration.keyCipher, registration.keyIv)
+                        )
+                    val plaintext = openPushPayload(cryptoService, key, r, iv, c)
+                    registration.anonymousGroupInternalId to
+                        apiJson.decodeFromString<AGFrameDto>(plaintext.decodeToString())
+                } catch (e: IllegalArgumentException) {
+                    return@withContext null
+                } catch (e: CryptoException) {
+                    return@withContext null
+                }
+            val (internalId, frame) = dto
+            val entity = anonymousGroupDao.getAGByInternalId(internalId) ?: return@withContext null
+            val group = AnonymousGroupMapper.toDomain(entity, keyStoreService)
+            val channelFrame =
+                when (frame.type) {
+                    AGFrameDto.GROUP_DELETED -> {
+                        setAGExistsRemoteFalse(group)
+                        return@withContext null
+                    }
+
+                    AGFrameDto.MEMBER_LEFT -> {
+                        if (frame.memberId == group.memberId) setAGIsMemberFalse(group)
+                        return@withContext null
+                    }
+
+                    AGFrameDto.CIRCLE_EVENT ->
+                        AGChannelFrame.CircleEvent(
+                            memberId = frame.memberId!!,
+                            transition =
+                                payloadCodec.decryptCircleEvent(
+                                    EncryptedDataMapper.toDomain(
+                                        frame.circleEvent!!.encryptedEvent
+                                    ),
+                                    group.key,
+                                    group.id,
+                                    frame.memberId,
+                                ),
+                            timestamp = frame.circleEvent.timestamp,
+                        )
+
+                    AGFrameDto.MEMBER_PRESENCE ->
+                        AGChannelFrame.MemberPresence(
+                            frame.memberId!!,
+                            frame.online!!,
+                            frame.lastSeen,
+                        )
+
+                    else -> return@withContext null
+                }
+            describeNotification(GroupFrame(group.internalId, group.id, channelFrame))
         }
 
     suspend fun listMutedTargets(anonymousGroupInternalId: Long): Set<String> =

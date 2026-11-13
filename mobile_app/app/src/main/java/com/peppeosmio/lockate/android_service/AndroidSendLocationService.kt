@@ -11,14 +11,10 @@ import android.os.IBinder
 import android.os.Looper
 import androidx.annotation.RequiresPermission
 import androidx.core.app.NotificationCompat
-import com.peppeosmio.lockate.MainActivity
 import com.peppeosmio.lockate.R
 import com.peppeosmio.lockate.domain.anonymous_group.notificationText
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
-import com.peppeosmio.lockate.service.geofence.CIRCLE_NOTIFICATION_TIMEOUT_MILLIS
-import com.peppeosmio.lockate.service.geofence.CircleNotification
-import com.peppeosmio.lockate.service.geofence.CircleNotificationBook
-import com.peppeosmio.lockate.service.geofence.CircleNotificationUpdate
+import com.peppeosmio.lockate.service.push.PushRegistrationService
 import com.peppeosmio.lockate.utils.SendLoopLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,6 +30,9 @@ class AndroidSendLocationService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val anonymousGroupService: AnonymousGroupService by inject<AnonymousGroupService>()
     private val sendLoopLog: SendLoopLog by inject<SendLoopLog>()
+    private val circleNotifier: CircleNotifier by inject<CircleNotifier>()
+    private val pushRegistrationService: PushRegistrationService by
+        inject<PushRegistrationService>()
     private val mainHandler = Handler(Looper.getMainLooper())
 
     // isRunning and the jobs are only touched on the main thread (onStartCommand and the posted
@@ -41,7 +40,6 @@ class AndroidSendLocationService : Service() {
     private var isRunning = false
     private var sendJob: Job? = null
     private var notifyJob: Job? = null
-    private val circleNotificationBook = CircleNotificationBook(System::currentTimeMillis)
     private var restartJob: Job? = null
     private var notificationBuilder: NotificationCompat.Builder? = null
 
@@ -91,13 +89,15 @@ class AndroidSendLocationService : Service() {
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         notifyJob?.cancel()
         notifyJob = serviceScope.launch {
-            // only the live frames notify, never the ones read back from the server
+            // only the live frames notify, never the ones read back from the server, and only for
+            // the groups whose server doesn't push the same events
             anonymousGroupService.groupFrames.collect { groupFrame ->
+                if (pushRegistrationService.isPushed(groupFrame.anonymousGroupInternalId)) {
+                    return@collect
+                }
                 val events =
                     anonymousGroupService.describeNotification(groupFrame) ?: return@collect
-                mainHandler.post {
-                    if (isRunning) showCircleNotifications(circleNotificationBook.record(events))
-                }
+                mainHandler.post { if (isRunning) circleNotifier.show(events) }
             }
         }
         sendJob = serviceScope.launch {
@@ -122,62 +122,6 @@ class AndroidSendLocationService : Service() {
             }
         }
     }
-
-    private fun showCircleNotifications(update: CircleNotificationUpdate) {
-        if (
-            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
-                PackageManager.PERMISSION_GRANTED
-        )
-            return
-        val openIntent =
-            PendingIntent.getActivity(
-                this,
-                2,
-                Intent(this, MainActivity::class.java),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-            )
-        val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.notify(
-            update.member.tag,
-            CIRCLE_NOTIFICATION_ID,
-            circleNotificationBuilder(update.member, openIntent)
-                .setStyle(
-                    NotificationCompat.BigTextStyle()
-                        .bigText(update.member.lines.joinToString("\n"))
-                )
-                .build(),
-        )
-        // the summary is silent: the member's notification is the one that alerts
-        notificationManager.notify(
-            update.summary.tag,
-            CIRCLE_NOTIFICATION_ID,
-            circleNotificationBuilder(update.summary, openIntent)
-                .setGroupSummary(true)
-                .setOnlyAlertOnce(true)
-                .setStyle(
-                    NotificationCompat.InboxStyle().also { style ->
-                        update.summary.lines.forEach { style.addLine(it) }
-                    }
-                )
-                .build(),
-        )
-    }
-
-    private fun circleNotificationBuilder(
-        notification: CircleNotification,
-        openIntent: PendingIntent,
-    ) =
-        NotificationCompat.Builder(this, CIRCLE_NOTIFICATION_CHANNEL_ID)
-            .setContentTitle(notification.title)
-            .setContentText(notification.text)
-            .setSmallIcon(R.drawable.ic_launcher_background)
-            .setContentIntent(openIntent)
-            .setGroup(notification.groupKey)
-            .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
-            .setWhen(notification.whenMillis)
-            .setShowWhen(true)
-            .setTimeoutAfter(CIRCLE_NOTIFICATION_TIMEOUT_MILLIS)
-            .setAutoCancel(true)
 
     private fun createNotificationBuilder(): NotificationCompat.Builder {
         val stopIntent =
@@ -277,7 +221,5 @@ class AndroidSendLocationService : Service() {
         const val ACTION_RESTART = "ACTION_RESTART"
         const val NOTIFICATION_CHANNEL_ID = "lockateLocation"
         const val CIRCLE_NOTIFICATION_CHANNEL_ID = "lockateCircles"
-        // the notifications of the circles are told apart by their tag
-        private const val CIRCLE_NOTIFICATION_ID = 100
     }
 }

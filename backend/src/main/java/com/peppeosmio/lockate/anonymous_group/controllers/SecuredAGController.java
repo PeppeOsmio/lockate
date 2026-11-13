@@ -10,6 +10,7 @@ import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotAdminExcepti
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.push.AGPushRegistrationReqDto;
+import com.peppeosmio.lockate.anonymous_group.push.AGPushRegistrationResDto;
 import com.peppeosmio.lockate.anonymous_group.push.AGPushService;
 import com.peppeosmio.lockate.anonymous_group.push.InvalidPushRegistrationException;
 import com.peppeosmio.lockate.anonymous_group.security.AGMemberAuthentication;
@@ -52,12 +53,12 @@ public class SecuredAGController {
 
   @PutMapping("/{anonymousGroupId}/members/push-registration")
   @ResponseStatus(HttpStatus.OK)
-  void registerPush(
+  AGPushRegistrationResDto registerPush(
       @PathVariable UUID anonymousGroupId,
       @Valid @RequestBody AGPushRegistrationReqDto dto,
       AGMemberAuthentication authentication)
       throws InvalidPushRegistrationException, UnauthorizedException {
-    agPushService.register(anonymousGroupId, authentication, dto);
+    return agPushService.register(anonymousGroupId, authentication, dto);
   }
 
   @GetMapping("/{anonymousGroupId}/members/auth/verify")

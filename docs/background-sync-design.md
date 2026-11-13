@@ -1,6 +1,7 @@
 # Background sync redesign
 
-Status: direction agreed. Steps 1, 2, 3, 4a and 4b done, not yet released; 4c next (see Timeline).
+Status: direction agreed. Steps 1 to 4 done, not yet released; step 5 next (see Timeline). Pushes
+reach no phone until our Firebase project exists and a relay runs.
 
 This document is the reference for how background sync works and why: every decision and its
 reasons are here, and it is updated together with the code.
@@ -127,9 +128,11 @@ Why these numbers, with a still fix every 10 min:
   ```
 
   `r` in the AAD stops a valid payload from being replayed under another registration.
-- Payload: event type, the event (circle events stay encrypted with the group key as today),
-  server timestamp. Group and member are known from `r`. Well under FCM's ~4 KB limit, so nothing
-  is stored server-side for later fetch.
+- Payload: the same `AGFrameDto` JSON the group's sockets get (`circle.event` with the event
+  still encrypted with the group key, `member.presence`, `member.left` with the member's own id
+  for a removal, `group.deleted`), so the app parses it with the code it has. The group is known
+  from `r`. A few hundred bytes, well under FCM's ~4 KB limit, so nothing is stored server-side
+  for later fetch.
 - On receipt (`onMessageReceived`): look up `r` in Room, drop the push if unknown (left group, old
   registration, forged); decrypt with its key, drop if that fails; then show the notification for
   that group. AES-GCM also authenticates: only the backend and the app hold the key, so neither the
@@ -204,9 +207,12 @@ backend (any server)                relay (ours)                    FCM         
   Firebase.
 
 **Backend configuration**
-- `lockate.push.relay-url`: default our relay; a self-hoster who builds their own app with their
-  own Firebase project can run their own relay and point here.
-- Without a reachable relay, the server still works; only notifications are missing.
+- `lockate.push.relay-url` (`PUSH_RELAY_URL`): our relay once it's hosted (empty for now, which
+  sends nothing); a self-hoster who builds their own app with their own Firebase project can run
+  their own relay and point here.
+- Without a relay, or with an unreachable one, the server still works; only notifications are
+  missing. The registration answers `{"pushes": false}` then, so the app keeps notifying from
+  the socket's frames for that server.
 
 **How it's built**
 - A new module in this repo, `push_relay/`: Quarkus compiled native (starts in milliseconds, so it
@@ -324,11 +330,23 @@ replaces it.
      over), 502 any other FCM failure. FCM HTTP v1 with `android.priority = HIGH`; the access
      token from the metadata server or a JWT signed with a key file. Testable alone with a token
      from 4a. Hosting still to decide: the image runs on both.
-   - **4c, pushes.** Backend: payload encryption (`{r, iv, c}`), pushes through the relay for
-     circle events, started/stopped sharing (Redis claim), removed / group deleted;
-     registration deleted when the relay answers 404. App: `FirebaseMessagingService` decrypts
-     and shows the notifications, cleans up on removed / group deleted; notifications from socket
-     frames stop.
+   - **4c, pushes.**
+     - Backend (`AGPushService`, `AGPushSender`): the frame sealed per member (`{r, iv, c}`,
+       AES-GCM with the member's key, AAD `lockate-push-v1|` + `r` in Base64), posted to the relay
+       after the transaction commits, on virtual threads. Pushed: a circle event to the group's
+       other registered members; started/stopped sharing (only on the instance that won the
+       Redis claim) to the others; `member.left` to a member the admin removes, read before the
+       row goes; `group.deleted` to every member but the one who deleted it, read before the
+       delete. A 404 from the relay clears the registration, only if it is still the same one.
+       The registration answers `{"pushes": true|false}`: whether a relay is configured.
+     - App: `LockateMessagingService.onMessageReceived` → `AnonymousGroupService.openPush`: find
+       `r` in Room (unknown → dropped), open it (`openPushPayload`; fails → dropped), then a
+       circle event or a sharing change is notified through `CircleNotifier` (shared with the
+       foreground service), a removal or a deleted group marks the group like the socket's 4401
+       / 4404. Notifications now come also with no foreground service running.
+     - The socket's frames stop notifying only for the groups whose server answered
+       `pushes: true` at this run's registration, so nothing is told twice and a server without
+       a relay keeps working as before.
 5. **Switch over.**
    - App: foreground service only while a group is shared.
    - Backend: group events go on the SSE stream; the WebSocket endpoint (`AGWSHandler`) is removed.

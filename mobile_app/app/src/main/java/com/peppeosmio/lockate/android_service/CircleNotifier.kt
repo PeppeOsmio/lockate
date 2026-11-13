@@ -75,7 +75,10 @@ class CircleNotifier(private val context: Context) {
         notification: CircleNotification,
         openIntent: PendingIntent,
     ) =
-        NotificationCompat.Builder(context, AndroidSendLocationService.CIRCLE_NOTIFICATION_CHANNEL_ID)
+        NotificationCompat.Builder(
+                context,
+                AndroidSendLocationService.CIRCLE_NOTIFICATION_CHANNEL_ID,
+            )
             .setContentTitle(notification.title)
             .setContentText(notification.text)
             .setSmallIcon(R.drawable.ic_launcher_background)

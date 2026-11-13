@@ -5,6 +5,7 @@ import com.peppeosmio.lockate.data.anonymous_group.database.AnonymousGroupEntity
 import com.peppeosmio.lockate.data.anonymous_group.database.PushRegistrationEntity
 import com.peppeosmio.lockate.data.anonymous_group.mappers.AnonymousGroupMapper
 import com.peppeosmio.lockate.data.anonymous_group.remote.PushRegistrationReqDto
+import com.peppeosmio.lockate.data.anonymous_group.remote.PushRegistrationResDto
 import com.peppeosmio.lockate.domain.crypto.EncryptedData
 import com.peppeosmio.lockate.platform_service.KeyStoreService
 import com.peppeosmio.lockate.platform_service.PushTokenSource
@@ -12,6 +13,7 @@ import com.peppeosmio.lockate.service.ConnectionService
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupEvent
 import com.peppeosmio.lockate.utils.SendLoopLog
 import io.ktor.client.HttpClient
+import io.ktor.client.call.body
 import io.ktor.client.request.headers
 import io.ktor.client.request.put
 import io.ktor.client.request.setBody
@@ -20,6 +22,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import java.security.SecureRandom
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.encoding.Base64
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -47,6 +50,13 @@ class PushRegistrationService(
     private val random: SecureRandom = SecureRandom(),
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val pushedGroups = ConcurrentHashMap.newKeySet<Long>()
+
+    /**
+     * Whether the group's server pushes its events to us, as it said when we last registered in
+     * this run; its socket frames then don't notify, or we would tell everything twice.
+     */
+    fun isPushed(anonymousGroupInternalId: Long) = anonymousGroupInternalId in pushedGroups
 
     /** Registers every group now, and each group we join or create from now on. */
     fun start(events: Flow<AnonymousGroupEvent>) {
@@ -99,8 +109,11 @@ class PushRegistrationService(
                     )
                 )
             }
-            if (response.status.value != 200) {
-                sendLoopLog.log("push registration ${group.id} ${response.status.value}")
+            if (response.status.value == 200 && response.body<PushRegistrationResDto>().pushes) {
+                pushedGroups.add(entity.internalId)
+            } else {
+                pushedGroups.remove(entity.internalId)
+                sendLoopLog.log("push registration ${group.id} ${response.status.value} no pushes")
             }
         } catch (e: CancellationException) {
             throw e

@@ -2,11 +2,15 @@ package com.peppeosmio.lockate.anonymous_group.push;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.groups.Tuple.tuple;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.peppeosmio.lockate.anonymous_group.dto.AGFrameDto;
 import com.peppeosmio.lockate.anonymous_group.entity.AGMemberEntity;
 import com.peppeosmio.lockate.anonymous_group.entity.AnonymousGroupEntity;
 import com.peppeosmio.lockate.anonymous_group.repository.AGMemberRepository;
@@ -14,11 +18,13 @@ import com.peppeosmio.lockate.anonymous_group.security.AGMemberAuthentication;
 import com.peppeosmio.lockate.common.classes.EncryptedString;
 import com.peppeosmio.lockate.common.exceptions.UnauthorizedException;
 import java.util.Base64;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -26,6 +32,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class AGPushServiceTest {
 
   @Mock private AGMemberRepository agMemberRepository;
+  @Mock private AGPushSender agPushSender;
 
   private AGPushService service;
   private final UUID groupId = UUID.randomUUID();
@@ -35,7 +42,7 @@ class AGPushServiceTest {
 
   @BeforeEach
   void setUp() {
-    service = new AGPushService(agMemberRepository);
+    service = new AGPushService(agMemberRepository, agPushSender);
     var group =
         new AnonymousGroupEntity(groupId, new EncryptedString("n".getBytes(), "iv".getBytes()));
     member =
@@ -62,8 +69,11 @@ class AGPushServiceTest {
     when(agMemberRepository.findByIdAndAnonymousGroupId(memberId, groupId))
         .thenReturn(Optional.of(member));
 
-    service.register(groupId, authentication, registration(16, 32));
+    when(agPushSender.isEnabled()).thenReturn(true);
 
+    var result = service.register(groupId, authentication, registration(16, 32));
+
+    assertThat(result.pushes()).isTrue();
     assertThat(member.getPushToken()).isEqualTo("fcm-token");
     assertThat(member.getPushRegistrationId()).isEqualTo(Base64.getDecoder().decode(bytes(16, 1)));
     assertThat(member.getPushKey()).isEqualTo(Base64.getDecoder().decode(bytes(32, 2)));
@@ -114,5 +124,57 @@ class AGPushServiceTest {
 
     assertThatThrownBy(() -> service.register(groupId, authentication, registration(16, 32)))
         .isInstanceOf(UnauthorizedException.class);
+  }
+
+  private AGMemberEntity registeredMember(UUID id) {
+    var group =
+        new AnonymousGroupEntity(groupId, new EncryptedString("n".getBytes(), "iv".getBytes()));
+    var other =
+        new AGMemberEntity(
+            id, new EncryptedString("m".getBytes(), "iv".getBytes()), "t".getBytes(), false, group);
+    other.registerPush("token-" + id, new byte[16], new byte[32]);
+    return other;
+  }
+
+  @Test
+  void notifyGroup_pushesToTheRegisteredMembersButTheOneWhoCausedIt() {
+    var other = registeredMember(UUID.randomUUID());
+    var causer = registeredMember(memberId);
+    when(agMemberRepository.findByAnonymousGroupIdAndPushTokenIsNotNull(groupId))
+        .thenReturn(List.of(causer, other));
+    var frame = AGFrameDto.memberPresence(memberId, true, null);
+
+    service.notifyGroup(groupId, memberId, frame);
+
+    var captor = ArgumentCaptor.forClass(List.class);
+    verify(agPushSender).send(captor.capture(), eq(frame));
+    assertThat(captor.getValue())
+        .extracting("memberId", "token")
+        .containsExactly(tuple(other.getId(), "token-" + other.getId()));
+  }
+
+  @Test
+  void notifyMember_withoutRegistration_pushesNothing() {
+    service.notifyMember(member, AGFrameDto.groupDeleted());
+
+    verifyNoInteractions(agPushSender);
+  }
+
+  @Test
+  void notifyMember_registered_pushesToIt() {
+    var registered = registeredMember(memberId);
+    var frame = AGFrameDto.memberLeft(memberId);
+
+    service.notifyMember(registered, frame);
+
+    verify(agPushSender).send(List.of(PushTarget.of(registered)), frame);
+  }
+
+  @Test
+  void register_withoutARelay_tellsTheAppThereAreNoPushes() throws Exception {
+    when(agMemberRepository.findByIdAndAnonymousGroupId(memberId, groupId))
+        .thenReturn(Optional.of(member));
+
+    assertThat(service.register(groupId, authentication, registration(16, 32)).pushes()).isFalse();
   }
 }

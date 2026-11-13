@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.room.Room
 import com.google.android.gms.location.LocationServices
 import com.peppeosmio.lockate.AppDatabase
+import com.peppeosmio.lockate.android_service.CircleNotifier
 import com.peppeosmio.lockate.dao.AnonymousGroupDao
 import com.peppeosmio.lockate.dao.ConnectionDao
 import com.peppeosmio.lockate.data.apiJson
@@ -192,6 +193,8 @@ val appModule = module {
     }
 
     single<PushTokenSource> { FirebasePushTokenSource() }
+
+    single<CircleNotifier> { CircleNotifier(androidContext()) }
 
     single<PushRegistrationService> {
         PushRegistrationService(
