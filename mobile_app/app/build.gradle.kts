@@ -7,6 +7,19 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+// The Firebase project's client config, public (it ships in the APK): from local.properties, a
+// Gradle property or the environment. Without it the app builds and runs with no pushes.
+val localProperties =
+    Properties().apply {
+        rootProject.file("local.properties").takeIf { it.exists() }?.reader()?.use { load(it) }
+    }
+
+fun firebaseConfig(name: String, env: String): String =
+    localProperties.getProperty("lockate.firebase.$name")
+        ?: findProperty("lockate.firebase.$name") as String?
+        ?: System.getenv(env)
+        ?: ""
+
 android {
     namespace = "com.peppeosmio.lockate"
     compileSdk = 37
@@ -17,6 +30,16 @@ android {
         targetSdk = 36
         versionCode = (findProperty("versionCode") as String?)?.toInt() ?: 1
         versionName = findProperty("versionName") as String? ?: "1.0"
+
+        for ((field, name, env) in
+            listOf(
+                Triple("FIREBASE_PROJECT_ID", "projectId", "LOCKATE_FIREBASE_PROJECT_ID"),
+                Triple("FIREBASE_APP_ID", "appId", "LOCKATE_FIREBASE_APP_ID"),
+                Triple("FIREBASE_API_KEY", "apiKey", "LOCKATE_FIREBASE_API_KEY"),
+                Triple("FIREBASE_SENDER_ID", "senderId", "LOCKATE_FIREBASE_SENDER_ID"),
+            )) {
+            buildConfigField("String", field, "\"${firebaseConfig(name, env)}\"")
+        }
     }
 
     signingConfigs {
@@ -55,6 +78,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     splits {
@@ -113,6 +137,8 @@ dependencies {
     implementation(libs.cryptography.provider.optimal)
 
     implementation(libs.play.services.location)
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
 
     implementation(libs.maplibre.compose)
     implementation(libs.maplibre.composeMaterial3)

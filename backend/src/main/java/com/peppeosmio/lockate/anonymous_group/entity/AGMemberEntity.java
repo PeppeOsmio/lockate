@@ -58,6 +58,16 @@ public class AGMemberEntity {
   @ToString.Exclude
   private List<AGMemberLocationEntity> agMemberLocationEntities;
 
+  // Where to push its notifications: see docs/background-sync-design.md
+  @Column(name = "push_token")
+  private String pushToken;
+
+  @Column(name = "push_registration_id")
+  private byte[] pushRegistrationId;
+
+  @Column(name = "push_key")
+  private byte[] pushKey;
+
   @OneToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "last_location_id")
   @OnDelete(action = OnDeleteAction.SET_NULL)
@@ -77,6 +87,12 @@ public class AGMemberEntity {
     this.isAGAdmin = isAGAdmin;
     this.anonymousGroupEntity = anonymousGroupEntity;
     this.anonymousGroupId = anonymousGroupEntity.getId();
+  }
+
+  public void registerPush(String token, byte[] registrationId, byte[] key) {
+    this.pushToken = token;
+    this.pushRegistrationId = registrationId;
+    this.pushKey = key;
   }
 
   public boolean hasToken(byte[] token) {

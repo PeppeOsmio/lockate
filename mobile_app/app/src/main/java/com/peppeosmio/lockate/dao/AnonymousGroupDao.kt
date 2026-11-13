@@ -9,6 +9,7 @@ import com.peppeosmio.lockate.data.anonymous_group.database.AGCircleEntity
 import com.peppeosmio.lockate.data.anonymous_group.database.AGMemberEntity
 import com.peppeosmio.lockate.data.anonymous_group.database.AnonymousGroupEntity
 import com.peppeosmio.lockate.data.anonymous_group.database.MutedTargetEntity
+import com.peppeosmio.lockate.data.anonymous_group.database.PushRegistrationEntity
 import com.peppeosmio.lockate.data.anonymous_group.mappers.CircleMapper
 import com.peppeosmio.lockate.domain.anonymous_group.Circle
 
@@ -233,4 +234,12 @@ interface AnonymousGroupDao {
         "DELETE FROM muted_target WHERE anonymousGroupInternalId = :agInternalId AND targetId = :targetId"
     )
     suspend fun deleteMutedTarget(agInternalId: Long, targetId: String)
+
+    @Query("SELECT * FROM push_registration WHERE anonymousGroupInternalId = :agInternalId")
+    suspend fun getPushRegistration(agInternalId: Long): PushRegistrationEntity?
+
+    @Query("SELECT * FROM push_registration WHERE registrationId = :registrationId")
+    suspend fun getPushRegistrationById(registrationId: ByteArray): PushRegistrationEntity?
+
+    @Insert suspend fun insertPushRegistration(registration: PushRegistrationEntity)
 }
