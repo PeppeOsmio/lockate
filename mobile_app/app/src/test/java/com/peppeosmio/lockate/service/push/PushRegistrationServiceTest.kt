@@ -15,9 +15,11 @@ import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.HttpRequestData
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.TextContent
+import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -27,6 +29,7 @@ import java.io.File
 import kotlin.io.encoding.Base64
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -37,12 +40,17 @@ class PushRegistrationServiceTest {
     private val keyStore = mockk<KeyStoreService>()
     private val requests = mutableListOf<HttpRequestData>()
     private var status = HttpStatusCode.OK
+    private var pushes = true
 
     private val httpClient =
         HttpClient(
             MockEngine { request ->
                 requests += request
-                respond("", status)
+                respond(
+                    """{"pushes":$pushes}""",
+                    status,
+                    headersOf(HttpHeaders.ContentType, "application/json"),
+                )
             }
         ) {
             install(ContentNegotiation) { json(apiJson) }
@@ -167,5 +175,29 @@ class PushRegistrationServiceTest {
         service().registerAll()
 
         assertEquals(1, requests.size)
+    }
+
+    @Test
+    fun `a group is pushed only if its server says it pushes`() = runTest {
+        coEvery { dao.listAGsToHold() } returns listOf(group(1, "g1"))
+        val service = service()
+
+        service.registerAll()
+        assertTrue(service.isPushed(1))
+
+        pushes = false
+        service.registerAll()
+        assertFalse(service.isPushed(1))
+    }
+
+    @Test
+    fun `a failed registration doesn't count as pushed`() = runTest {
+        coEvery { dao.listAGsToHold() } returns listOf(group(1, "g1"))
+        status = HttpStatusCode.InternalServerError
+
+        val service = service()
+        service.registerAll()
+
+        assertFalse(service.isPushed(1))
     }
 }

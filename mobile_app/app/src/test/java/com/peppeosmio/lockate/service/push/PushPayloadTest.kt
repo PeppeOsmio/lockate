@@ -22,7 +22,13 @@ class PushPayloadTest {
         val sealed = seal("frame".encodeToByteArray())
 
         val opened =
-            openPushPayload(crypto, key, r, Base64.encode(sealed.iv), Base64.encode(sealed.cipherText))
+            openPushPayload(
+                crypto,
+                key,
+                r,
+                Base64.encode(sealed.iv),
+                Base64.encode(sealed.cipherText),
+            )
 
         assertArrayEquals("frame".encodeToByteArray(), opened)
     }

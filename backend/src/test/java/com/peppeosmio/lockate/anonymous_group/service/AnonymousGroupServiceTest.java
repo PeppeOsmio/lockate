@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -26,6 +27,8 @@ import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.mapper.AGMemberMapper;
 import com.peppeosmio.lockate.anonymous_group.mapper.AnonymousGroupMapper;
 import com.peppeosmio.lockate.anonymous_group.presence.AGPresenceService;
+import com.peppeosmio.lockate.anonymous_group.push.AGPushService;
+import com.peppeosmio.lockate.anonymous_group.push.PushTarget;
 import com.peppeosmio.lockate.anonymous_group.repository.AGCircleRepository;
 import com.peppeosmio.lockate.anonymous_group.repository.AGLocationRepository;
 import com.peppeosmio.lockate.anonymous_group.repository.AGMemberRepository;
@@ -72,6 +75,7 @@ class AnonymousGroupServiceTest {
   @Mock private AnonymousGroupMapper anonymousGroupMapper;
   @Mock private AGMemberMapper agMemberMapper;
   @Mock private AGPresenceService presenceService;
+  @Mock private AGPushService pushService;
 
   private AnonymousGroupService service;
 
@@ -92,7 +96,8 @@ class AnonymousGroupServiceTest {
             objectMapper,
             anonymousGroupMapper,
             agMemberMapper,
-            presenceService);
+            presenceService,
+            pushService);
 
     groupEntity =
         new AnonymousGroupEntity(
@@ -815,6 +820,7 @@ class AnonymousGroupServiceTest {
     assertThat(frame.circleEvent().encryptedEvent()).isEqualTo(event);
     assertThat(frame.circleEvent().timestamp()).isNotNull();
     verify(redisService).publish(eq("ag-" + groupId + "-events"), eq("{}"));
+    verify(pushService).notifyGroup(groupId, memberId, frame);
   }
 
   @Test
@@ -886,9 +892,16 @@ class AnonymousGroupServiceTest {
   void deleteAnonymousGroupForAdmin_publishesGroupDeleted() throws Exception {
     when(anonymousGroupRepository.existsById(groupId)).thenReturn(true);
 
+    var targets = List.of(new PushTarget(UUID.randomUUID(), "t", new byte[16], new byte[32]));
+    when(pushService.targets(groupId, null)).thenReturn(targets);
+
     service.deleteAnonymousGroupForAdmin(groupId);
 
     assertThat(publishedFrame().type()).isEqualTo(AGFrameDto.GROUP_DELETED);
+    var order = inOrder(pushService, anonymousGroupRepository);
+    order.verify(pushService).targets(groupId, null);
+    order.verify(anonymousGroupRepository).deleteAnonymousGroup(groupId);
+    order.verify(pushService).notifyTargets(targets, AGFrameDto.groupDeleted());
   }
 
   // ---------- listGroupsForAdmin ----------
@@ -993,10 +1006,15 @@ class AnonymousGroupServiceTest {
     var member = newMember(memberId, "token".getBytes(), true, groupEntity);
     when(agMemberRepository.findById(memberId)).thenReturn(Optional.of(member));
     var authentication = new AGMemberAuthentication(memberId);
+    var targets = List.of(new PushTarget(UUID.randomUUID(), "t", new byte[16], new byte[32]));
+    when(pushService.targets(groupId, memberId)).thenReturn(targets);
 
     service.deleteAnonymousGroup(groupId, authentication);
 
-    verify(anonymousGroupRepository).deleteAnonymousGroup(groupId);
+    var order = inOrder(pushService, anonymousGroupRepository);
+    order.verify(pushService).targets(groupId, memberId);
+    order.verify(anonymousGroupRepository).deleteAnonymousGroup(groupId);
+    order.verify(pushService).notifyTargets(targets, AGFrameDto.groupDeleted());
   }
 
   @Test
@@ -1113,7 +1131,9 @@ class AnonymousGroupServiceTest {
 
     service.deleteMemberForAdmin(groupId, memberId);
 
-    verify(agMemberRepository).deleteById(memberId);
+    var order = inOrder(pushService, agMemberRepository);
+    order.verify(pushService).notifyMember(member, AGFrameDto.memberLeft(memberId));
+    order.verify(agMemberRepository).deleteById(memberId);
     verify(presenceService).forget(groupId, memberId);
   }
 

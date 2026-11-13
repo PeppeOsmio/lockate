@@ -1,6 +1,7 @@
 package com.peppeosmio.lockate.anonymous_group.presence;
 
 import com.peppeosmio.lockate.anonymous_group.dto.AGFrameDto;
+import com.peppeosmio.lockate.anonymous_group.push.AGPushService;
 import com.peppeosmio.lockate.anonymous_group.service.AnonymousGroupService;
 import com.peppeosmio.lockate.redis.RedisService;
 import java.time.Duration;
@@ -35,9 +36,13 @@ public class AGPresenceService {
   private final RedisService redisService;
   private final ObjectMapper objectMapper;
 
-  public AGPresenceService(RedisService redisService, ObjectMapper objectMapper) {
+  private final AGPushService pushService;
+
+  public AGPresenceService(
+      RedisService redisService, ObjectMapper objectMapper, AGPushService pushService) {
     this.redisService = redisService;
     this.objectMapper = objectMapper;
+    this.pushService = pushService;
     redisService.enableExpiredEvents();
     redisService.subscribePattern("__keyevent@*__:expired", this::onExpired);
   }
@@ -59,7 +64,7 @@ public class AGPresenceService {
             LocalDateTime.now(ZoneOffset.UTC).toString(),
             ONLINE_TTL);
     if (previous.isEmpty()) {
-      publish(anonymousGroupId, AGFrameDto.memberPresence(memberId, true, null));
+      announce(anonymousGroupId, memberId, AGFrameDto.memberPresence(memberId, true, null));
     }
   }
 
@@ -90,9 +95,16 @@ public class AGPresenceService {
   }
 
   private void announceOffline(UUID anonymousGroupId, UUID memberId, String lastSeen) {
-    publish(
+    announce(
         anonymousGroupId,
+        memberId,
         AGFrameDto.memberPresence(memberId, false, LocalDateTime.parse(lastSeen)));
+  }
+
+  // Only the instance that won the claim gets here, so the others are told once
+  private void announce(UUID anonymousGroupId, UUID memberId, AGFrameDto frame) {
+    publish(anonymousGroupId, frame);
+    pushService.notifyGroup(anonymousGroupId, memberId, frame);
   }
 
   private void publish(UUID anonymousGroupId, AGFrameDto frame) {

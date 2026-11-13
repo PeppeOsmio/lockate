@@ -28,5 +28,7 @@ data class AGFrameDto(
         const val CIRCLE_EVENT = "circle.event"
         const val MEMBER_PRESENCE = "member.presence"
         const val PONG = "pong"
+        // only in pushes: a socket is closed with 4404 instead
+        const val GROUP_DELETED = "group.deleted"
     }
 }

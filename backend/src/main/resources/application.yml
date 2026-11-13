@@ -33,6 +33,9 @@ logging:
 
 lockate:
   require-api-key: ${REQUIRE_API_KEY:false}
+  # The push relay that forwards notifications to FCM; empty sends none
+  push:
+    relay-url: ${PUSH_RELAY_URL:}
   admin-api-key: ${ADMIN_API_KEY:}
   admin-ui-origin: ${ADMIN_UI_ORIGIN:http://localhost:5173}
   retention:

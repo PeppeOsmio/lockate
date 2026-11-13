@@ -10,6 +10,7 @@ import com.peppeosmio.lockate.anonymous_group.exceptions.*;
 import com.peppeosmio.lockate.anonymous_group.mapper.AGMemberMapper;
 import com.peppeosmio.lockate.anonymous_group.mapper.AnonymousGroupMapper;
 import com.peppeosmio.lockate.anonymous_group.presence.AGPresenceService;
+import com.peppeosmio.lockate.anonymous_group.push.AGPushService;
 import com.peppeosmio.lockate.anonymous_group.repository.AGCircleRepository;
 import com.peppeosmio.lockate.anonymous_group.repository.AGGroupSummaryProjection;
 import com.peppeosmio.lockate.anonymous_group.repository.AGLocationRepository;
@@ -55,6 +56,7 @@ public class AnonymousGroupService {
   private final AnonymousGroupMapper anonymousGroupMapper;
   private final AGMemberMapper agMemberMapper;
   private final AGPresenceService presenceService;
+  private final AGPushService pushService;
 
   public AnonymousGroupService(
       AGLocationConfigurationProperties agLocationConfigurationProperties,
@@ -67,7 +69,8 @@ public class AnonymousGroupService {
       ObjectMapper objectMapper,
       AnonymousGroupMapper anonymousGroupMapper,
       AGMemberMapper agMemberMapper,
-      AGPresenceService presenceService) {
+      AGPresenceService presenceService,
+      AGPushService pushService) {
     this.agLocationConfigurationProperties = agLocationConfigurationProperties;
     this.agMemberRepository = agMemberRepository;
     this.anonymousGroupRepository = anonymousGroupRepository;
@@ -79,6 +82,7 @@ public class AnonymousGroupService {
     this.anonymousGroupMapper = anonymousGroupMapper;
     this.agMemberMapper = agMemberMapper;
     this.presenceService = presenceService;
+    this.pushService = pushService;
   }
 
   public static final int MAX_CIRCLES_PER_GROUP = 50;
@@ -406,11 +410,12 @@ public class AnonymousGroupService {
       throw new InvalidEncryptedDataException();
     }
     dto.encryptedEvent().toEncryptedStringOfLength(CIRCLE_EVENT_CIPHER_BYTES);
-    publishFrame(
-        anonymousGroupId,
+    var frame =
         AGFrameDto.circleEventOf(
             authentication.getId(),
-            new CircleEventDto(dto.encryptedEvent(), LocalDateTime.now(ZoneOffset.UTC))));
+            new CircleEventDto(dto.encryptedEvent(), LocalDateTime.now(ZoneOffset.UTC)));
+    publishFrame(anonymousGroupId, frame);
+    pushService.notifyGroup(anonymousGroupId, authentication.getId(), frame);
   }
 
   @Transactional
@@ -472,8 +477,10 @@ public class AnonymousGroupService {
     if (!agMemberEntity.isAGAdmin()) {
       throw new AGMemberNotAdminException();
     }
+    var targets = pushService.targets(anonymousGroupId, agMemberEntity.getId());
     anonymousGroupRepository.deleteAnonymousGroup(anonymousGroupId);
     publishFrame(anonymousGroupId, AGFrameDto.groupDeleted());
+    pushService.notifyTargets(targets, AGFrameDto.groupDeleted());
   }
 
   @Transactional
@@ -498,8 +505,10 @@ public class AnonymousGroupService {
     if (!anonymousGroupRepository.existsById(anonymousGroupId)) {
       throw new AGNotFoundException(anonymousGroupId);
     }
+    var targets = pushService.targets(anonymousGroupId, null);
     anonymousGroupRepository.deleteAnonymousGroup(anonymousGroupId);
     publishFrame(anonymousGroupId, AGFrameDto.groupDeleted());
+    pushService.notifyTargets(targets, AGFrameDto.groupDeleted());
   }
 
   @Transactional
@@ -509,6 +518,7 @@ public class AnonymousGroupService {
         agMemberRepository
             .findByIdAndAnonymousGroupId(agMemberId, anonymousGroupId)
             .orElseThrow(() -> new AGMemberNotFoundException(agMemberId));
+    pushService.notifyMember(agMemberEntity, AGFrameDto.memberLeft(agMemberId));
     agMemberRepository.deleteById(agMemberEntity.getId());
     presenceService.forget(anonymousGroupId, agMemberId);
     publishFrame(anonymousGroupId, AGFrameDto.memberLeft(agMemberId));
