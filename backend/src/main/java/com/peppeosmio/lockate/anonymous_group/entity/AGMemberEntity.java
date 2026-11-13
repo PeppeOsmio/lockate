@@ -2,6 +2,8 @@ package com.peppeosmio.lockate.anonymous_group.entity;
 
 import com.peppeosmio.lockate.common.classes.EncryptedString;
 import jakarta.persistence.*;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -9,7 +11,6 @@ import java.util.UUID;
 import lombok.*;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
-import org.springframework.security.crypto.bcrypt.BCrypt;
 
 @Entity
 @Table(
@@ -25,8 +26,10 @@ public class AGMemberEntity {
   @Column(name = "id")
   private UUID id;
 
+  // SHA-256, not BCrypt: the token is 32 random bytes, so a slow hash adds no protection and every
+  // request checks it
   @Column(name = "token_hash", nullable = false)
-  private String tokenHash;
+  private byte[] tokenHash;
 
   // Encrypted fields
   @Column(name = "name_cipher", nullable = false)
@@ -66,14 +69,25 @@ public class AGMemberEntity {
       byte[] token,
       boolean isAGAdmin,
       AnonymousGroupEntity anonymousGroupEntity) {
-    var tokenHash = BCrypt.hashpw(token, BCrypt.gensalt());
     this.id = id;
     this.nameCipher = encryptedUserName.cipherText();
     this.nameIv = encryptedUserName.iv();
-    this.tokenHash = tokenHash;
+    this.tokenHash = sha256(token);
     this.createdAt = LocalDateTime.now(ZoneOffset.UTC);
     this.isAGAdmin = isAGAdmin;
     this.anonymousGroupEntity = anonymousGroupEntity;
     this.anonymousGroupId = anonymousGroupEntity.getId();
+  }
+
+  public boolean hasToken(byte[] token) {
+    return MessageDigest.isEqual(tokenHash, sha256(token));
+  }
+
+  private static byte[] sha256(byte[] data) {
+    try {
+      return MessageDigest.getInstance("SHA-256").digest(data);
+    } catch (NoSuchAlgorithmException e) {
+      throw new IllegalStateException("SHA-256 is always available on the JVM", e);
+    }
   }
 }

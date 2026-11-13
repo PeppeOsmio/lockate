@@ -56,7 +56,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import org.springframework.security.crypto.bcrypt.BCrypt;
 import tools.jackson.databind.ObjectMapper;
 
 @ExtendWith(MockitoExtension.class)
@@ -205,8 +204,8 @@ class AnonymousGroupServiceTest {
     assertThat(savedMember.isAGAdmin()).isTrue();
     var rawToken = Base64.getDecoder().decode(result.authenticatedMemberInfo().token());
     assertThat(rawToken).hasSize(32);
-    assertThat(savedMember.getTokenHash()).isNotEqualTo(result.authenticatedMemberInfo().token());
-    assertThat(BCrypt.checkpw(rawToken, savedMember.getTokenHash())).isTrue();
+    assertThat(savedMember.getTokenHash()).isNotEqualTo(rawToken);
+    assertThat(savedMember.hasToken(rawToken)).isTrue();
   }
 
   @Test

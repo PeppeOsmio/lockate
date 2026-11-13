@@ -36,7 +36,6 @@ import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import org.springframework.security.crypto.bcrypt.BCrypt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -237,7 +236,7 @@ public class AnonymousGroupService {
       throw new UnauthorizedException();
     }
     var decoder = Base64.getDecoder();
-    if (!BCrypt.checkpw(decoder.decode(memberToken), agMemberEntity.getTokenHash())) {
+    if (!agMemberEntity.hasToken(decoder.decode(memberToken))) {
       log.error("Wrong token for member " + agMemberId);
       throw new UnauthorizedException();
     }

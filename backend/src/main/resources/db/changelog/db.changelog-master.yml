@@ -17,3 +17,5 @@ databaseChangeLog:
       file: classpath:db/changelog/circle-fields.sql
   - include:
       file: classpath:db/changelog/name-fields.sql
+  - include:
+      file: classpath:db/changelog/sha256-member-tokens.sql
