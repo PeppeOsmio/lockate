@@ -65,7 +65,8 @@ public class FcmClient {
         }
       };
     } catch (IOException e) {
-      LOG.warnf("Can't reach FCM: %s", e.getMessage());
+      // also a failed access-token request, which happens first
+      LOG.warnf("Can't push: %s", e.toString());
       return Result.FAILED;
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
