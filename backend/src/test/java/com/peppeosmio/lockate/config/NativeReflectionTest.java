@@ -9,6 +9,7 @@ import com.peppeosmio.lockate.anonymous_group.dto.AGFrameDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGJoinReqDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGJoinResDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGMemberMessageReqDto;
+import com.peppeosmio.lockate.anonymous_group.dto.AGPostLocationReqDto;
 import com.peppeosmio.lockate.anonymous_group.dto.CircleDto;
 import com.peppeosmio.lockate.anonymous_group.dto.CircleEventDto;
 import com.peppeosmio.lockate.anonymous_group.dto.CircleUpsertReqDto;
@@ -122,6 +123,8 @@ class NativeReflectionTest {
     assertThat(reflection.onMethodInvocation(InviterFinalDto.class, "payload")).accepts(hints);
     assertThat(reflection.onMethodInvocation(AGJoinReqDto.class, "joinToken")).accepts(hints);
     assertThat(reflection.onMethodInvocation(AGJoinResDto.class, "members")).accepts(hints);
+    assertThat(reflection.onMethodInvocation(AGPostLocationReqDto.class, "circleEvents"))
+        .accepts(hints);
     assertThat(reflection.onMethodInvocation(EncryptedDataDto.class, "cipherText")).accepts(hints);
     assertThat(reflection.onMethodInvocation(CircleUpsertReqDto.class, "encryptedName"))
         .accepts(hints);

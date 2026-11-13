@@ -20,7 +20,8 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Service
 public class AGPresenceService {
-  static final Duration TIMEOUT = Duration.ofMinutes(5);
+  // = the grey dot on the map; a still phone sends every 10 min, so two lost fixes in a row
+  static final Duration TIMEOUT = Duration.ofMinutes(30);
   static final Duration ONLINE_TTL = TIMEOUT.plusMinutes(1);
   private static final String PRESENCE_PREFIX = "ag-presence:";
 

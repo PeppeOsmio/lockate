@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.peppeosmio.lockate.anonymous_group.dto.AGFrameDto;
 import com.peppeosmio.lockate.redis.RedisService;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -46,6 +47,12 @@ class AGPresenceServiceTest {
     verify(redisService).enableExpiredEvents();
     verify(redisService).subscribePattern(eq("__keyevent@*__:expired"), captor.capture());
     onExpired = captor.getValue();
+  }
+
+  @Test
+  void timeouts_matchTheGreyDotAndOutliveTwoLostStillFixes() {
+    assertThat(AGPresenceService.TIMEOUT).isEqualTo(Duration.ofMinutes(30));
+    assertThat(AGPresenceService.ONLINE_TTL).isEqualTo(Duration.ofMinutes(31));
   }
 
   private AGFrameDto published() {
