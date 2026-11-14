@@ -108,6 +108,54 @@ class GeofenceTrackerTest {
     }
 
     @Test
+    fun `a circle learned after the fix that crossed it announces the crossing on that fix`() {
+        val tracker = tracker()
+        tracker.update(north(500.0))
+        tracker.unsent(north(50.0))
+
+        tracker.upsertCircle(home)
+
+        assertEquals(listOf(enter("home")), tracker.unsent(north(50.0)))
+    }
+
+    @Test
+    fun `a circle crossed while the posts failed is announced when we learn of it`() {
+        val tracker = tracker()
+        tracker.update(north(500.0), nowMillis = 0)
+        tracker.unsent(north(300.0), nowMillis = 1_000)
+        tracker.unsent(north(50.0), nowMillis = 2_000)
+        tracker.unsent(north(40.0), nowMillis = 3_000)
+
+        tracker.upsertCircle(home)
+
+        assertEquals(listOf(enter("home")), tracker.unsent(north(40.0), nowMillis = 4_000))
+    }
+
+    @Test
+    fun `a circle created around us while we stand still announces nothing`() {
+        val tracker = tracker()
+        tracker.update(north(10.0))
+        tracker.unsent(north(10.0))
+
+        tracker.upsertCircle(home)
+
+        assertTrue(tracker.unsent(north(10.0)).isEmpty())
+    }
+
+    @Test
+    fun `a crossing older than the pending limit isn't announced`() {
+        val tracker = tracker()
+        tracker.update(north(500.0), nowMillis = 0)
+        tracker.unsent(north(50.0), nowMillis = GeofenceTracker.MAX_PENDING_MILLIS)
+
+        tracker.upsertCircle(home)
+
+        assertTrue(
+            tracker.unsent(north(50.0), nowMillis = GeofenceTracker.MAX_PENDING_MILLIS).isEmpty()
+        )
+    }
+
+    @Test
     fun `a circle moved onto us takes us as inside silently`() {
         val tracker = tracker(home)
         tracker.update(north(1_000.0))

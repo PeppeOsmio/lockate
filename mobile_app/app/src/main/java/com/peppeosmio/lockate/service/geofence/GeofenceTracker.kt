@@ -11,19 +11,26 @@ import kotlin.math.min
  * Tells when we enter or leave the circles of a group, from our own fixes. Entering needs to get
  * [HYSTERESIS_MAX_METERS] (at most a fifth of the radius) inside the circle and leaving that far
  * outside, so a GPS jittering on the edge doesn't produce a burst of events, and fixes less
- * accurate than [MAX_ACCURACY_METERS] are ignored. The first fix, and a circle that is new, moved
- * or resized, take the state of our position without announcing anything, so nobody is told about
- * an arrival that happened hours ago.
+ * accurate than [MAX_ACCURACY_METERS] are ignored. The first fix takes the state of our position
+ * without announcing anything, so nobody is told about an arrival that happened hours ago. A circle
+ * that is new, moved or resized takes the state of the last position the server got from us (the
+ * last [confirm]), if that is less than [MAX_PENDING_MILLIS] old, else of our position: updating
+ * again then announces a crossing made since, also while the posts failed, while a circle created
+ * around us stays silent. The send loop learns of a changed circle only from a post's answer (see
+ * `docs/architecture/sending.md`).
  *
  * The transitions are computed against the state the server confirmed, not the last one seen: they
  * are returned by every [update] until [confirm] is called with them, so a post that failed is
  * repeated by the next one, an entry and an exit both made meanwhile cancel out, and one waiting
  * for more than [MAX_PENDING_MILLIS] is dropped, since the receivers would take it as just
- * happened. Called by the send loop and by the channel's frames, so every method is synchronized.
+ * happened.
  */
 class GeofenceTracker {
     private val circles = mutableMapOf<String, Circle>()
     private var position: Coordinates? = null
+    // the last position the server got from us, and when
+    private var confirmedPosition: Coordinates? = null
+    private var confirmedAt = 0L
     private val inside = mutableMapOf<String, Boolean>()
     private val confirmed = mutableMapOf<String, Boolean>()
     private val divergedAt = mutableMapOf<String, Long>()
@@ -38,7 +45,7 @@ class GeofenceTracker {
     fun upsertCircle(circle: Circle) {
         val old = circles.put(circle.id, circle)
         if (old == null || old.center != circle.center || old.radiusMeters != circle.radiusMeters) {
-            position?.let { seed(circle.id, circle.contains(it)) }
+            (confirmedPosition ?: position)?.let { seed(circle.id, circle.contains(it)) }
         }
     }
 
@@ -54,6 +61,7 @@ class GeofenceTracker {
     @Synchronized
     fun forgetPosition() {
         position = null
+        confirmedPosition = null
         inside.clear()
         confirmed.clear()
         divergedAt.clear()
@@ -68,9 +76,11 @@ class GeofenceTracker {
         return pending(nowMillis)
     }
 
-    /** The server got [transitions]: they are no longer returned. */
+    /** The server got our position and [transitions]: they are no longer returned. */
     @Synchronized
     fun confirm(transitions: List<CircleTransition>, nowMillis: Long) {
+        confirmedPosition = position
+        confirmedAt = nowMillis
         transitions
             .filter { it.circleId in circles }
             .forEach {
@@ -104,6 +114,7 @@ class GeofenceTracker {
     }
 
     private fun pending(nowMillis: Long): List<CircleTransition> {
+        if (nowMillis - confirmedAt >= MAX_PENDING_MILLIS) confirmedPosition = null
         divergedAt.entries.removeAll { (id, since) ->
             (nowMillis - since >= MAX_PENDING_MILLIS).also { stale ->
                 if (stale) confirmed[id] = inside.getValue(id)

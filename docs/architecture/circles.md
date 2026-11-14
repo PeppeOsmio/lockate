@@ -19,9 +19,12 @@ or by the receivers (they'd need our positions continuously). `GeofenceTracker`,
 tracks only ourselves:
 
 - it feeds on our own fixes and ignores inaccurate ones;
-- it starts silently from the first fix, and reseeds silently when a circle is added, moved or
-  resized, so editing a circle doesn't notify anyone; the circles come from Room, refreshed when a
-  location post says they changed ([Sending positions](sending.md#keeping-the-circles-current));
+- it starts silently from the first fix; a circle added, moved or resized takes the state of the
+  last position the server got from us (if under 5 minutes old), so a crossing made since is
+  announced but a circle created around us isn't, and editing a circle notifies nobody;
+- its circles come from Room, refreshed when a location post finds they changed, and events are
+  only ever sent computed on the circles the server has
+  ([Sending positions](sending.md#keeping-the-circles-current));
 - each transition is a circle event: circle id + enter/exit, one AES-GCM field of 33 bytes, no
   timestamp (receivers use the server's).
 
