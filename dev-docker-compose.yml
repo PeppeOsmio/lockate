@@ -63,7 +63,8 @@ services:
         condition: service_started
     command: mvn -Duser.home=/var/maven spring-boot:run -Pdev
 
-  # The push relay in JVM dev mode. It needs a service-account key of the Firebase project in
+  # The push relay in JVM dev mode, for the staging Firebase project (the staging app flavor). It
+  # needs the key that `terragrunt apply` in push_relay/terraform/live/staging writes to
   # push_relay/.secrets/service-account.json (not committed); without it pushes fail with 502 and
   # everything else works
   push-relay:
@@ -75,7 +76,7 @@ services:
       - backend_m2:/var/maven/.m2
     environment:
       MAVEN_CONFIG: /var/maven/.m2
-      FCM_PROJECT_ID: ${FCM_PROJECT_ID:-lockate}
+      FCM_PROJECT_ID: ${FCM_PROJECT_ID:-lockate-staging}
       GOOGLE_APPLICATION_CREDENTIALS: /app/.secrets/service-account.json
     ports:
       - "3120:8080"

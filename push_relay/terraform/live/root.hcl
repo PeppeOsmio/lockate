@@ -13,6 +13,6 @@ remote_state {
 
 inputs = {
   region         = "europe-west1"
-  dockerhub_user = get_env("DOCKERHUB_USERNAME")
-  image_version  = get_env("RELAY_VERSION")
+  dockerhub_user = get_env("DOCKERHUB_USERNAME", "")
+  image_version  = get_env("RELAY_VERSION", "")
 }

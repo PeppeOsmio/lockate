@@ -18,26 +18,38 @@ variables; a staging APK is built locally (`./gradlew assembleStagingRelease`).
 
 ## Servers and relay
 
+Each environment has its own Firebase project and relays, always paired: an FCM token belongs to
+one project, so the staging app gets pushes only through a staging relay.
+
+| | Prod | Staging |
+|---|---|---|
+| App | `com.peppeosmio.lockate` | `com.peppeosmio.lockate.staging` |
+| Google Cloud / Firebase project | `lockate` | `lockate-staging` |
+| Relays | Cloud Run | Cloud Run, and the dev Docker Compose |
+
 For development, `dev-docker-compose.yml` runs the relay in JVM dev mode next to the backend
-(`localhost:3120`, already the compose backend's `PUSH_RELAY_URL`), with a service-account key in
-`push_relay/.secrets/service-account.json`, never committed. A backend run on the host sets
-`PUSH_RELAY_URL=http://localhost:3120`.
+(`localhost:3120`, already the compose backend's `PUSH_RELAY_URL`, `FCM_PROJECT_ID=lockate-staging`)
+with the key of the `push-relay-dev` service account, which `terragrunt apply` in
+`live/staging` writes to `push_relay/.secrets/service-account.json` (git-ignored). A backend run on
+the host sets `PUSH_RELAY_URL=http://localhost:3120`. Keys exist only for staging; prod's relay uses
+its Cloud Run identity. Several relays can serve one project: each holds the project's credentials,
+and their rate limits are counted separately.
 
 A staging backend is just another Lockate server, with its own database and Valkey; the app picks
 the server at first run anyway.
 
-The relay doesn't look at the app, so one relay serves both flavors when both Android apps are in
-the same Firebase project. Terragrunt also has a separate `staging` environment (Google Cloud
-project `lockate-staging`, its own Firebase project and relay), for testing changes to the relay
-itself; a staging app built against it needs that project's Firebase values.
+Separate projects let us change the relay, its deployment or Firebase settings without touching
+the people using the app, and a leaked development key reaches only staging installs. FCM works on
+the free Spark plan; only Cloud Run needs Blaze. Both projects are on Blaze, under one billing
+account.
 
 ```
 push_relay/terraform/
   modules/push-relay/     the resources
   live/root.hcl           shared: local state per environment, region, image from env
-  live/prod/              project lockate
-  live/staging/           project lockate-staging
+  live/prod/              project lockate: Cloud Run
+  live/staging/           project lockate-staging: Cloud Run and the dev key
 ```
 
-`DOCKERHUB_USERNAME` and `RELAY_VERSION` pick the image; `terragrunt output url` gives the
-environment's `PUSH_RELAY_URL`. State is local and not committed.
+`DOCKERHUB_USERNAME` and `RELAY_VERSION` pick the image (Cloud Run only); `terragrunt output url`
+gives the environment's `PUSH_RELAY_URL`. State is local and not committed: it holds the dev key.

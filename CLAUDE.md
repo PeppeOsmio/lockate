@@ -115,7 +115,7 @@ make all
 FCM_PROJECT_ID=my-project ./mvnw quarkus:dev
 ```
 
-`dev-docker-compose.yml` runs it too (`push-relay`, JVM dev mode, `localhost:3120`, the compose backend's `PUSH_RELAY_URL`), with the key in `push_relay/.secrets/service-account.json` (git-ignored); without the key, pushes fail with 502 and everything else works.
+`dev-docker-compose.yml` runs it too (`push-relay`, JVM dev mode, `localhost:3120`, the compose backend's `PUSH_RELAY_URL`, staging Firebase project), with the key `terragrunt apply` in `push_relay/terraform/live/staging` writes to `push_relay/.secrets/service-account.json` (git-ignored); without the key, pushes fail with 502 and everything else works.
 
 ## Mobile
 
