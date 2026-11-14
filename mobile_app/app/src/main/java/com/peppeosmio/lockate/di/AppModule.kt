@@ -1,13 +1,18 @@
 package com.peppeosmio.lockate.di
 
 import android.util.Log
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.room.Room
 import com.google.android.gms.location.LocationServices
 import com.peppeosmio.lockate.AppDatabase
 import com.peppeosmio.lockate.android_service.CircleNotifier
+import com.peppeosmio.lockate.android_service.HealthNotifier
 import com.peppeosmio.lockate.dao.AnonymousGroupDao
 import com.peppeosmio.lockate.dao.ConnectionDao
 import com.peppeosmio.lockate.data.apiJson
+import com.peppeosmio.lockate.exceptions.AGMemberUnauthorizedException
+import com.peppeosmio.lockate.exceptions.RemoteAGNotFoundException
 import com.peppeosmio.lockate.platform_service.ActivityService
 import com.peppeosmio.lockate.platform_service.ConnectivityService
 import com.peppeosmio.lockate.platform_service.DeviceOrientationService
@@ -22,6 +27,8 @@ import com.peppeosmio.lockate.service.PlaceSearchService
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
 import com.peppeosmio.lockate.service.anonymous_group.PayloadCodec
 import com.peppeosmio.lockate.service.crypto.CryptoService
+import com.peppeosmio.lockate.service.dataStore
+import com.peppeosmio.lockate.service.health.HealthCheck
 import com.peppeosmio.lockate.service.invite.InviteService
 import com.peppeosmio.lockate.service.location.PositionProvider
 import com.peppeosmio.lockate.service.location.STILL_FIX_INTERVAL_MILLIS
@@ -35,6 +42,8 @@ import io.ktor.client.plugins.logging.Logging
 import io.ktor.client.plugins.sse.SSE
 import io.ktor.serialization.kotlinx.json.json
 import java.io.File
+import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.flow.first
 import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.module
 
@@ -180,6 +189,60 @@ val appModule = module {
     single<PushTokenSource> { FirebasePushTokenSource() }
 
     single<CircleNotifier> { CircleNotifier(androidContext()) }
+
+    single<HealthNotifier> { HealthNotifier(androidContext()) }
+
+    single<HealthCheck> {
+        val anonymousGroupDao = get<AnonymousGroupDao>()
+        val anonymousGroupService = get<AnonymousGroupService>()
+        val connectionService = get<ConnectionService>()
+        val healthNotifier = get<HealthNotifier>()
+        val dataStore = androidContext().dataStore
+        HealthCheck(
+            listGroups = {
+                anonymousGroupDao.listMemberAGs().map {
+                    HealthCheck.Group(it.connectionId, it.internalId)
+                }
+            },
+            verify = { group ->
+                try {
+                    anonymousGroupService.verifyMemberAuth(
+                        group.connectionId,
+                        group.anonymousGroupInternalId,
+                    )
+                    HealthCheck.Outcome.Ok
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: AGMemberUnauthorizedException) {
+                    HealthCheck.Outcome.Gone
+                } catch (e: RemoteAGNotFoundException) {
+                    HealthCheck.Outcome.Gone
+                } catch (e: Exception) {
+                    HealthCheck.Outcome.Unreachable
+                }
+            },
+            registerPushes = { get<PushRegistrationService>().registerAll() },
+            failures =
+                object : HealthCheck.FailureCounts {
+                    private fun key(connectionId: Long) =
+                        intPreferencesKey("health_failures_$connectionId")
+
+                    override suspend fun get(connectionId: Long) =
+                        dataStore.data.first()[key(connectionId)] ?: 0
+
+                    override suspend fun set(connectionId: Long, count: Int) {
+                        dataStore.edit { it[key(connectionId)] = count }
+                    }
+                },
+            notifyUnreachable = { connectionId ->
+                healthNotifier.show(
+                    connectionId,
+                    connectionService.getConnectionSettingsById(connectionId).name,
+                )
+            },
+            clearUnreachable = { healthNotifier.clear(it) },
+        )
+    }
 
     single<PushRegistrationService> {
         PushRegistrationService(
