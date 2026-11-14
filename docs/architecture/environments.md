@@ -18,6 +18,11 @@ variables; a staging APK is built locally (`./gradlew assembleStagingRelease`).
 
 ## Servers and relay
 
+For development, `dev-docker-compose.yml` runs the relay in JVM dev mode next to the backend
+(`localhost:3120`, already the compose backend's `PUSH_RELAY_URL`), with a service-account key in
+`push_relay/.secrets/service-account.json`, never committed. A backend run on the host sets
+`PUSH_RELAY_URL=http://localhost:3120`.
+
 A staging backend is just another Lockate server, with its own database and Valkey; the app picks
 the server at first run anyway.
 
