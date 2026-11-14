@@ -63,8 +63,9 @@ characters; 404 FCM says the token is unregistered; 429 over 30 a minute per tok
   move invisible to servers.
 - Deployed with Terragrunt (`push_relay/terraform/`): a module creating the `push-relay` service
   account (FCM admin role only, no key), an Artifact Registry repository proxying Docker Hub and
-  the public Cloud Run service (0–3 instances, 256 MiB, `RELAY_BEHIND_PROXY=true`), and optionally a
-  `push-relay-dev` service account whose key a locally run relay uses; run per environment from
-  `live/prod` and `live/staging` ([Environments](environments.md)).
+  the public Cloud Run service (0–3 instances, 256 MiB, `RELAY_BEHIND_PROXY=true`, CPU only while
+  a request is handled, so billed per request: the relay calls FCM inside the request), and
+  optionally a `push-relay-dev` service account whose key a locally run relay uses; run per
+  environment from `live/prod` and `live/staging` ([Environments](environments.md)).
 - A self-hoster who builds the app with their own Firebase project runs their own relay and sets
   `PUSH_RELAY_URL` to it.
