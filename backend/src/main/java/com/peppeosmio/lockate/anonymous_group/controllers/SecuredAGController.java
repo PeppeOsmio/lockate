@@ -1,5 +1,6 @@
 package com.peppeosmio.lockate.anonymous_group.controllers;
 
+import com.peppeosmio.lockate.anonymous_group.dto.AGFrameDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGGetMembersCountDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGGetMembersResDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGPostLocationReqDto;
@@ -135,6 +136,13 @@ public class SecuredAGController {
       AGMemberAuthentication authentication)
       throws AGCircleNotFoundException {
     anonymousGroupService.deleteCircle(anonymousGroupId, circleId);
+  }
+
+  /** The snapshot the streams start with, for a phone that must learn a member or circle. */
+  @GetMapping("/{anonymousGroupId}/snapshot")
+  AGFrameDto getSnapshot(@PathVariable UUID anonymousGroupId, AGMemberAuthentication authentication)
+      throws AGNotFoundException {
+    return anonymousGroupService.getSnapshot(anonymousGroupId);
   }
 
   @GetMapping(value = "/{anonymousGroupId}/locations", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
