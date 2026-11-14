@@ -140,7 +140,7 @@ Build a production JAR:
 
 ```bash
 cd mobile_app
-./gradlew assembleDebug
+./gradlew assembleProdDebug
 ./gradlew test
 ```
 

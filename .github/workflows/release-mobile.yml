@@ -20,6 +20,10 @@ jobs:
       LOCKATE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       LOCKATE_KEY_ALIAS: ${{ vars.ANDROID_KEY_ALIAS }}
       LOCKATE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      LOCKATE_FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
+      LOCKATE_FIREBASE_APP_ID: ${{ vars.FIREBASE_APP_ID }}
+      LOCKATE_FIREBASE_API_KEY: ${{ vars.FIREBASE_API_KEY }}
+      LOCKATE_FIREBASE_SENDER_ID: ${{ vars.FIREBASE_SENDER_ID }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -43,19 +47,19 @@ jobs:
         working-directory: mobile_app
         run: |
           IFS=. read -r major minor patch <<< "${VERSION%%-*}"
-          ./gradlew assembleRelease -PversionName="$VERSION" -PversionCode=$((major * 1000000 + minor * 1000 + patch))
+          ./gradlew assembleProdRelease -PversionName="$VERSION" -PversionCode=$((major * 1000000 + minor * 1000 + patch))
       - name: Verify and rename APKs
-        working-directory: mobile_app/app/build/outputs/apk/release
+        working-directory: mobile_app/app/build/outputs/apk/prod/release
         run: |
           apksigner="$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)"
           count=0
-          for apk in app-*-release.apk; do
+          for apk in app-prod-*-release.apk; do
             certs="$("$apksigner" verify --print-certs "$apk")"
             if grep -q "Android Debug" <<< "$certs"; then
               echo "$apk is signed with the debug key" >&2
               exit 1
             fi
-            abi="${apk#app-}"
+            abi="${apk#app-prod-}"
             abi="${abi%-release.apk}"
             mv "$apk" "lockate-$VERSION-$abi.apk"
             count=$((count + 1))
@@ -65,7 +69,7 @@ jobs:
             exit 1
           fi
       - name: Publish GitHub release
-        working-directory: mobile_app/app/build/outputs/apk/release
+        working-directory: mobile_app/app/build/outputs/apk/prod/release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

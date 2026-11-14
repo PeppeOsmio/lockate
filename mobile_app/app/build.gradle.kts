@@ -14,11 +14,15 @@ val localProperties =
         rootProject.file("local.properties").takeIf { it.exists() }?.reader()?.use { load(it) }
     }
 
-fun firebaseConfig(name: String, env: String): String =
-    localProperties.getProperty("lockate.firebase.$name")
-        ?: findProperty("lockate.firebase.$name") as String?
-        ?: System.getenv(env)
+fun firebaseConfig(flavor: String, name: String, env: String): String {
+    val key = if (flavor == "prod") "lockate.firebase.$name" else "lockate.firebase.$flavor.$name"
+    val envKey =
+        if (flavor == "prod") env else env.replace("FIREBASE_", "FIREBASE_${flavor.uppercase()}_")
+    return localProperties.getProperty(key)
+        ?: findProperty(key) as String?
+        ?: System.getenv(envKey)
         ?: ""
+}
 
 android {
     namespace = "com.peppeosmio.lockate"
@@ -30,15 +34,33 @@ android {
         targetSdk = 36
         versionCode = (findProperty("versionCode") as String?)?.toInt() ?: 1
         versionName = findProperty("versionName") as String? ?: "1.0"
+    }
 
-        for ((field, name, env) in
-            listOf(
-                Triple("FIREBASE_PROJECT_ID", "projectId", "LOCKATE_FIREBASE_PROJECT_ID"),
-                Triple("FIREBASE_APP_ID", "appId", "LOCKATE_FIREBASE_APP_ID"),
-                Triple("FIREBASE_API_KEY", "apiKey", "LOCKATE_FIREBASE_API_KEY"),
-                Triple("FIREBASE_SENDER_ID", "senderId", "LOCKATE_FIREBASE_SENDER_ID"),
-            )) {
-            buildConfigField("String", field, "\"${firebaseConfig(name, env)}\"")
+    // prod and staging install side by side (different application ids, so different data, Keystore
+    // keys and FCM tokens), each with its own Firebase app
+    flavorDimensions += "env"
+    productFlavors {
+        for (flavor in listOf("prod", "staging")) {
+            create(flavor) {
+                dimension = "env"
+                if (flavor != "prod") {
+                    applicationIdSuffix = ".$flavor"
+                }
+                resValue(
+                    "string",
+                    "app_name",
+                    if (flavor == "prod") "Lockate" else "Lockate Staging",
+                )
+                for ((field, name, env) in
+                    listOf(
+                        Triple("FIREBASE_PROJECT_ID", "projectId", "LOCKATE_FIREBASE_PROJECT_ID"),
+                        Triple("FIREBASE_APP_ID", "appId", "LOCKATE_FIREBASE_APP_ID"),
+                        Triple("FIREBASE_API_KEY", "apiKey", "LOCKATE_FIREBASE_API_KEY"),
+                        Triple("FIREBASE_SENDER_ID", "senderId", "LOCKATE_FIREBASE_SENDER_ID"),
+                    )) {
+                    buildConfigField("String", field, "\"${firebaseConfig(flavor, name, env)}\"")
+                }
+            }
         }
     }
 
@@ -79,6 +101,7 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+        resValues = true
     }
 
     splits {

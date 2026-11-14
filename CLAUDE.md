@@ -33,7 +33,7 @@ Three core domain entities:
 
 **Presence**: a member is online while it sends locations (`AGPresenceService`), decided by the server from when members send, which it already knows. Every location refreshes `ag-presence:{g}:{m}` (TTL 30 min, the grey dot on the map) and then `ag-online:{g}:{m}` (TTL 31 min, value = last seen); a nil previous `ag-online` announces `online: true`. The expiry event of `ag-presence` announces `online: false` on the instance whose Lua script (only if `ag-presence` wasn't recreated meanwhile) `GETDEL`s `ag-online`; `member.paused` does the same at once. Lost expiry events are accepted: `ag-online` expires by itself, so nothing stays stuck. The backend turns on `notify-keyspace-events` `Ex` at startup. Leaving or being removed deletes both keys silently. The app notifies presence like circle events, in the member's one notification, and doesn't store it.
 
-**Push** (see `docs/background-sync-design.md`): each member registers where its notifications go with `PUT /api/v1/anonymous-groups/{id}/members/push-registration` (`{fcmToken, registrationId, key}`, the id 16 bytes and the AES key 32, Base64), stored on `ag_member` (`push_token`, `push_registration_id`, `push_key`): one registration per member, replaced by the next. The app (`PushRegistrationService`) generates the id and the key once per group, keeps them in Room (`push_registration`, the key encrypted with the Keystore, the id unique only on the phone) and registers every group at start, each new group, and on `onNewToken`. The server pushes (`AGPushService`, `AGPushSender`) the same `AGFrameDto` the sockets get, sealed per member as `{r, iv, c}` (AES-GCM with the member's key, AAD `lockate-push-v1|` + `r` in Base64), through the push relay at `lockate.push.relay-url` (`PUSH_RELAY_URL`, empty sends nothing), after the transaction commits: circle events and sharing changes to the group's other members, `member.left` to a member the admin removes, `group.deleted` to everyone but who deleted it; a 404 from the relay clears the registration. The registration answers `{pushes}` (whether a relay is set), and the socket's frames stop notifying for the groups that are pushed. The app opens a push in `AnonymousGroupService.openPush` (unknown `r` or a payload that doesn't open is dropped). Firebase is initialised by hand (`FirebaseSetup`) from the `lockate.firebase.{projectId,appId,apiKey,senderId}` properties (`local.properties`, a Gradle property or `LOCKATE_FIREBASE_*`), not from `google-services.json`: without them the app has no FCM token and registers nothing.
+**Push** (see `docs/background-sync-design.md`): each member registers where its notifications go with `PUT /api/v1/anonymous-groups/{id}/members/push-registration` (`{fcmToken, registrationId, key}`, the id 16 bytes and the AES key 32, Base64), stored on `ag_member` (`push_token`, `push_registration_id`, `push_key`): one registration per member, replaced by the next. The app (`PushRegistrationService`) generates the id and the key once per group, keeps them in Room (`push_registration`, the key encrypted with the Keystore, the id unique only on the phone) and registers every group at start, each new group, and on `onNewToken`. The server pushes (`AGPushService`, `AGPushSender`) the same `AGFrameDto` the sockets get, sealed per member as `{r, iv, c}` (AES-GCM with the member's key, AAD `lockate-push-v1|` + `r` in Base64), through the push relay at `lockate.push.relay-url` (`PUSH_RELAY_URL`, empty sends nothing), after the transaction commits: circle events and sharing changes to the group's other members, `member.left` to a member the admin removes, `group.deleted` to everyone but who deleted it; a 404 from the relay clears the registration. The registration answers `{pushes}` (whether a relay is set), and the socket's frames stop notifying for the groups that are pushed. The app opens a push in `AnonymousGroupService.openPush` (unknown `r` or a payload that doesn't open is dropped). Firebase is initialised by hand (`FirebaseSetup`) from the `lockate.firebase.{projectId,appId,apiKey,senderId}` properties (`local.properties`, a Gradle property or `LOCKATE_FIREBASE_*`), not from `google-services.json`, per flavor (see Mobile): without them the app has no FCM token and registers nothing.
 
 **Redis** (Valkey, referred to as Redis throughout the codebase): used for the invite mailbox (`invite:{id}`, `invite-nameplate:{n}`, `invite-claim:{id}`, `invite-join:{groupId}:{tokenHash}`, 10-min TTL), rate-limit counters (`rate:*`), presence (`ag-presence:*`, `ag-online:*`) and pub/sub (`ag-{groupId}-events`, `ag-{groupId}-locations`, `__keyevent@*__:expired`).
 
@@ -124,17 +124,19 @@ cd mobile_app
 make all
 
 # Debug build
-./gradlew assembleDebug
+./gradlew assembleProdDebug
 
 # Run unit tests
 ./gradlew test
 
 # Run a single test class
-./gradlew testDebug --tests "com.peppeosmio.lockate.ExampleUnitTest"
+./gradlew testProdDebugUnitTest --tests "com.peppeosmio.lockate.ExampleUnitTest"
 
-# Install on connected device
-./gradlew installDebug
+# Install on connected device (installStagingDebug is the staging flavor, installed beside it)
+./gradlew installProdDebug
 ```
+
+Two flavors, `prod` (`com.peppeosmio.lockate`) and `staging` (`.staging`, named "Lockate Staging"), install side by side with separate data, Keystore keys and FCM tokens. Each has its own Firebase app: `lockate.firebase.*` for prod, `lockate.firebase.staging.*` (`LOCKATE_FIREBASE_STAGING_*`) for staging. Releases build `prod` only.
 
 The first clone needs `git submodule update --init --recursive` (Mbed TLS), and building needs the Android NDK and CMake 3.22.1 (Gradle installs them if the SDK licenses are accepted) plus a host `cmake` for `:jpake:jvmTest`.
 
