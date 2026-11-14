@@ -52,6 +52,7 @@ class CreateAnonymousGroupViewModel(private val anonymousGroupService: Anonymous
     }
 
     fun createAnonymousGroup(connectionSettingsId: Long) {
+        if (state.value.showLoadingOverlay) return
         viewModelScope.launch {
             if (!canConfirm()) {
                 return@launch

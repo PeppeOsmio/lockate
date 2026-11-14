@@ -56,6 +56,15 @@ case, and the server never overwrites what belongs to someone else: a taken grou
 a 409 (`AGIdTakenException`), a circle id of another group a 409 (`circle_id_taken`), and a push
 registration is keyed by the authenticated member.
 
+The app's HTTP client never sends a request twice (`retryOnConnectionFailure(false)`). OkHttp by
+default sends a request again on a new connection when a reused one fails after the request went
+out, and a POST may already have been handled: creating a group then failed with "id taken"
+although the group existed, and a join, an invite step or a location post with circle events would
+fail or be relayed twice. A failed request is an error for its caller, which retries where it
+matters (the stream reconnects, the next position is posted anyway). A POST whose answer is lost
+stays an error; for a group creation the group then exists on the server with a member whose token
+nobody has.
+
 ## Server access: API keys and admin
 
 - **API keys** (`X-API-KEY`): with `REQUIRE_API_KEY=true` the server accepts only clients that
