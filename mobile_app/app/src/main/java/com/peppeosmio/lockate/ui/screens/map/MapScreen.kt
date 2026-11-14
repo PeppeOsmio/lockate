@@ -43,6 +43,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -69,15 +70,17 @@ import com.peppeosmio.lockate.ui.composables.PermissionsRequester
 import com.peppeosmio.lockate.ui.composables.ServerUnreachableBanner
 import com.peppeosmio.lockate.ui.routes.ConnectionSettingsRoute
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.AGDetailsViewModel
+import com.peppeosmio.lockate.ui.screens.anonymous_group_details.LastSeenFreshness
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.LocationStreamState
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.MARKER_MOVE_DURATION_MS
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.MapPoint
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.MembersMap
+import com.peppeosmio.lockate.ui.screens.anonymous_group_details.lastSeenFreshness
 import com.peppeosmio.lockate.utils.LoadingState
 import com.peppeosmio.lockate.utils.LockatePermissions
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -85,8 +88,6 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toInstant
 import org.koin.compose.viewmodel.koinViewModel
 import org.maplibre.compose.camera.CameraAnimation
 import org.maplibre.compose.camera.CameraPosition
@@ -122,8 +123,14 @@ fun MapScreen(
     val clipboard = LocalClipboard.current
     val context = LocalContext.current
 
-    var oldLocations by remember { mutableStateOf(emptySet<String>()) }
-    val oldLocationsJobs = remember { mutableMapOf<String, Job>() }
+    // the same clock and freshness as the dot next to each member's name
+    val now by
+        produceState(Clock.System.now()) {
+            while (true) {
+                value = Clock.System.now()
+                delay(30.seconds)
+            }
+        }
     var isMyLocationOld by remember { mutableStateOf(false) }
     var isMyLocationOldJob = remember<Job?> { null }
 
@@ -216,7 +223,7 @@ fun MapScreen(
     }
 
     val membersPoints =
-        remember(details.members, oldLocations, details.anonymousGroup, details.selectedMemberId) {
+        remember(details.members, now, details.anonymousGroup, details.selectedMemberId) {
             val group = details.anonymousGroup ?: return@remember null
             details.members?.mapNotNull { (memberId, member) ->
                 if (group.memberId == memberId) {
@@ -226,7 +233,8 @@ fun MapScreen(
                 MapPoint(
                     coordinates = locationRecord.coordinates,
                     name = member.name,
-                    isOld = oldLocations.contains(memberId),
+                    isOld =
+                        lastSeenFreshness(locationRecord.timestamp, now) != LastSeenFreshness.Live,
                     isSelected = memberId == details.selectedMemberId,
                     id = memberId,
                 )
@@ -244,29 +252,6 @@ fun MapScreen(
                 id = details.anonymousGroup?.memberId ?: "me",
             )
         }
-
-    LaunchedEffect(details.members) {
-        details.members?.forEach { (memberId, member) ->
-            oldLocations -= member.id
-            oldLocationsJobs[member.id]?.cancel()
-            if (member.lastLocationRecord == null) {
-                return@forEach
-            }
-            val now = Clock.System.now()
-            val locationTimestamp = member.lastLocationRecord.timestamp.toInstant(TimeZone.UTC)
-            val msToWait =
-                (locationTimestamp.plus(1.minutes) - now).inWholeMilliseconds.coerceAtLeast(0)
-            oldLocationsJobs[member.id] = launch {
-                delay(msToWait)
-                if (
-                    details.members?.get(memberId)?.lastLocationRecord?.timestamp ==
-                        member.lastLocationRecord.timestamp
-                ) {
-                    oldLocations += memberId
-                }
-            }
-        }
-    }
 
     LaunchedEffect(details.myLocationRecordFromGPS) {
         details.myLocationRecordFromGPS?.let {
