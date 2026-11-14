@@ -1,0 +1,53 @@
+# Roadmap
+
+[← Architecture](architecture.md)
+
+The architecture pages describe the target; this page says how far the code is. Each step is one
+or more PRs, shippable on its own, ordered so notifications keep working at every step.
+
+## Background sync redesign
+
+Goal: a still phone keeps reporting on time in Doze, and notifications arrive without a socket
+held open ([Sending positions](architecture/sending.md#why-the-location-request-is-the-timer)).
+
+| Step | | Status |
+|---|---|---|
+| 1 | Cleanup: drop the exact-alarm experiment. | done |
+| 2 | SHA-256 member tokens ([details](architecture/groups-and-auth.md#member-tokens)). A migration deletes every group; the app shows them as deleted. | done, not released |
+| 3a | Backend: `POST …/locations` and `…/members/pause`, rate limit, sharing timer 30 min. The socket still accepts the old messages. | done, not released |
+| 3b | App: every send over REST, still fix every 10 min, circle events with the position, colours 15 / 30 min. | done, not released |
+| 3c | Backend: the socket accepts only `ping`. Released after the 3b app. | done, not released |
+| 4a | Push registration (app and backend). | done, not released |
+| 4b | Push relay module, image and Terraform/Terragrunt. | done, not deployed |
+| 4c | Pushes: backend seals and sends, app opens and notifies. | done, not released |
+| 5 | Switch-over: foreground service only while a group is shared; group events on the SSE stream; `AGWSHandler` removed. | next, after the relay runs |
+| 6 | Health check: hourly inexact alarm checks each server, member validity and push registration; a local notification after repeated failures, once. | planned |
+
+Pushes reach no phone until the Firebase project's relay is deployed and servers set
+`PUSH_RELAY_URL`.
+
+Until step 5 the socket is only for receiving and still pings every minute: in Doze the ping is
+late, the server may close the socket after 150 s, and the app reconnects at the next fix, so a
+notification from a server without a relay can be missed meanwhile.
+
+## Open points
+
+- **Relay hosting**: Cloud Run is set up; an EU VPS remains the alternative if we'd rather Google
+  didn't see which servers push ([Push relay](architecture/push-relay.md)).
+- **Binding a token to its backends** (Nextcloud-style): each backend has an Ed25519 key pair, the
+  app tells the relay which keys may push to its token, backends sign requests. A stolen token alone
+  would be useless, at the cost of state in the relay, the app talking to the relay (which then sees
+  the phone's IP) and a verification push. Can be added later without changing the payload.
+- **Persisting the tracker's confirmed circle state** in Room, so a transition pending when the
+  process dies is still notified ([Circles](architecture/circles.md)).
+- **UnifiedPush** for phones without Google Play services, with the same encrypted payload.
+- **Health check threshold**: notify after 2 or 3 failed hourly checks.
+
+## Accepted trade-offs
+
+- No notifications without Google Play services, and no F-Droid build.
+- Old app versions stop working against the new server; backend and app are released together.
+- Every existing group was deleted by the SHA-256 change.
+- A dead phone is reported as "stopped sharing" after 30 min.
+- A still position can be up to 10 min old, and a movement Activity Recognition misses is reported
+  up to 10 min late.

@@ -33,7 +33,7 @@ Before anything leaves your phone, your location, your name and the group's name
 
 Inviting someone hands them that key without the server ever seeing it. The two phones use the invite code to agree on a secret lock of their own, and the key travels inside it. If someone else tries the code, or it's typed wrong, the inviter's phone notices and nothing is sent. Each code works once and expires after 10 minutes.
 
-Your phone also keeps sending updates when you're standing still. If it only sent them when you moved, the server could guess when you stopped, so Lockate doesn't give it that clue.
+What the server can tell is when your phone sends: every few seconds while you move, every 10 minutes while you stand still. So it can guess whether you are moving, but never where you are.
 
 ## What it doesn't do
 
@@ -75,8 +75,10 @@ Yes. Lockate is open source under the MIT license.
 
 - Group names, member names and coordinates are encrypted client-side with AES-256-GCM, with a random group key that never leaves the members' devices.
 - Invites use EC-JPAKE ([RFC 8236](https://www.rfc-editor.org/rfc/rfc8236)) keyed by the words of the invite code, from [Mbed TLS](https://github.com/Mbed-TLS/mbedtls) (Apache-2.0), called from Kotlin through `mobile_app/jpake`, a generic Kotlin Multiplatform J-PAKE module with RFC 8236 key confirmation. The server relays the messages through a short-lived Redis mailbox. Both phones confirm they derived the same key before the inviter sends the group key and a single-use join token, encrypted with a key derived from the shared secret.
-- Members authenticate with a random 32-byte token that the server stores BCrypt-hashed.
-- Each member keeps one WebSocket per group, which carries their encrypted location and everything that happens in the group: the other members' locations, joins and leaves, and the circles (places like home or school, with encrypted name, position and radius). Arrivals and departures are computed on the phone and travel inside the padded, encrypted location messages, so the server can't tell them from any other location. The server relays all of it through Redis pub/sub without decrypting.
+- Members authenticate with a random 32-byte token that the server stores as a SHA-256 hash.
+- Phones post their encrypted position over REST: every ~2 s while moving, every 10 minutes while still. Arrivals and departures at circles (places like home or school) are computed on the phone and sent encrypted with the position. The group on screen streams over SSE; everything else arrives as an end-to-end encrypted push, through a small relay that holds our Firebase credentials.
+
+The full architecture, with the reasons behind each choice, is in [docs/architecture.md](docs/architecture.md).
 
 ## Self-hosting
 

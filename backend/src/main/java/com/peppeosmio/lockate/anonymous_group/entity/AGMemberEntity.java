@@ -58,7 +58,7 @@ public class AGMemberEntity {
   @ToString.Exclude
   private List<AGMemberLocationEntity> agMemberLocationEntities;
 
-  // Where to push its notifications: see docs/background-sync-design.md
+  // Where to push its notifications: see docs/architecture/push.md
   @Column(name = "push_token")
   private String pushToken;
 
