@@ -108,6 +108,18 @@ class AGMemberMessageServiceTest {
   }
 
   @Test
+  void postLocation_answersTheGroupsCirclesVersion() throws Exception {
+    underTheRateLimit();
+    when(anonymousGroupService.relayMemberMessage(eq(groupId), eq(authentication), any(), any()))
+        .thenReturn(Optional.empty());
+    when(anonymousGroupService.getCirclesVersion(groupId)).thenReturn(7L);
+
+    var res = service.postLocation(groupId, authentication, post(null));
+
+    assertThat(res.circlesVersion()).isEqualTo(7L);
+  }
+
+  @Test
   void postLocation_withoutCircleEvents_relaysOnlyThePosition() throws Exception {
     underTheRateLimit();
     when(anonymousGroupService.relayMemberMessage(eq(groupId), eq(authentication), any(), any()))

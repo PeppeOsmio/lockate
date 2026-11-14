@@ -7,8 +7,8 @@ import java.util.UUID;
 import org.springframework.aot.hint.annotation.RegisterReflectionForBinding;
 
 /**
- * Everything the server sends on the group websocket, and what it relays on the group's Redis
- * channel. Only the fields of the frame's {@code type} are set.
+ * What the server tells a member about its group: on the group's SSE stream, in pushes, and on the
+ * group's Redis channel. Only the fields of the frame's {@code type} are set.
  */
 @RegisterReflectionForBinding
 @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -33,8 +33,6 @@ public record AGFrameDto(
   public static final String CIRCLE_DELETED = "circle.deleted";
   public static final String CIRCLE_EVENT = "circle.event";
   public static final String MEMBER_PRESENCE = "member.presence";
-  public static final String PONG = "pong";
-  // Never sent to clients: it closes their sockets
   public static final String GROUP_DELETED = "group.deleted";
 
   public static AGFrameDto snapshot(List<AGMemberDto> members, List<CircleDto> circles) {
@@ -75,10 +73,6 @@ public record AGFrameDto(
   public static AGFrameDto memberPresence(UUID memberId, boolean online, LocalDateTime lastSeen) {
     return new AGFrameDto(
         MEMBER_PRESENCE, null, null, null, memberId, null, null, null, null, online, lastSeen);
-  }
-
-  public static AGFrameDto pong() {
-    return new AGFrameDto(PONG, null, null, null, null, null, null, null, null, null, null);
   }
 
   public static AGFrameDto groupDeleted() {

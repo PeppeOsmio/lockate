@@ -22,14 +22,15 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * The other members' locations, streamed to a member only while it looks at the map: a {@code
- * snapshot} event, the same as the socket's (members with their last saved record, circles), then a
- * {@code location} event for each message. The stream ends when the member is removed or the group
- * deleted.
+ * A group as it happens, streamed to a member only while it looks at the group: a {@code snapshot}
+ * event (members with their last saved record, circles), then a {@code location} event for each
+ * member message and a {@code frame} event ({@link AGFrameDto}) for each change and circle event.
+ * Our own circle events and sharing changes aren't sent back to us. The stream ends after the
+ * {@code member.left} of our removal or the {@code group.deleted} frame.
  */
 @Slf4j
 @Component
-public class AGLocationStreams {
+public class AGStreams {
   private static final long HEARTBEAT_SECONDS = 15;
 
   private final ObjectMapper objectMapper;
@@ -38,7 +39,7 @@ public class AGLocationStreams {
   private final Set<Stream> streams = ConcurrentHashMap.newKeySet();
   private final ScheduledExecutorService heartbeats = Executors.newSingleThreadScheduledExecutor();
 
-  public AGLocationStreams(
+  public AGStreams(
       ObjectMapper objectMapper,
       AnonymousGroupService anonymousGroupService,
       RedisService redisService) {
@@ -50,16 +51,17 @@ public class AGLocationStreams {
   }
 
   /**
-   * Locations that arrive while the snapshot is being built are held back and sent right after it,
-   * so the client never applies one before the snapshot.
+   * What arrives while the snapshot is being built is held back, in order, and sent right after it,
+   * so the client never applies anything before the snapshot.
    */
   private class Stream {
     final SseEmitter emitter;
     final UUID ownMemberId;
     final String locationsChannel;
     final String eventsChannel;
-    final List<String> pending = new ArrayList<>();
+    final List<SseEmitter.SseEventBuilder> pending = new ArrayList<>();
     boolean snapshotSent = false;
+    boolean endAfterSnapshot = false;
     boolean closed = false;
     MessageListener locationsListener;
     MessageListener eventsListener;
@@ -72,30 +74,49 @@ public class AGLocationStreams {
     }
 
     synchronized void onLocation(String message) {
-      if (snapshotSent) {
-        send(SseEmitter.event().name("location").data(message));
-      } else {
-        pending.add(message);
-      }
+      sendOrHold(SseEmitter.event().name("location").data(message));
     }
 
     synchronized void onSnapshot(String snapshot) {
       send(SseEmitter.event().name("snapshot").data(snapshot));
       snapshotSent = true;
-      pending.forEach(message -> send(SseEmitter.event().name("location").data(message)));
+      pending.forEach(this::send);
       pending.clear();
+      if (endAfterSnapshot) {
+        emitter.complete();
+      }
     }
 
-    void onEvent(String message) {
+    synchronized void onEvent(String message) {
+      AGFrameDto frame;
       try {
-        var frame = objectMapper.readValue(message, AGFrameDto.class);
-        if (AGFrameDto.GROUP_DELETED.equals(frame.type())
-            || (AGFrameDto.MEMBER_LEFT.equals(frame.type())
-                && ownMemberId.equals(frame.memberId()))) {
-          emitter.complete();
-        }
+        frame = objectMapper.readValue(message, AGFrameDto.class);
       } catch (JacksonException e) {
         log.warn("[SSE] Can't read frame: " + e.getMessage());
+        return;
+      }
+      var aboutUs = ownMemberId.equals(frame.memberId());
+      var type = frame.type();
+      if (aboutUs
+          && (AGFrameDto.CIRCLE_EVENT.equals(type) || AGFrameDto.MEMBER_PRESENCE.equals(type))) {
+        return;
+      }
+      sendOrHold(SseEmitter.event().name("frame").data(message));
+      if (AGFrameDto.GROUP_DELETED.equals(type)
+          || (AGFrameDto.MEMBER_LEFT.equals(type) && aboutUs)) {
+        if (snapshotSent) {
+          emitter.complete();
+        } else {
+          endAfterSnapshot = true;
+        }
+      }
+    }
+
+    private void sendOrHold(SseEmitter.SseEventBuilder event) {
+      if (snapshotSent) {
+        send(event);
+      } else {
+        pending.add(event);
       }
     }
 

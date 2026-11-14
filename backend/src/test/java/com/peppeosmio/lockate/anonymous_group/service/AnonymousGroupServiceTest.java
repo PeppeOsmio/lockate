@@ -684,6 +684,7 @@ class AnonymousGroupServiceTest {
 
     service.upsertCircle(groupId, circleId, circleReq());
 
+    verify(anonymousGroupRepository).incrementCirclesVersion(groupId);
     var frame = publishedFrame();
     assertThat(frame.type()).isEqualTo(AGFrameDto.CIRCLE_UPSERTED);
     assertThat(frame.circle().id()).isEqualTo(circleId);
@@ -702,6 +703,7 @@ class AnonymousGroupServiceTest {
 
     service.upsertCircle(groupId, circleId, circleReq());
 
+    verify(anonymousGroupRepository).incrementCirclesVersion(groupId);
     assertThat(existing.getEncryptedName().cipherText())
         .hasSize(AnonymousGroupService.NAME_CIPHER_BYTES);
     assertThat(existing.getEncryptedRadius().cipherText())
@@ -758,6 +760,7 @@ class AnonymousGroupServiceTest {
     service.deleteCircle(groupId, circleId);
 
     verify(agCircleRepository).delete(circle);
+    verify(anonymousGroupRepository).incrementCirclesVersion(groupId);
     var frame = publishedFrame();
     assertThat(frame.type()).isEqualTo(AGFrameDto.CIRCLE_DELETED);
     assertThat(frame.circleId()).isEqualTo(circleId);
@@ -846,6 +849,21 @@ class AnonymousGroupServiceTest {
                     new AGCircleEventReqDto(null)))
         .isInstanceOf(InvalidEncryptedDataException.class);
     verify(redisService, never()).publish(any(), any());
+  }
+
+  @Test
+  void getCirclesVersion_returnsTheGroupsVersion() throws Exception {
+    when(anonymousGroupRepository.findCirclesVersionById(groupId)).thenReturn(Optional.of(7L));
+
+    assertThat(service.getCirclesVersion(groupId)).isEqualTo(7L);
+  }
+
+  @Test
+  void getCirclesVersion_missingGroup_throwsAGNotFound() {
+    when(anonymousGroupRepository.findCirclesVersionById(groupId)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.getCirclesVersion(groupId))
+        .isInstanceOf(AGNotFoundException.class);
   }
 
   @Test

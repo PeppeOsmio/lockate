@@ -18,6 +18,15 @@ public interface AnonymousGroupRepository extends JpaRepository<AnonymousGroupEn
   @Query("DELETE FROM AnonymousGroupEntity WHERE id = :anonymousGroupId")
   void deleteAnonymousGroup(@Param("anonymousGroupId") UUID anonymousGroupId);
 
+  @Modifying
+  @Query(
+      "UPDATE AnonymousGroupEntity g SET g.circlesVersion = g.circlesVersion + 1"
+          + " WHERE g.id = :anonymousGroupId")
+  void incrementCirclesVersion(@Param("anonymousGroupId") UUID anonymousGroupId);
+
+  @Query("SELECT g.circlesVersion FROM AnonymousGroupEntity g WHERE g.id = :anonymousGroupId")
+  Optional<Long> findCirclesVersionById(@Param("anonymousGroupId") UUID anonymousGroupId);
+
   /** Holds the group's row until the transaction ends, so its writes go one at a time. */
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("SELECT g FROM AnonymousGroupEntity g WHERE g.id = :anonymousGroupId")
