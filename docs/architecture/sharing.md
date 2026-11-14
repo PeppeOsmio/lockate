@@ -22,7 +22,9 @@ With a still fix every 10 min ([Sending positions](sending.md)):
   false alarms;
 - a dead phone is reported after 30 min. Stopping on purpose is reported at once (`members/pause`).
 
-The colours are computed on the phone (`LastSeenText.kt`, `LIVE_WINDOW`, `RECENT_WINDOW`).
+The colours are computed on the phone (`LastSeenText.kt`, `LIVE_WINDOW`, `RECENT_WINDOW`). The
+member's marker on the map follows the same rule: opaque while the dot is green, faded once it
+isn't.
 
 ## The timer in Redis
 
