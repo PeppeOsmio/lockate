@@ -82,7 +82,10 @@ resource "google_cloud_run_v2_service" "relay" {
     containers {
       image = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.dockerhub[0].repository_id}/${var.dockerhub_user}/lockate-push-relay:${var.image_version}"
 
+      # CPU only while a request is handled (and billed per request): the relay calls FCM inside the
+      # request and does nothing in between. Cloud Run also refuses less than 512 MiB otherwise.
       resources {
+        cpu_idle = true
         limits = {
           memory = "256Mi"
           cpu    = "1"
