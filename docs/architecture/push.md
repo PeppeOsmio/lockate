@@ -15,8 +15,9 @@ so the token can't tell the app which group a push is for. A registration id doe
   32-byte AES key, kept in Room (`push_registration`, the key encrypted with the Keystore;
   `PushRegistrationService`).
 - It registers `PUT /api/v1/anonymous-groups/{id}/members/push-registration`
-  `{fcmToken, registrationId, key}` (Base64): at app start for every group, for each new group, and
-  on `onNewToken`. A wrong size is 400 `invalid_push_registration`.
+  `{fcmToken, registrationId, key}` (Base64): at app start for every group, for each new group, on
+  `onNewToken`, and by the hourly [health check](health-check.md), so a token change that
+  `onNewToken` missed is fixed within the hour. A wrong size is 400 `invalid_push_registration`.
 - The server stores it on `ag_member` (`push_token`, `push_registration_id`, `push_key`): one per
   member, keyed by the authenticated member, replaced by the next; deleted with the member.
 - `r` only has to be unique on the phone, where it finds the Room row; two phones with the same `r`

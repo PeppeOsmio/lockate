@@ -5,6 +5,8 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import com.peppeosmio.lockate.android_service.AndroidSendLocationService
+import com.peppeosmio.lockate.android_service.HealthCheckWorker
+import com.peppeosmio.lockate.android_service.HealthNotifier
 import com.peppeosmio.lockate.di.appModule
 import com.peppeosmio.lockate.di.viewModelModule
 import com.peppeosmio.lockate.platform_service.FirebaseSetup
@@ -40,8 +42,16 @@ class LockateApplication : Application() {
                     NotificationManager.IMPORTANCE_DEFAULT,
                 )
             )
+            notificationManager.createNotificationChannel(
+                NotificationChannel(
+                    HealthNotifier.CHANNEL_ID,
+                    "Server problems",
+                    NotificationManager.IMPORTANCE_DEFAULT,
+                )
+            )
         }
         FirebaseSetup.init(this)
+        HealthCheckWorker.schedule(this)
         get<PushRegistrationService>().start(get<AnonymousGroupService>().events)
     }
 }

@@ -125,4 +125,5 @@ sequenceDiagram
 | [Real-time](architecture/realtime.md) | The SSE stream of the group on screen, why there is no socket, Redis pub/sub across instances |
 | [Push notifications](architecture/push.md) | Registration, sealed payloads, what the app does with a push |
 | [Push relay](architecture/push-relay.md) | Why it exists, what it sees, how it runs and is deployed |
+| [Health check](architecture/health-check.md) | The hourly check of servers, membership and push registrations |
 | [Environments](architecture/environments.md) | Prod and staging app flavors, Firebase and relay per environment |
