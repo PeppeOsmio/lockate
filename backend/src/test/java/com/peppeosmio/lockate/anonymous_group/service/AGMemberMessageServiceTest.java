@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -15,6 +16,7 @@ import static org.mockito.Mockito.when;
 import com.peppeosmio.lockate.anonymous_group.dto.AGCircleEventReqDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGMemberMessageReqDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGPostLocationReqDto;
+import com.peppeosmio.lockate.anonymous_group.exceptions.CirclesChangedException;
 import com.peppeosmio.lockate.anonymous_group.presence.AGPresenceService;
 import com.peppeosmio.lockate.anonymous_group.security.AGMemberAuthentication;
 import com.peppeosmio.lockate.common.dto.EncryptedDataDto;
@@ -50,9 +52,13 @@ class AGMemberMessageServiceTest {
   private final String rateKey = "rate:location:" + memberId;
 
   @BeforeEach
-  void setUp() {
+  void setUp() throws Exception {
     service = new AGMemberMessageService(anonymousGroupService, presenceService, redisService);
+    // the version the posts below were computed on, unless a test says otherwise
+    lenient().when(anonymousGroupService.getCirclesVersion(groupId)).thenReturn(CIRCLES_VERSION);
   }
+
+  private static final long CIRCLES_VERSION = 4;
 
   private static EncryptedDataDto blobOfSize(int cipherTextBytes) {
     return new EncryptedDataDto(
@@ -69,10 +75,16 @@ class AGMemberMessageServiceTest {
   }
 
   private static AGPostLocationReqDto post(List<EncryptedDataDto> circleEvents) {
+    return post(circleEvents, CIRCLES_VERSION);
+  }
+
+  private static AGPostLocationReqDto post(
+      List<EncryptedDataDto> circleEvents, Long circlesVersion) {
     return new AGPostLocationReqDto(
         blobOfSize(AnonymousGroupService.COORDINATES_CIPHER_BYTES),
         blobOfSize(AnonymousGroupService.MEMBER_ACTIVITY_CIPHER_BYTES),
-        circleEvents);
+        circleEvents,
+        circlesVersion);
   }
 
   private void underTheRateLimit() {
@@ -112,11 +124,52 @@ class AGMemberMessageServiceTest {
     underTheRateLimit();
     when(anonymousGroupService.relayMemberMessage(eq(groupId), eq(authentication), any(), any()))
         .thenReturn(Optional.empty());
-    when(anonymousGroupService.getCirclesVersion(groupId)).thenReturn(7L);
 
     var res = service.postLocation(groupId, authentication, post(null));
 
-    assertThat(res.circlesVersion()).isEqualTo(7L);
+    assertThat(res.circlesVersion()).isEqualTo(CIRCLES_VERSION);
+  }
+
+  @Test
+  void postLocation_eventsOnOtherCircles_throwsCirclesChangedAndRelaysNothing() throws Exception {
+    underTheRateLimit();
+
+    assertThatThrownBy(
+            () ->
+                service.postLocation(
+                    groupId,
+                    authentication,
+                    post(List.of(circleEvent((byte) 1)), CIRCLES_VERSION - 1)))
+        .isInstanceOfSatisfying(
+            CirclesChangedException.class,
+            e -> assertThat(e.getCirclesVersion()).isEqualTo(CIRCLES_VERSION));
+    verifyNoInteractions(presenceService);
+    verify(anonymousGroupService, never()).relayMemberMessage(any(), any(), any(), any());
+    verify(anonymousGroupService, never()).relayCircleEvent(any(), any(), any());
+  }
+
+  @Test
+  void postLocation_eventsWithoutAVersion_throwsCirclesChanged() {
+    underTheRateLimit();
+
+    assertThatThrownBy(
+            () ->
+                service.postLocation(
+                    groupId, authentication, post(List.of(circleEvent((byte) 1)), null)))
+        .isInstanceOf(CirclesChangedException.class);
+  }
+
+  @Test
+  void postLocation_noEventsOnOtherCircles_relaysThePositionAndAnswersTheNewVersion()
+      throws Exception {
+    underTheRateLimit();
+    when(anonymousGroupService.relayMemberMessage(eq(groupId), eq(authentication), any(), any()))
+        .thenReturn(Optional.empty());
+
+    var res = service.postLocation(groupId, authentication, post(List.of(), null));
+
+    verify(presenceService).onLocation(groupId, memberId);
+    assertThat(res.circlesVersion()).isEqualTo(CIRCLES_VERSION);
   }
 
   @Test

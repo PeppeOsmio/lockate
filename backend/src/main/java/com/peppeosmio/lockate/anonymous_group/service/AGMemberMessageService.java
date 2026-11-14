@@ -5,6 +5,7 @@ import com.peppeosmio.lockate.anonymous_group.dto.AGMemberMessageReqDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGPostLocationReqDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGPostLocationResDto;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
+import com.peppeosmio.lockate.anonymous_group.exceptions.CirclesChangedException;
 import com.peppeosmio.lockate.anonymous_group.presence.AGPresenceService;
 import com.peppeosmio.lockate.anonymous_group.security.AGMemberAuthentication;
 import com.peppeosmio.lockate.common.dto.EncryptedDataDto;
@@ -50,7 +51,8 @@ public class AGMemberMessageService {
       throws TooManyRequestsException,
           InvalidEncryptedDataException,
           AGNotFoundException,
-          UnauthorizedException {
+          UnauthorizedException,
+          CirclesChangedException {
     var memberId = authentication.getId();
     if (redisService.increment("rate:location:" + memberId, Duration.ofMinutes(1))
         > MAX_LOCATIONS_PER_MINUTE) {
@@ -67,6 +69,13 @@ public class AGMemberMessageService {
       }
       circleEvent.toEncryptedStringOfLength(AnonymousGroupService.CIRCLE_EVENT_CIPHER_BYTES);
     }
+    // read before anything is relayed: a circle change committed after it is caught by the next
+    // post
+    var circlesVersion = anonymousGroupService.getCirclesVersion(anonymousGroupId);
+    if (!circleEvents.isEmpty()
+        && (dto.circlesVersion() == null || dto.circlesVersion() != circlesVersion)) {
+      throw new CirclesChangedException(circlesVersion);
+    }
     var saved =
         anonymousGroupService.relayMemberMessage(
             anonymousGroupId,
@@ -79,7 +88,7 @@ public class AGMemberMessageService {
       anonymousGroupService.relayCircleEvent(
           anonymousGroupId, authentication, new AGCircleEventReqDto(circleEvent));
     }
-    return new AGPostLocationResDto(anonymousGroupService.getCirclesVersion(anonymousGroupId));
+    return new AGPostLocationResDto(circlesVersion);
   }
 
   /** The member turned sharing off: the others learn it now rather than after the timeout. */

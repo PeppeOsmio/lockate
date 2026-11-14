@@ -57,14 +57,19 @@ movement the GPS runs every 2 s again. It is one constant. The map colours are b
 `POST /api/v1/anonymous-groups/{id}/locations` (`AGMemberMessageService`):
 
 ```json
-{ "encryptedCoordinates": {…}, "encryptedActivity": {…}, "circleEvents": [{ "cipherText": "…", "iv": "…" }] }
+{ "encryptedCoordinates": {…}, "encryptedActivity": {…},
+  "circleEvents": [{ "cipherText": "…", "iv": "…" }], "circlesVersion": 7 }
 ```
 
 - Everything is checked before anything is relayed: at most 16 circle events, every field at its
   exact size ([Encryption](encryption.md)). A bad request is a 400 and relays nothing.
+- Circle events computed on circles the server no longer has are refused: with events, a
+  `circlesVersion` other than the group's (or none) is a **409 `{circlesVersion}`** that relays
+  nothing ([below](#keeping-the-circles-current)).
 - Then the position is relayed to the group's SSE streams, maybe saved (at most every 2 min,
   [Retention](groups-and-auth.md#retention)), refreshes the sharing timer ([Sharing](sharing.md)),
   and each circle event is published in order ([Circles](circles.md)).
+- The answer is `{circlesVersion}`, the version of the group's circles.
 - At most 120 posts per member per minute (`rate:location:{memberId}`), 429 above. The app sends
   at most 40, so only a broken or malicious client hits it.
 - A failed post is dropped; the next fix replaces it (its circle events are recomputed).
@@ -89,16 +94,55 @@ stops at once. Nothing else needs it: notifications come by push
 ## Keeping the circles current
 
 The tracker needs the group's circles, and with no stream open the phone isn't told when someone
-creates, moves or deletes one. So every location post answers `{circlesVersion}`: a counter on the
-group (`anonymous_group.circles_version`), bumped in the same transaction as every circle change.
-`holdSharing` remembers the last version it saw, starting from none; when the answer differs it
-fetches the snapshot (`GET …/snapshot`), saves it and replaces the tracker's circles, which reseeds
-silently, so editing a circle doesn't notify anyone. A failed fetch is retried on the next post.
+creates, moves or deletes one. The group has a version of its circles, a counter
+(`anonymous_group.circles_version`) bumped in the same transaction as every circle change, and
+every location post is a conditional request on it, like an HTTP `If-Match`:
 
-It costs one indexed read per post on the server and one fetch per change, or per sharing start, on
-the phone, and it rides on posts the phone sends anyway: a moving phone learns of a change within
-seconds, a still one within 10 minutes. Pushing circle changes instead would add a push per change
-for every member and leave the tracker stale whenever one is lost.
+```mermaid
+sequenceDiagram
+    participant P as Phone (circles of v7)
+    participant S as Server (circles of v8)
+
+    P->>S: POST position + events, circlesVersion 7
+    S-->>P: 409 {circlesVersion: 8}, nothing relayed
+    P->>S: GET …/snapshot
+    P->>P: replace the tracker's circles, look at the same fix again
+    P->>S: POST position + events, circlesVersion 8
+    S-->>P: 200 {circlesVersion: 8}
+```
+
+- **Events on other circles are refused.** The post says on which version its events were
+  computed; with events, any other version (or none) is a 409 carrying the current one, and nothing
+  is relayed. The phone fetches the snapshot, replaces the tracker's circles and computes the events
+  of the same fix again, then posts again. So no event goes out about a deleted circle (which would
+  make every receiver fetch the snapshot for nothing) or about a circle that moved.
+- **A post without events is accepted on any version**, and its answer carries the current one.
+  When it differs, the phone fetches the snapshot, replaces the circles and looks at the same fix
+  again; if that gives events (a new circle it just crossed), it posts again with them.
+- **A changed circle takes the state of the last position the server got from us.**
+  `GeofenceTracker` seeds a new, moved or resized circle from the position of the last post that
+  went through (if under 5 minutes old, the same limit as pending events; else from where we are),
+  and the same fix is looked at again: a crossing made since that post is announced, also one made
+  while the posts were failing, while a circle created around a still phone isn't. The circles are
+  replaced before the post that brought the new version is confirmed, so that post's position isn't
+  taken as the base.
+- `holdSharing` keeps the version in memory, starting from none, so the first post of a sharing
+  session always fetches the circles once. A failed fetch keeps the old version and the next post
+  tries again; if the circles keep changing it gives up until the next position (`MAX_CIRCLE_REFRESHES`).
+
+Why a conditional post rather than posting the position first and the events after fetching the
+circles: it computes the same and in the usual case sends one request instead of two for each
+crossing, and the position and its events stay one request, so they arrive together or not at all.
+
+It costs one indexed read per post on the server, one fetch per change (or per sharing start) on the
+phone, and rides on posts the phone sends anyway: a moving phone learns of a change within seconds, a
+still one within 10 minutes. Pushing circle changes instead would add a push per change for every
+member and still leave the tracker stale whenever one is lost.
+
+The version is a monotonic `BIGINT` that never resets while the group exists; the phone only
+compares it for equality, so its size doesn't matter (at 1000 changes a second it would take
+hundreds of millions of years to overflow, and over 200,000 to leave a JavaScript number's exact
+range).
 
 What emulators can't show: Activity Recognition never reports there, and the emulator CPU doesn't
 sleep, so still mode and the original Doze bug need a real phone.

@@ -31,6 +31,7 @@ import com.peppeosmio.lockate.domain.anonymous_group.AnonymousGroup
 import com.peppeosmio.lockate.domain.anonymous_group.ChannelState
 import com.peppeosmio.lockate.domain.anonymous_group.ChannelStatus
 import com.peppeosmio.lockate.domain.anonymous_group.Circle
+import com.peppeosmio.lockate.domain.anonymous_group.CircleTransition
 import com.peppeosmio.lockate.domain.anonymous_group.GroupFrame
 import com.peppeosmio.lockate.domain.anonymous_group.MemberMessage
 import com.peppeosmio.lockate.domain.anonymous_group.SendLocationStatus
@@ -57,6 +58,7 @@ import com.peppeosmio.lockate.service.geofence.CircleEvents
 import com.peppeosmio.lockate.service.geofence.GeofenceTracker
 import com.peppeosmio.lockate.service.geofence.circleEventTexts
 import com.peppeosmio.lockate.service.geofence.presenceText
+import com.peppeosmio.lockate.service.location.Position
 import com.peppeosmio.lockate.service.location.PositionProvider
 import com.peppeosmio.lockate.service.push.namesUnknown
 import com.peppeosmio.lockate.service.push.openPushPayload
@@ -139,6 +141,9 @@ internal fun classifyStreamFailure(e: Throwable?, isNetworkAvailable: Boolean): 
 internal fun nextBackoffSeconds(retries: Int): Long = min(5L * retries, 60L)
 
 private val PAUSE_TIMEOUT = 10.seconds
+
+// a group whose circles keep changing while we post gives up until the next position
+private const val MAX_CIRCLE_REFRESHES = 2
 
 class AnonymousGroupService(
     private val anonymousGroupDao: AnonymousGroupDao,
@@ -774,8 +779,53 @@ class AnonymousGroupService(
     }
 
     /**
+     * Posts [position] and the circle [transitions], computed on the circles of [circlesVersion].
+     */
+    private suspend fun postLocation(
+        anonymousGroup: AnonymousGroup,
+        connectionSettings: Connection,
+        position: Position,
+        transitions: List<CircleTransition>,
+        circlesVersion: Long?,
+    ): HttpResponse? {
+        val encrypted =
+            payloadCodec.encryptMemberMessage(
+                message =
+                    MemberMessage(
+                        coordinates = position.fix.coordinates,
+                        activity = position.activity,
+                    ),
+                key = anonymousGroup.key,
+                groupId = anonymousGroup.id,
+                memberId = anonymousGroup.memberId,
+            )
+        val circleEvents = transitions.map {
+            EncryptedDataMapper.toDto(
+                payloadCodec.encryptCircleEvent(
+                    it,
+                    anonymousGroup.key,
+                    anonymousGroup.id,
+                    anonymousGroup.memberId,
+                )
+            )
+        }
+        return postAsMember(
+            anonymousGroup,
+            connectionSettings,
+            "locations",
+            AGPostLocationReqDto(
+                encryptedCoordinates = EncryptedDataMapper.toDto(encrypted.coordinates),
+                encryptedActivity = EncryptedDataMapper.toDto(encrypted.activity),
+                circleEvents = circleEvents,
+                circlesVersion = circlesVersion,
+            ),
+        )
+    }
+
+    /**
      * Posts [body] to the group's [path] as us. Null when it didn't get through; a removal or a
-     * deleted group is applied here, which stops the sharing.
+     * deleted group is applied here, which stops the sharing. A 409 is the answer of a location
+     * post whose circle events were computed on circles that changed, and is returned.
      */
     private suspend fun postAsMember(
         anonymousGroup: AnonymousGroup,
@@ -799,7 +849,8 @@ class AnonymousGroupService(
                 }
             }
             when (response.status.value) {
-                200 -> response
+                200,
+                409 -> response
                 401,
                 403 -> {
                     setAGIsMemberFalse(anonymousGroup)
@@ -873,68 +924,66 @@ class AnonymousGroupService(
                     launch {
                         getTimeoutJob()
                     }
-            val transitions = tracker.update(position.fix, now.toEpochMilliseconds())
+            val nowMillis = now.toEpochMilliseconds()
+            var transitions = tracker.update(position.fix, nowMillis)
             // a crossing goes out at once, whatever the throttle
             if (transitions.isEmpty() && lastSent?.let { (now - it).inMs < 1500 } == true) {
                 return@collect
             }
 
-            val encrypted =
-                payloadCodec.encryptMemberMessage(
-                    message =
-                        MemberMessage(coordinates = coordinates, activity = position.activity),
-                    key = anonymousGroup.key,
-                    groupId = anonymousGroup.id,
-                    memberId = anonymousGroup.memberId,
-                )
-            val circleEvents = transitions.map {
-                EncryptedDataMapper.toDto(
-                    payloadCodec.encryptCircleEvent(
-                        it,
-                        anonymousGroup.key,
-                        anonymousGroup.id,
-                        anonymousGroup.memberId,
+            // The events are computed on the circles of `circlesVersion`; when the server has
+            // other circles it refuses them (409) or, without events, says so in its answer. Then
+            // we fetch the circles and look at the same fix again: the events go out only computed
+            // on the circles the server has, and a new circle we just crossed isn't missed.
+            repeat(MAX_CIRCLE_REFRESHES + 1) {
+                val response =
+                    postLocation(
+                        anonymousGroup,
+                        connectionSettings,
+                        position,
+                        transitions,
+                        circlesVersion,
                     )
-                )
+                if (response == null) {
+                    // the next position replaces this one, and carries the same transitions again
+                    channel.status.update { it.copy(state = ChannelState.Reconnecting) }
+                    return@collect
+                }
+                channel.status.update { it.copy(state = ChannelState.Connected) }
+                val version = response.body<AGPostLocationResDto>().circlesVersion
+                val sent = response.status.value == 200
+                // The circles are replaced before the post is confirmed: a changed circle takes the
+                // state of the last position the server got from us, before this one. A failed
+                // fetch leaves the version as it was, so the next post tries again.
+                val refreshed =
+                    version != circlesVersion &&
+                        refreshSnapshot(anonymousGroup).also { ok ->
+                            if (ok) {
+                                circlesVersion = version
+                                tracker.replaceCircles(listCircles(anonymousGroup.internalId))
+                            }
+                        }
+                if (sent) {
+                    tracker.confirm(transitions, nowMillis)
+                    lastSent = now
+                    _events.tryEmit(
+                        AnonymousGroupEvent.AGLocationSentEvent(
+                            anonymousGroupInternalId = anonymousGroup.internalId,
+                            anonymousGroupId = anonymousGroup.id,
+                            connectionId = anonymousGroup.connectionId,
+                            locationRecord =
+                                LocationRecord(
+                                    coordinates = coordinates,
+                                    timestamp = Clock.System.now().toLocalDateTime(TimeZone.UTC),
+                                    activity = position.activity,
+                                ),
+                        )
+                    )
+                }
+                if (!refreshed) return@collect
+                transitions = tracker.update(position.fix, nowMillis)
+                if (sent && transitions.isEmpty()) return@collect
             }
-            val response =
-                postAsMember(
-                    anonymousGroup,
-                    connectionSettings,
-                    "locations",
-                    AGPostLocationReqDto(
-                        encryptedCoordinates = EncryptedDataMapper.toDto(encrypted.coordinates),
-                        encryptedActivity = EncryptedDataMapper.toDto(encrypted.activity),
-                        circleEvents = circleEvents,
-                    ),
-                )
-            // the next position replaces this one, and carries the same transitions again
-            if (response == null) {
-                channel.status.update { it.copy(state = ChannelState.Reconnecting) }
-                return@collect
-            }
-            channel.status.update { it.copy(state = ChannelState.Connected) }
-            tracker.confirm(transitions, now.toEpochMilliseconds())
-            lastSent = now
-            // with no stream open, this is how we learn that someone changed the circles
-            val version = response.body<AGPostLocationResDto>().circlesVersion
-            if (version != circlesVersion && refreshSnapshot(anonymousGroup)) {
-                circlesVersion = version
-                tracker.replaceCircles(listCircles(anonymousGroup.internalId))
-            }
-            _events.tryEmit(
-                AnonymousGroupEvent.AGLocationSentEvent(
-                    anonymousGroupInternalId = anonymousGroup.internalId,
-                    anonymousGroupId = anonymousGroup.id,
-                    connectionId = anonymousGroup.connectionId,
-                    locationRecord =
-                        LocationRecord(
-                            coordinates = coordinates,
-                            timestamp = Clock.System.now().toLocalDateTime(TimeZone.UTC),
-                            activity = position.activity,
-                        ),
-                )
-            )
         }
     }
 

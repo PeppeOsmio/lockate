@@ -22,6 +22,7 @@ held open ([Sending positions](architecture/sending.md#why-the-location-request-
 | 4c | Pushes: backend seals and sends, app opens and notifies. | done, not released |
 | 5a | Fetch on a miss: a push naming a member or circle the phone hasn't saved fetches the group's snapshot and notifies after it ([details](architecture/push.md#members-and-circles-the-phone-doesnt-know-yet)). Needed before 5b, and fixes a rare race today. | done, not released |
 | 5b | Switch-over: foreground service only while a group is shared; group events on the SSE stream; `AGWSHandler` removed; location posts answer the circles version ([details](architecture/sending.md#keeping-the-circles-current)). | done, not released; release only with the relay deployed, or nobody gets notifications |
+| 5c | Conditional location post: events computed on circles the server no longer has are refused (409) and computed again; a changed circle is seeded from the last position the server got ([details](architecture/sending.md#keeping-the-circles-current)). | done, not released |
 | 6 | Health check: hourly inexact alarm checks each server, member validity and push registration; a local notification after repeated failures, once. | planned |
 
 Pushes reach no phone until the Firebase project's relay is deployed and servers set

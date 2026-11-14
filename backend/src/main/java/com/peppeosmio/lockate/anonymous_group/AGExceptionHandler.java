@@ -1,5 +1,6 @@
 package com.peppeosmio.lockate.anonymous_group;
 
+import com.peppeosmio.lockate.anonymous_group.dto.AGPostLocationResDto;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGCircleConflictException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGCircleNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGIdTakenException;
@@ -7,6 +8,7 @@ import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotAdminExcepti
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.Base64Exception;
+import com.peppeosmio.lockate.anonymous_group.exceptions.CirclesChangedException;
 import com.peppeosmio.lockate.anonymous_group.push.InvalidPushRegistrationException;
 import com.peppeosmio.lockate.common.dto.ErrorResponseDto;
 import lombok.extern.slf4j.Slf4j;
@@ -57,6 +59,13 @@ public class AGExceptionHandler {
       InvalidPushRegistrationException e) {
     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
         .body(new ErrorResponseDto("invalid_push_registration"));
+  }
+
+  /** The phone fetches the circles and computes the events again: the body is the version now. */
+  @ExceptionHandler(CirclesChangedException.class)
+  public ResponseEntity<AGPostLocationResDto> handleCirclesChanged(CirclesChangedException e) {
+    return ResponseEntity.status(HttpStatus.CONFLICT)
+        .body(new AGPostLocationResDto(e.getCirclesVersion()));
   }
 
   @ExceptionHandler(AGIdTakenException.class)

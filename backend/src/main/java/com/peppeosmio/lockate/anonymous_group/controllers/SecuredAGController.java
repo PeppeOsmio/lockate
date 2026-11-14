@@ -11,6 +11,7 @@ import com.peppeosmio.lockate.anonymous_group.exceptions.AGCircleNotFoundExcepti
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotAdminException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
+import com.peppeosmio.lockate.anonymous_group.exceptions.CirclesChangedException;
 import com.peppeosmio.lockate.anonymous_group.push.AGPushRegistrationReqDto;
 import com.peppeosmio.lockate.anonymous_group.push.AGPushRegistrationResDto;
 import com.peppeosmio.lockate.anonymous_group.push.AGPushService;
@@ -162,7 +163,8 @@ public class SecuredAGController {
       throws TooManyRequestsException,
           InvalidEncryptedDataException,
           AGNotFoundException,
-          UnauthorizedException {
+          UnauthorizedException,
+          CirclesChangedException {
     return agMemberMessageService.postLocation(anonymousGroupId, authentication, dto);
   }
 }

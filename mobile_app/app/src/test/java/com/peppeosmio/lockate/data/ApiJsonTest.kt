@@ -41,12 +41,12 @@ class ApiJsonTest {
     }
 
     @Test
-    fun `a location post carries its circle events as encrypted fields`() {
+    fun `a location post carries its circle events and the circles version they were computed on`() {
         val blob = EncryptedDataDto(cipherText = "c", iv = "i")
 
         assertEquals(
-            """{"encryptedCoordinates":{"cipherText":"c","iv":"i"},"encryptedActivity":{"cipherText":"c","iv":"i"},"circleEvents":[{"cipherText":"c","iv":"i"}]}""",
-            apiJson.encodeToString(AGPostLocationReqDto(blob, blob, listOf(blob))),
+            """{"encryptedCoordinates":{"cipherText":"c","iv":"i"},"encryptedActivity":{"cipherText":"c","iv":"i"},"circleEvents":[{"cipherText":"c","iv":"i"}],"circlesVersion":3}""",
+            apiJson.encodeToString(AGPostLocationReqDto(blob, blob, listOf(blob), 3)),
         )
     }
 }

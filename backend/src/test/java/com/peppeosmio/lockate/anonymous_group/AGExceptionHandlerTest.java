@@ -7,6 +7,7 @@ import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotAdminExcepti
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.Base64Exception;
+import com.peppeosmio.lockate.anonymous_group.exceptions.CirclesChangedException;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -21,6 +22,14 @@ class AGExceptionHandlerTest {
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     assertThat(response.getBody().error()).isEqualTo("invalid_base64");
+  }
+
+  @Test
+  void handleCirclesChanged_returns409WithTheCurrentVersion() {
+    var response = handler.handleCirclesChanged(new CirclesChangedException(8));
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    assertThat(response.getBody().circlesVersion()).isEqualTo(8);
   }
 
   @Test
