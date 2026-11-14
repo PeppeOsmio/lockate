@@ -67,20 +67,20 @@ without a relay, or with one unreachable, everything works except notifications.
 circle event or sharing change through `CircleNotifier` ([Circles](circles.md#notifications)), or
 mark the group removed / deleted as for the socket's 4401 / 4404.
 
-### Members and circles the phone doesn't know yet (planned)
+### Members and circles the phone doesn't know yet
 
 A push names a member and, for a circle event, a circle; the notification needs their names, which
-the phone has only once it has saved them. Today a push naming a member or circle missing from
-Room is dropped silently (`describeNotification`, `circleEventTexts`). That is rare while the
-foreground service holds every group's socket, which saves `member.joined` and `circle.upserted` as
-they happen, but it can still lose a race: a new member who starts sharing at once, or a circle
-crossed right after it was created, can be pushed before the socket's frame is saved. After the
-switch-over ([Roadmap](../roadmap.md)) the phone learns about new members and circles only when it
-opens the group, so it would become the normal case.
+the phone has only once it has saved them. While the foreground service holds every group's socket,
+`member.joined` and `circle.upserted` are saved as they happen, but a push can still win the race: a
+new member who starts sharing at once, or a circle crossed right after it was created, or a socket
+that is down. After the switch-over ([Roadmap](../roadmap.md)) the phone learns about new members
+and circles only when it opens the group, so a miss becomes the normal case.
 
-So, on a miss, the app fetches the group's snapshot (members and circles, the same snapshot the SSE
-stream starts with), saves it through the usual snapshot code, and tries the notification again; a
-member or circle still unknown after that (removed meanwhile) is dropped. A high-priority push
+So when a push names a member, or for a circle event a circle, missing from Room (`namesUnknown`),
+`openPush` fetches the group's snapshot with `GET /api/v1/anonymous-groups/{id}/snapshot` (the same
+snapshot the streams start with), saves it through the usual snapshot code under the group's lock,
+and then describes the push. A member or circle still unknown after that (removed meanwhile), or a
+server that can't be reached, means the push is dropped. A high-priority push
 gives the app a few seconds of work, and a miss costs one request. Only on a miss: pushing every
 group change too would cost a push per change and still leave a gap whenever one is lost.
 

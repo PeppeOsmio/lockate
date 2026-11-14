@@ -11,7 +11,7 @@ The server speaks in JSON frames with a `type` (`AGFrameDto`), the same on every
 
 | Frame | |
 |---|---|
-| `snapshot` | Members with their last saved record, and circles. First on every stream, and in the join response. |
+| `snapshot` | Members with their last saved record, and circles. First on every stream, in the join response, and from `GET …/snapshot`. |
 | `member.joined` / `left` / `updated` | Membership changes. |
 | `circle.upserted` / `deleted` | [Circles](circles.md). |
 | `circle.event` | Another member's circle event, with the server's timestamp, never stored. |

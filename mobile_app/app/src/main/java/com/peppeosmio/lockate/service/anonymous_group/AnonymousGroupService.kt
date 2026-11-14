@@ -58,6 +58,7 @@ import com.peppeosmio.lockate.service.geofence.GeofenceTracker
 import com.peppeosmio.lockate.service.geofence.circleEventTexts
 import com.peppeosmio.lockate.service.geofence.presenceText
 import com.peppeosmio.lockate.service.location.PositionProvider
+import com.peppeosmio.lockate.service.push.namesUnknown
 import com.peppeosmio.lockate.service.push.openPushPayload
 import com.peppeosmio.lockate.utils.ErrorHandler
 import com.peppeosmio.lockate.utils.SendLoopLog
@@ -80,6 +81,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.contentType
+import io.ktor.http.isSuccess
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
 import java.io.IOException
@@ -1791,8 +1793,53 @@ class AnonymousGroupService(
 
                     else -> return@withContext null
                 }
+            val known = anonymousGroupDao.listAGMembers(group.internalId).map { it.id }.toSet()
+            val circles = listCircles(group.internalId).map { it.id }.toSet()
+            if (namesUnknown(channelFrame, known, circles)) {
+                refreshSnapshot(group)
+            }
             describeNotification(GroupFrame(group.internalId, group.id, channelFrame))
         }
+
+    /**
+     * Fetches and saves the group's snapshot, for a push naming a member or circle the phone hasn't
+     * saved yet. Best effort: if the server can't be reached the push is described with what the
+     * phone has, so it is dropped.
+     */
+    private suspend fun refreshSnapshot(anonymousGroup: AnonymousGroup) {
+        val connectionSettings =
+            connectionService.getConnectionSettingsById(anonymousGroup.connectionId)
+        val dto =
+            try {
+                val response = httpClient.get {
+                    url(
+                        "${connectionSettings.url}/api/v1/anonymous-groups/${anonymousGroup.id}/snapshot"
+                    )
+                    headers {
+                        connectionSettings.apiKey?.let { ak -> append("X-API-KEY", ak) }
+                        append(
+                            HttpHeaders.Authorization,
+                            "AGMember ${anonymousGroup.memberId} ${Base64.encode(anonymousGroup.memberToken)}",
+                        )
+                    }
+                }
+                if (!response.status.isSuccess()) {
+                    Log.w(
+                        "",
+                        "Can't fetch the snapshot of ${anonymousGroup.id}: ${response.status}",
+                    )
+                    return
+                }
+                response.body<AGFrameDto>()
+            } catch (e: IOException) {
+                Log.w("", "Can't fetch the snapshot of ${anonymousGroup.id}", e)
+                return
+            }
+        groupLock(anonymousGroup.id).withLock {
+            val snapshot = saveSnapshot(anonymousGroup, dto.members!!, dto.circles!!)
+            _groupFrames.emit(GroupFrame(anonymousGroup.internalId, anonymousGroup.id, snapshot))
+        }
+    }
 
     suspend fun listMutedTargets(anonymousGroupInternalId: Long): Set<String> =
         withContext(Dispatchers.IO) {

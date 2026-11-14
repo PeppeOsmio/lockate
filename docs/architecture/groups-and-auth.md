@@ -30,6 +30,7 @@ All under `/api/v1/anonymous-groups`; `🔒` = `@SecuredAGMember`.
 | 🔒 `PUT\|DELETE /{id}/circles/{circleId}` | Any member: [Circles](circles.md). |
 | 🔒 `POST /{id}/locations`, `POST /{id}/members/pause` | [Sending positions](sending.md). |
 | 🔒 `GET /{id}/locations` | SSE stream: [Real-time](realtime.md). |
+| 🔒 `GET /{id}/snapshot` | The snapshot the streams start with, for a push naming what the phone hasn't saved: [Push notifications](push.md#members-and-circles-the-phone-doesnt-know-yet). |
 | 🔒 `PUT /{id}/members/push-registration` | [Push notifications](push.md). |
 
 ## Member tokens
