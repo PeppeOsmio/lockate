@@ -14,7 +14,7 @@ import kotlinx.coroutines.launch
 
 internal const val GOOD_ACCURACY_METERS = 30f
 internal const val STALE_FIX_MILLIS = 60_000L
-// see docs/background-sync-design.md for why 10 minutes
+// see docs/architecture/sending.md for why 10 minutes
 const val STILL_FIX_INTERVAL_MILLIS = 10 * 60_000L
 internal const val WARM_UP_MILLIS = 20_000L
 internal const val STILL_ACQUIRE_MILLIS = 20_000L

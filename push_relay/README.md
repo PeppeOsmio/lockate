@@ -2,8 +2,9 @@
 
 Forwards push notifications from any Lockate backend to FCM with our Firebase project's
 credentials, which can't be given to self-hosted backends. The payload is sealed by the backend
-with a key only the app knows, so the relay can't read it. See `docs/background-sync-design.md`,
-"Push relay", for why it exists and what it sees.
+with a key only the app knows, so the relay can't read it. See
+[`docs/architecture/push-relay.md`](../docs/architecture/push-relay.md) for why it exists and what
+it sees.
 
 It is a Quarkus app compiled with GraalVM native-image, unlike the Spring Boot backend: it has no
 state and almost no code, and Quarkus native starts in milliseconds, so it can scale to zero.
