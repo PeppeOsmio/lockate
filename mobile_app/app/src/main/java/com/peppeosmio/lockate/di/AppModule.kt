@@ -33,14 +33,10 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.logging.Logger
 import io.ktor.client.plugins.logging.Logging
 import io.ktor.client.plugins.sse.SSE
-import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.serialization.kotlinx.json.json
 import java.io.File
 import org.koin.android.ext.koin.androidContext
-import org.koin.core.qualifier.named
 import org.koin.dsl.module
-
-private const val WEB_SOCKET_CLIENT = "webSocket"
 
 private val httpLogger =
     object : Logger {
@@ -86,16 +82,6 @@ val appModule = module {
                 json(apiJson)
             }
 
-            install(Logging) { logger = httpLogger }
-        }
-    }
-
-    // The group sockets ping on their own, aligned to the minute, so no OkHttp ping here: its
-    // timer would wake the radio at other times. The read timeout only backs up the pong timeout.
-    single<HttpClient>(named(WEB_SOCKET_CLIENT)) {
-        HttpClient(OkHttp) {
-            engine { config { readTimeout(90, java.util.concurrent.TimeUnit.SECONDS) } }
-            install(WebSockets)
             install(Logging) { logger = httpLogger }
         }
     }
@@ -182,7 +168,6 @@ val appModule = module {
             cryptoService = get(),
             connectionService = get(),
             httpClient = get(),
-            webSocketClient = get(named(WEB_SOCKET_CLIENT)),
             locationService = get(),
             positionProvider = get(),
             connectivityService = get(),

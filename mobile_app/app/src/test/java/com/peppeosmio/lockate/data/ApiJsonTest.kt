@@ -1,8 +1,8 @@
 package com.peppeosmio.lockate.data
 
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGFrameDto
-import com.peppeosmio.lockate.data.anonymous_group.remote.AGMemberMessageReqDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGPostLocationReqDto
+import com.peppeosmio.lockate.data.anonymous_group.remote.AGPostLocationResDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.EncryptedDataDto
 import kotlinx.datetime.LocalDateTime
 import org.junit.Assert.assertEquals
@@ -31,10 +31,12 @@ class ApiJsonTest {
     }
 
     @Test
-    fun `the ping is only its type`() {
+    fun `a location post answers the circles version`() {
         assertEquals(
-            """{"type":"ping"}""",
-            apiJson.encodeToString<AGMemberMessageReqDto>(AGMemberMessageReqDto.Ping),
+            7L,
+            apiJson
+                .decodeFromString<AGPostLocationResDto>("""{"circlesVersion":7}""")
+                .circlesVersion,
         )
     }
 

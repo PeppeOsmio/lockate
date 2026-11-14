@@ -20,7 +20,8 @@ tracks only ourselves:
 
 - it feeds on our own fixes and ignores inaccurate ones;
 - it starts silently from the first fix, and reseeds silently when a circle is added, moved or
-  resized, so editing a circle doesn't notify anyone;
+  resized, so editing a circle doesn't notify anyone; the circles come from Room, refreshed when a
+  location post says they changed ([Sending positions](sending.md#keeping-the-circles-current));
 - each transition is a circle event: circle id + enter/exit, one AES-GCM field of 33 bytes, no
   timestamp (receivers use the server's).
 
@@ -54,7 +55,7 @@ never stored.
 ## Notifications
 
 Notifications come only from live `circle.event` and sharing frames, never from stored records:
-by push ([Push notifications](push.md)), or on the group socket for a server that doesn't push.
+by push ([Push notifications](push.md)); a server without a push relay notifies nothing.
 `CircleNotifier` shows them: one notification per member, replaced by each new event, under one
 summary per group (`CircleNotificationBook`); they expire after 1 hour. Muted circles and members
 are kept only in Room.

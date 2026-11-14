@@ -119,11 +119,20 @@ interface AnonymousGroupDao {
     @Query(
         """
         SELECT * FROM anonymous_group
+        WHERE isMember = 1 AND existsRemote = 1 AND sendLocation = 1
+        ORDER BY internalId DESC
+        """
+    )
+    suspend fun listAGsToShare(): List<AnonymousGroupEntity>
+
+    @Query(
+        """
+        SELECT * FROM anonymous_group
         WHERE isMember = 1 AND existsRemote = 1
         ORDER BY internalId DESC
         """
     )
-    suspend fun listAGsToHold(): List<AnonymousGroupEntity>
+    suspend fun listMemberAGs(): List<AnonymousGroupEntity>
 
     @Query(
         """

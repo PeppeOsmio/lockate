@@ -22,7 +22,6 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import java.security.SecureRandom
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.encoding.Base64
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -50,13 +49,6 @@ class PushRegistrationService(
     private val random: SecureRandom = SecureRandom(),
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val pushedGroups = ConcurrentHashMap.newKeySet<Long>()
-
-    /**
-     * Whether the group's server pushes its events to us, as it said when we last registered in
-     * this run; its socket frames then don't notify, or we would tell everything twice.
-     */
-    fun isPushed(anonymousGroupInternalId: Long) = anonymousGroupInternalId in pushedGroups
 
     /** Registers every group now, and each group we join or create from now on. */
     fun start(events: Flow<AnonymousGroupEvent>) {
@@ -74,7 +66,7 @@ class PushRegistrationService(
 
     suspend fun registerAll() {
         val token = pushTokenSource.token() ?: return
-        anonymousGroupDao.listAGsToHold().forEach { register(it, token) }
+        anonymousGroupDao.listMemberAGs().forEach { register(it, token) }
     }
 
     suspend fun register(anonymousGroupInternalId: Long) {
@@ -109,10 +101,8 @@ class PushRegistrationService(
                     )
                 )
             }
-            if (response.status.value == 200 && response.body<PushRegistrationResDto>().pushes) {
-                pushedGroups.add(entity.internalId)
-            } else {
-                pushedGroups.remove(entity.internalId)
+            // a server without a relay sends no notifications at all
+            if (response.status.value != 200 || !response.body<PushRegistrationResDto>().pushes) {
                 sendLoopLog.log("push registration ${group.id} ${response.status.value} no pushes")
             }
         } catch (e: CancellationException) {

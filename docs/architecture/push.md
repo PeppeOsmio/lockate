@@ -21,9 +21,8 @@ so the token can't tell the app which group a push is for. A registration id doe
   member, keyed by the authenticated member, replaced by the next; deleted with the member.
 - `r` only has to be unique on the phone, where it finds the Room row; two phones with the same `r`
   don't interfere.
-- The answer `{pushes: true|false}` says whether the server has a relay. The app stops notifying
-  from the socket only for groups pushed, so nothing is told twice and a server without a relay
-  works as before.
+- The answer `{pushes: true|false}` says whether the server has a relay. Pushes are the only way
+  notifications arrive, so a server without a relay sends none; the app only logs it.
 
 The push key is stored in clear on the server, since the server seals with it: a database leak
 lets someone holding the FCM token forge notifications for that member, as a leak already exposes
@@ -37,7 +36,7 @@ An FCM `data` message, high priority:
 { "r": registrationId, "iv": 12 bytes, "c": AES-GCM(pushKey, frame, aad = "lockate-push-v1|" + r) }
 ```
 
-- `frame` is the same `AGFrameDto` JSON the sockets get ([Real-time](realtime.md)), so the app
+- `frame` is the same `AGFrameDto` JSON the SSE stream sends ([Real-time](realtime.md)), so the app
   parses it with code it already has; a circle event inside is still encrypted with the group key.
   A few hundred bytes, under FCM's ~4 KB, so nothing is stored for later fetch.
 - `r` in the AAD stops a payload from being replayed under another registration.
@@ -65,16 +64,14 @@ without a relay, or with one unreachable, everything works except notifications.
 `LockateMessagingService.onMessageReceived` → `AnonymousGroupService.openPush`: look up `r` in Room
 (unknown: left group, old registration or forged → dropped), open it (fails → dropped), then show a
 circle event or sharing change through `CircleNotifier` ([Circles](circles.md#notifications)), or
-mark the group removed / deleted as for the socket's 4401 / 4404.
+mark the group removed / deleted as the stream's last frame does.
 
 ### Members and circles the phone doesn't know yet
 
 A push names a member and, for a circle event, a circle; the notification needs their names, which
-the phone has only once it has saved them. While the foreground service holds every group's socket,
-`member.joined` and `circle.upserted` are saved as they happen, but a push can still win the race: a
-new member who starts sharing at once, or a circle crossed right after it was created, or a socket
-that is down. After the switch-over ([Roadmap](../roadmap.md)) the phone learns about new members
-and circles only when it opens the group, so a miss becomes the normal case.
+the phone has only once it has saved them. It saves them when it opens the group (the stream's
+snapshot and frames) and when a location post says the circles changed, so a member who joined or a
+circle created while the group wasn't on screen is usually unknown.
 
 So when a push names a member, or for a circle event a circle, missing from Room (`namesUnknown`),
 `openPush` fetches the group's snapshot with `GET /api/v1/anonymous-groups/{id}/snapshot` (the same

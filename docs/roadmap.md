@@ -21,15 +21,13 @@ held open ([Sending positions](architecture/sending.md#why-the-location-request-
 | 4b | Push relay module, image and Terraform/Terragrunt. | done, not deployed |
 | 4c | Pushes: backend seals and sends, app opens and notifies. | done, not released |
 | 5a | Fetch on a miss: a push naming a member or circle the phone hasn't saved fetches the group's snapshot and notifies after it ([details](architecture/push.md#members-and-circles-the-phone-doesnt-know-yet)). Needed before 5b, and fixes a rare race today. | done, not released |
-| 5b | Switch-over: foreground service only while a group is shared; group events on the SSE stream; `AGWSHandler` removed. | next, after the relay is deployed |
+| 5b | Switch-over: foreground service only while a group is shared; group events on the SSE stream; `AGWSHandler` removed; location posts answer the circles version ([details](architecture/sending.md#keeping-the-circles-current)). | done, not released; release only with the relay deployed, or nobody gets notifications |
 | 6 | Health check: hourly inexact alarm checks each server, member validity and push registration; a local notification after repeated failures, once. | planned |
 
 Pushes reach no phone until the Firebase project's relay is deployed and servers set
 `PUSH_RELAY_URL`.
 
-Until step 5b the socket is only for receiving and still pings every minute: in Doze the ping is
-late, the server may close the socket after 150 s, and the app reconnects at the next fix, so a
-notification from a server without a relay can be missed meanwhile.
+Since 5b notifications come only by push: a server without `PUSH_RELAY_URL` sends none.
 
 ## Open points
 
@@ -50,5 +48,7 @@ notification from a server without a relay can be missed meanwhile.
 - Old app versions stop working against the new server; backend and app are released together.
 - Every existing group was deleted by the SHA-256 change.
 - A dead phone is reported as "stopped sharing" after 30 min.
+- No notifications from a server without a push relay (no socket to fall back on since 5b).
+- A still phone learns of a changed circle within 10 minutes, at its next post.
 - A still position can be up to 10 min old, and a movement Activity Recognition misses is reported
   up to 10 min late.

@@ -64,14 +64,14 @@ class CirclesViewModel(private val anonymousGroupService: AnonymousGroupService)
                     mutedTargets = anonymousGroupService.listMutedTargets(anonymousGroupInternalId),
                 )
             }
-            // subscribed before the channel is held, so the snapshot of a new connection isn't
+            // subscribed before the stream is held, so the snapshot of a new connection isn't
             // missed
             launch(start = CoroutineStart.UNDISPATCHED) {
                 anonymousGroupService.groupFrames
                     .filter { it.anonymousGroupInternalId == anonymousGroupInternalId }
                     .collect { applyFrame(it.frame) }
             }
-            anonymousGroupService.holdChannel(anonymousGroup, send = false)
+            anonymousGroupService.holdGroupStream(anonymousGroup, onState = {}, onLocations = {})
         }
     }
 

@@ -14,7 +14,6 @@ import androidx.core.app.NotificationCompat
 import com.peppeosmio.lockate.R
 import com.peppeosmio.lockate.domain.anonymous_group.notificationText
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
-import com.peppeosmio.lockate.service.push.PushRegistrationService
 import com.peppeosmio.lockate.utils.SendLoopLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,16 +29,12 @@ class AndroidSendLocationService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val anonymousGroupService: AnonymousGroupService by inject<AnonymousGroupService>()
     private val sendLoopLog: SendLoopLog by inject<SendLoopLog>()
-    private val circleNotifier: CircleNotifier by inject<CircleNotifier>()
-    private val pushRegistrationService: PushRegistrationService by
-        inject<PushRegistrationService>()
     private val mainHandler = Handler(Looper.getMainLooper())
 
     // isRunning and the jobs are only touched on the main thread (onStartCommand and the posted
     // notification updates), so a status update arriving after stop() can't repost the notification
     private var isRunning = false
     private var sendJob: Job? = null
-    private var notifyJob: Job? = null
     private var restartJob: Job? = null
     private var notificationBuilder: NotificationCompat.Builder? = null
 
@@ -87,29 +82,18 @@ class AndroidSendLocationService : Service() {
         if (sendJob?.isActive == true) return
 
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        notifyJob?.cancel()
-        notifyJob = serviceScope.launch {
-            // only the live frames notify, never the ones read back from the server, and only for
-            // the groups whose server doesn't push the same events
-            anonymousGroupService.groupFrames.collect { groupFrame ->
-                if (pushRegistrationService.isPushed(groupFrame.anonymousGroupInternalId)) {
-                    return@collect
-                }
-                val events =
-                    anonymousGroupService.describeNotification(groupFrame) ?: return@collect
-                mainHandler.post { if (isRunning) circleNotifier.show(events) }
-            }
-        }
         sendJob = serviceScope.launch {
             try {
-                anonymousGroupService.holdAllChannels { status ->
-                    // when the coroutines are canceled the status callback is still invoked
-                    // to notify that they're not sending location anymore by decrementing AG count
-                    // so update the notification only while running, otherwise a "ghost"
-                    // notification
-                    // is created
+                anonymousGroupService.holdAllSharing { status ->
+                    // the callback still runs while the coroutines are cancelled, so the
+                    // notification is updated only while running, or a "ghost" one would appear
                     mainHandler.post {
-                        if (isRunning) {
+                        if (!isRunning) return@post
+                        // the service runs only while we share with some group; notifications
+                        // come by push
+                        if (status.totalAGCount == 0) {
+                            stop()
+                        } else {
                             notificationManager.notify(
                                 1,
                                 builder.setContentText(status.notificationText()).build(),
@@ -184,8 +168,6 @@ class AndroidSendLocationService : Service() {
         restartJob?.cancel()
         sendJob?.cancel()
         sendJob = null
-        notifyJob?.cancel()
-        notifyJob = null
         stopForeground(STOP_FOREGROUND_REMOVE)
         (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).cancel(1)
         stopSelf()
@@ -199,8 +181,6 @@ class AndroidSendLocationService : Service() {
         restartJob?.cancel()
         val oldJob = sendJob
         sendJob = null
-        notifyJob?.cancel()
-        notifyJob = null
         restartJob =
             serviceScope.launch(Dispatchers.Main) {
                 oldJob?.cancelAndJoin()

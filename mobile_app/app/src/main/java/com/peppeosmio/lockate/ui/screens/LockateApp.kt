@@ -2,10 +2,13 @@ package com.peppeosmio.lockate.ui.screens
 
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupEvent
+import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
 import com.peppeosmio.lockate.ui.routes.CircleEditorRoute
 import com.peppeosmio.lockate.ui.routes.CirclesRoute
 import com.peppeosmio.lockate.ui.routes.ConnectionSettingsRoute
@@ -27,10 +30,26 @@ import com.peppeosmio.lockate.ui.screens.manage_connections.ManageConnectionsScr
 import com.peppeosmio.lockate.ui.screens.map.MapScreen
 import com.peppeosmio.lockate.ui.screens.settings.SettingsScreen
 import com.peppeosmio.lockate.ui.theme.LockateTheme
+import org.koin.compose.koinInject
 
 @Composable
 fun LockateApp(startLocationService: () -> Unit) {
     val appNavController = rememberNavController()
+    val anonymousGroupService = koinInject<AnonymousGroupService>()
+
+    // The service runs only while we share with some group and stops by itself when we don't, so
+    // it is started again whenever a group starts being shared
+    LaunchedEffect(Unit) {
+        anonymousGroupService.events.collect { event ->
+            when (event) {
+                is AnonymousGroupEvent.NewAnonymousGroupEvent,
+                is AnonymousGroupEvent.ReaddedToAnonymousGroupEvent,
+                is AnonymousGroupEvent.RemoteAGExistsEvent,
+                is AnonymousGroupEvent.SendEnabledEvent -> startLocationService()
+                else -> Unit
+            }
+        }
+    }
 
     LockateTheme {
         NavHost(

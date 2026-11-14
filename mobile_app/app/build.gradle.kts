@@ -143,7 +143,6 @@ dependencies {
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.ktor.client.logging)
     implementation(libs.ktor.serialization.kotlinx.json)
-    implementation(libs.ktor.client.websockets)
 
     implementation(platform(libs.koin.bom))
     implementation(libs.insert.koin.koin.core)
