@@ -45,3 +45,26 @@ FCM_PROJECT_ID=my-project ./mvnw quarkus:dev
 # Native image
 docker build -f native.Dockerfile -t lockate-push-relay .
 ```
+
+## Deploying to Cloud Run
+
+`terraform/modules/push-relay` creates everything on Google Cloud: the `push-relay` service
+account (only the Firebase Cloud Messaging admin role, no key file), an Artifact Registry
+repository that proxies Docker Hub, and the public Cloud Run service. Terragrunt runs it once per
+environment from `terraform/live/`: `prod` (project `lockate`) and `staging` (project
+`lockate-staging`, a separate Google Cloud and Firebase project). Each project must be on the
+Blaze plan.
+
+```bash
+gcloud auth application-default login
+export DOCKERHUB_USERNAME=<the release workflow's DOCKERHUB_USERNAME>
+export RELAY_VERSION=<release version, like 1.2.3>
+
+cd terraform/live/staging   # or prod
+terragrunt init
+terragrunt apply
+```
+
+`terragrunt output url` prints the environment's `PUSH_RELAY_URL`. The image exists once a
+`backend-vX.Y.Z` release has run. The state is `terraform.tfstate` in the environment's folder (not
+committed): keep it, or switch `remote_state` in `live/root.hcl` to a GCS bucket.
