@@ -2,7 +2,8 @@
 
 [← Architecture](../architecture.md)
 
-While a member shares with a group, the foreground service follows its position and posts it.
+While a member shares with a group, the foreground service follows its position and posts it. The
+service runs only while some group is shared.
 
 ## Modes
 
@@ -73,13 +74,31 @@ timeout): the others are told at once instead of when the timer expires.
 
 ## On the phone
 
-`AnonymousGroupService` owns the networking. `holdChannel` keeps a group's channel open while
-someone needs it (the foreground service for every group, the open map); while the group has a
-send lease the channel follows our location through `PositionProvider`, runs the group's
-`GeofenceTracker` and posts each position with its circle events, one post at a time, then posts
-`members/pause` when the lease ends. The foreground service restarts on boot; today it runs for
-every group we are in, since it also holds the group sockets, and after the switch-over it will run
-only while a group is shared ([Roadmap](../roadmap.md)).
+`AnonymousGroupService` owns the networking. The foreground service (`AndroidSendLocationService`)
+calls `holdAllSharing`, which runs `holdSharing` for each group we share with (member, group still
+there, sharing on) and follows the groups that start or stop being shared. `holdSharing` follows our
+location through `PositionProvider`, runs the group's `GeofenceTracker` and posts each position with
+its circle events, one post at a time, then posts `members/pause` when it stops. A post answered 401
+or 404 marks the group removed or deleted, which stops its sharing.
+
+The service stops itself when no group is shared. It is started at app launch, when the app sees a
+group start being shared (created, joined, sharing turned on), and on boot; with nothing to share it
+stops at once. Nothing else needs it: notifications come by push
+([Push notifications](push.md)), and the stream of the group on screen is held by the screen.
+
+## Keeping the circles current
+
+The tracker needs the group's circles, and with no stream open the phone isn't told when someone
+creates, moves or deletes one. So every location post answers `{circlesVersion}`: a counter on the
+group (`anonymous_group.circles_version`), bumped in the same transaction as every circle change.
+`holdSharing` remembers the last version it saw, starting from none; when the answer differs it
+fetches the snapshot (`GET …/snapshot`), saves it and replaces the tracker's circles, which reseeds
+silently, so editing a circle doesn't notify anyone. A failed fetch is retried on the next post.
+
+It costs one indexed read per post on the server and one fetch per change, or per sharing start, on
+the phone, and it rides on posts the phone sends anyway: a moving phone learns of a change within
+seconds, a still one within 10 minutes. Pushing circle changes instead would add a push per change
+for every member and leave the tracker stale whenever one is lost.
 
 What emulators can't show: Activity Recognition never reports there, and the emulator CPU doesn't
 sleep, so still mode and the original Doze bug need a real phone.

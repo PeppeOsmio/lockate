@@ -120,9 +120,9 @@ sequenceDiagram
 | [Groups and authentication](architecture/groups-and-auth.md) | Groups, members, admins, member tokens, client ids, API keys, admin UI, retention |
 | [Invites](architecture/invites.md) | Invite codes, the J-PAKE exchange, the server mailbox |
 | [Circles](architecture/circles.md) | Places of a group, geofencing on the phone, circle events |
-| [Sending positions](architecture/sending.md) | Moving and still modes, the REST endpoint, Doze, rate limits |
+| [Sending positions](architecture/sending.md) | Moving and still modes, the REST endpoint, Doze, rate limits, keeping the circles current |
 | [Sharing](architecture/sharing.md) | Who is sharing, the Redis timer, map colours |
-| [Real-time](architecture/realtime.md) | SSE stream, the group socket, Redis pub/sub across instances |
+| [Real-time](architecture/realtime.md) | The SSE stream of the group on screen, why there is no socket, Redis pub/sub across instances |
 | [Push notifications](architecture/push.md) | Registration, sealed payloads, what the app does with a push |
 | [Push relay](architecture/push-relay.md) | Why it exists, what it sees, how it runs and is deployed |
 | [Environments](architecture/environments.md) | Prod and staging app flavors, Firebase and relay per environment |

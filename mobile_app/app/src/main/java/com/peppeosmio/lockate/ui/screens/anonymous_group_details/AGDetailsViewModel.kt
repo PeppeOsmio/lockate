@@ -102,7 +102,7 @@ class AGDetailsViewModel(
         listenForUserLocation()
     }
 
-    /** The others' positions stream only while the map is on screen, so the radio can rest */
+    /** The group streams only while the map is on screen, so the radio can rest */
     fun startLocationStream() {
         isMapStarted = true
         state.value.anonymousGroup?.let { holdLocationStream(it) }
@@ -198,18 +198,28 @@ class AGDetailsViewModel(
     private fun holdLocationStream(anonymousGroup: AnonymousGroup) {
         locationStreamJob?.cancel()
         locationStreamJob = viewModelScope.launch {
-            anonymousGroupService.holdLocationStream(
+            anonymousGroupService.holdGroupStream(
                 anonymousGroup,
                 onState = { streamState ->
                     _state.update {
                         it.copy(
+                            remoteDataLoadingState =
+                                when (streamState) {
+                                    ChannelState.Connecting -> it.remoteDataLoadingState
+                                    ChannelState.Connected -> LoadingState.Success
+                                    ChannelState.Reconnecting ->
+                                        if (it.remoteDataLoadingState == LoadingState.IsLoading)
+                                            LoadingState.Failed
+                                        else it.remoteDataLoadingState
+                                    ChannelState.Stopped -> LoadingState.Failed
+                                },
                             locationStreamState =
                                 when (streamState) {
                                     ChannelState.Connecting -> LocationStreamState.Connecting
                                     ChannelState.Connected -> LocationStreamState.Connected
                                     ChannelState.Reconnecting -> LocationStreamState.Reconnecting
                                     ChannelState.Stopped -> LocationStreamState.Stopped
-                                }
+                                },
                         )
                     }
                 },
@@ -228,7 +238,7 @@ class AGDetailsViewModel(
                     locationStreamState = LocationStreamState.Connecting,
                 )
             }
-            // subscribed before the channel is held, so the snapshot of a new connection isn't
+            // subscribed before the stream is held, so the snapshot of a new connection isn't
             // missed
             launch(start = CoroutineStart.UNDISPATCHED) {
                 anonymousGroupService.groupFrames
@@ -236,22 +246,6 @@ class AGDetailsViewModel(
                     .collect { applyFrame(it.frame) }
             }
             if (isMapStarted) holdLocationStream(anonymousGroup)
-            anonymousGroupService.holdChannel(anonymousGroup, send = false) { status ->
-                _state.update {
-                    it.copy(
-                        remoteDataLoadingState =
-                            when (status.state) {
-                                ChannelState.Connecting -> it.remoteDataLoadingState
-                                ChannelState.Connected -> LoadingState.Success
-                                ChannelState.Reconnecting ->
-                                    if (it.remoteDataLoadingState == LoadingState.IsLoading)
-                                        LoadingState.Failed
-                                    else it.remoteDataLoadingState
-                                ChannelState.Stopped -> LoadingState.Failed
-                            }
-                    )
-                }
-            }
         }
     }
 

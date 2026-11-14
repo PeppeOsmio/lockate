@@ -29,7 +29,6 @@ import java.io.File
 import kotlin.io.encoding.Base64
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -100,7 +99,7 @@ class PushRegistrationServiceTest {
 
     @Test
     fun `each group gets a new id and key, sent with the token`() = runTest {
-        coEvery { dao.listAGsToHold() } returns listOf(group(1, "g1"), group(2, "g2"))
+        coEvery { dao.listMemberAGs() } returns listOf(group(1, "g1"), group(2, "g2"))
         val stored = mutableListOf<PushRegistrationEntity>()
         coEvery { dao.insertPushRegistration(capture(stored)) } returns Unit
 
@@ -125,7 +124,7 @@ class PushRegistrationServiceTest {
 
     @Test
     fun `an existing registration is sent again, not replaced`() = runTest {
-        coEvery { dao.listAGsToHold() } returns listOf(group(1, "g1"))
+        coEvery { dao.listMemberAGs() } returns listOf(group(1, "g1"))
         val existing =
             PushRegistrationEntity(1, ByteArray(16) { 7 }, ByteArray(32) { 8 }, byteArrayOf(9))
         coEvery { dao.getPushRegistration(1) } returns existing
@@ -140,7 +139,7 @@ class PushRegistrationServiceTest {
 
     @Test
     fun `an id already used on this phone is drawn again`() = runTest {
-        coEvery { dao.listAGsToHold() } returns listOf(group(1, "g1"))
+        coEvery { dao.listMemberAGs() } returns listOf(group(1, "g1"))
         val taken = PushRegistrationEntity(2, ByteArray(16), ByteArray(32), ByteArray(1))
         coEvery { dao.getPushRegistrationById(any()) } returnsMany listOf(taken, null)
         val stored = slot<PushRegistrationEntity>()
@@ -157,7 +156,7 @@ class PushRegistrationServiceTest {
 
     @Test
     fun `without a push token nothing is stored or sent`() = runTest {
-        coEvery { dao.listAGsToHold() } returns listOf(group(1, "g1"))
+        coEvery { dao.listMemberAGs() } returns listOf(group(1, "g1"))
 
         service(token = null).registerAll()
 
@@ -167,7 +166,7 @@ class PushRegistrationServiceTest {
 
     @Test
     fun `a failing server doesn't stop the other groups`() = runTest {
-        coEvery { dao.listAGsToHold() } returns listOf(group(1, "g1"), group(2, "g2"))
+        coEvery { dao.listMemberAGs() } returns listOf(group(1, "g1"), group(2, "g2"))
         coEvery { connectionService.getConnectionSettingsById(1) } throws
             IllegalStateException("gone") andThen
             Connection(1, "c", "https://server", null, null, null)
@@ -175,29 +174,5 @@ class PushRegistrationServiceTest {
         service().registerAll()
 
         assertEquals(1, requests.size)
-    }
-
-    @Test
-    fun `a group is pushed only if its server says it pushes`() = runTest {
-        coEvery { dao.listAGsToHold() } returns listOf(group(1, "g1"))
-        val service = service()
-
-        service.registerAll()
-        assertTrue(service.isPushed(1))
-
-        pushes = false
-        service.registerAll()
-        assertFalse(service.isPushed(1))
-    }
-
-    @Test
-    fun `a failed registration doesn't count as pushed`() = runTest {
-        coEvery { dao.listAGsToHold() } returns listOf(group(1, "g1"))
-        status = HttpStatusCode.InternalServerError
-
-        val service = service()
-        service.registerAll()
-
-        assertFalse(service.isPushed(1))
     }
 }
