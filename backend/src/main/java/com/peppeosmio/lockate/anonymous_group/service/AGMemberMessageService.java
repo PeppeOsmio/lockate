@@ -3,6 +3,7 @@ package com.peppeosmio.lockate.anonymous_group.service;
 import com.peppeosmio.lockate.anonymous_group.dto.AGCircleEventReqDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGMemberMessageReqDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGPostLocationReqDto;
+import com.peppeosmio.lockate.anonymous_group.dto.AGPostLocationResDto;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.presence.AGPresenceService;
 import com.peppeosmio.lockate.anonymous_group.security.AGMemberAuthentication;
@@ -44,7 +45,7 @@ public class AGMemberMessageService {
   }
 
   /** Everything is checked before anything is relayed, so a bad request relays nothing. */
-  public void postLocation(
+  public AGPostLocationResDto postLocation(
       UUID anonymousGroupId, AGMemberAuthentication authentication, AGPostLocationReqDto dto)
       throws TooManyRequestsException,
           InvalidEncryptedDataException,
@@ -78,6 +79,7 @@ public class AGMemberMessageService {
       anonymousGroupService.relayCircleEvent(
           anonymousGroupId, authentication, new AGCircleEventReqDto(circleEvent));
     }
+    return new AGPostLocationResDto(anonymousGroupService.getCirclesVersion(anonymousGroupId));
   }
 
   /** The member turned sharing off: the others learn it now rather than after the timeout. */

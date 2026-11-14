@@ -21,3 +21,5 @@ databaseChangeLog:
       file: classpath:db/changelog/sha256-member-tokens.sql
   - include:
       file: classpath:db/changelog/push-registration.sql
+  - include:
+      file: classpath:db/changelog/circles-version.sql

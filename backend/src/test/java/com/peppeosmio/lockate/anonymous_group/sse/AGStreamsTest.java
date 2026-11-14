@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.peppeosmio.lockate.anonymous_group.dto.AGFrameDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGMemberDto;
+import com.peppeosmio.lockate.anonymous_group.dto.CircleEventDto;
 import com.peppeosmio.lockate.anonymous_group.dto.LocationRecordDto;
 import com.peppeosmio.lockate.anonymous_group.dto.MemberLocationDto;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
@@ -35,7 +36,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import tools.jackson.databind.ObjectMapper;
 
 @ExtendWith(MockitoExtension.class)
-class AGLocationStreamsTest {
+class AGStreamsTest {
 
   @Mock private AnonymousGroupService anonymousGroupService;
   @Mock private RedisService redisService;
@@ -43,7 +44,7 @@ class AGLocationStreamsTest {
   @Mock private MessageListener eventsListener;
 
   private final ObjectMapper objectMapper = new ObjectMapper();
-  private AGLocationStreams streams;
+  private AGStreams streams;
   private final UUID groupId = UUID.randomUUID();
   private final UUID memberId = UUID.randomUUID();
   private final ArgumentCaptor<Consumer<String>> locations = consumerCaptor();
@@ -79,7 +80,7 @@ class AGLocationStreamsTest {
 
   @BeforeEach
   void setUp() {
-    streams = new AGLocationStreams(objectMapper, anonymousGroupService, redisService);
+    streams = new AGStreams(objectMapper, anonymousGroupService, redisService);
   }
 
   @AfterEach
@@ -167,41 +168,102 @@ class AGLocationStreamsTest {
   }
 
   @Test
-  void ownMemberLeft_endsTheStream() throws Exception {
+  void open_eventsArrivingDuringTheSnapshotAreSentAfterItInOrder() throws Exception {
+    var early = json(location(UUID.randomUUID()));
+    var circle = json(AGFrameDto.circleDeleted(UUID.randomUUID()));
+    when(redisService.subscribe(eq("ag-" + groupId + "-locations"), locations.capture()))
+        .thenReturn(locationsListener);
+    when(redisService.subscribe(eq("ag-" + groupId + "-events"), events.capture()))
+        .thenReturn(eventsListener);
+    when(anonymousGroupService.getSnapshot(groupId))
+        .thenAnswer(
+            i -> {
+              events.getValue().accept(circle);
+              locations.getValue().accept(early);
+              return emptySnapshot();
+            });
+    var emitter = new RecordingEmitter();
+
+    streams.open(groupId, memberId, emitter);
+
+    assertThat(emitter.sent).hasSize(3);
+    assertThat(emitter.sent.get(0)).contains("event:snapshot");
+    assertThat(emitter.sent.get(1)).contains("event:frame").contains(circle);
+    assertThat(emitter.sent.get(2)).contains("event:location").contains(early);
+  }
+
+  @Test
+  void groupEvents_areSentAsFrames() throws Exception {
+    var emitter = open(emptySnapshot());
+    var message = json(AGFrameDto.circleDeleted(UUID.randomUUID()));
+
+    events.getValue().accept(message);
+
+    assertThat(emitter.sent.get(1)).contains("event:frame").contains(message);
+    assertThat(emitter.completed).isFalse();
+  }
+
+  @Test
+  void othersCircleEventsAndSharingChanges_areSent() throws Exception {
+    var emitter = open(emptySnapshot());
+    var other = UUID.randomUUID();
+
+    events.getValue().accept(json(AGFrameDto.memberPresence(other, true, null)));
+    events
+        .getValue()
+        .accept(
+            json(
+                AGFrameDto.circleEventOf(
+                    other, new CircleEventDto(blob("e"), LocalDateTime.now()))));
+
+    assertThat(emitter.sent).hasSize(3);
+  }
+
+  @Test
+  void ownCircleEventsAndSharingChanges_areNotSent() throws Exception {
     var emitter = open(emptySnapshot());
 
-    events.getValue().accept(json(AGFrameDto.memberLeft(memberId)));
+    events.getValue().accept(json(AGFrameDto.memberPresence(memberId, true, null)));
+    events
+        .getValue()
+        .accept(
+            json(
+                AGFrameDto.circleEventOf(
+                    memberId, new CircleEventDto(blob("e"), LocalDateTime.now()))));
 
+    assertThat(emitter.sent).hasSize(1);
+  }
+
+  @Test
+  void ownMemberLeft_isSentThenEndsTheStream() throws Exception {
+    var emitter = open(emptySnapshot());
+    var message = json(AGFrameDto.memberLeft(memberId));
+
+    events.getValue().accept(message);
+
+    assertThat(emitter.sent.get(1)).contains("event:frame").contains(message);
     assertThat(emitter.completed).isTrue();
   }
 
   @Test
-  void otherMemberLeft_keepsTheStream() throws Exception {
+  void otherMemberLeft_isSentAndKeepsTheStream() throws Exception {
     var emitter = open(emptySnapshot());
 
     events.getValue().accept(json(AGFrameDto.memberLeft(UUID.randomUUID())));
 
+    assertThat(emitter.sent).hasSize(2);
     assertThat(emitter.completed).isFalse();
-    assertThat(emitter.sent).hasSize(1);
   }
 
   @Test
-  void groupDeleted_endsTheStream() throws Exception {
+  void groupDeleted_isSentThenEndsTheStream() throws Exception {
     var emitter = open(emptySnapshot());
+    var message = json(AGFrameDto.groupDeleted());
 
-    events.getValue().accept(json(AGFrameDto.groupDeleted()));
+    events.getValue().accept(message);
 
+    assertThat(emitter.sent.get(1)).contains("event:frame").contains(message);
     assertThat(emitter.completed).isTrue();
-  }
-
-  @Test
-  void otherEvents_areNotSent() throws Exception {
-    var emitter = open(emptySnapshot());
-
-    events.getValue().accept(json(AGFrameDto.circleDeleted(UUID.randomUUID())));
-
-    assertThat(emitter.sent).hasSize(1);
-    assertThat(emitter.completed).isFalse();
   }
 
   @Test

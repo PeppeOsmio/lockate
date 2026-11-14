@@ -4,6 +4,7 @@ import com.peppeosmio.lockate.anonymous_group.dto.AGFrameDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGGetMembersCountDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGGetMembersResDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGPostLocationReqDto;
+import com.peppeosmio.lockate.anonymous_group.dto.AGPostLocationResDto;
 import com.peppeosmio.lockate.anonymous_group.dto.CircleUpsertReqDto;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGCircleConflictException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGCircleNotFoundException;
@@ -17,7 +18,7 @@ import com.peppeosmio.lockate.anonymous_group.push.InvalidPushRegistrationExcept
 import com.peppeosmio.lockate.anonymous_group.security.AGMemberAuthentication;
 import com.peppeosmio.lockate.anonymous_group.service.AGMemberMessageService;
 import com.peppeosmio.lockate.anonymous_group.service.AnonymousGroupService;
-import com.peppeosmio.lockate.anonymous_group.sse.AGLocationStreams;
+import com.peppeosmio.lockate.anonymous_group.sse.AGStreams;
 import com.peppeosmio.lockate.common.exceptions.InvalidEncryptedDataException;
 import com.peppeosmio.lockate.common.exceptions.UnauthorizedException;
 import com.peppeosmio.lockate.invite.exceptions.TooManyRequestsException;
@@ -37,17 +38,17 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @Validated
 public class SecuredAGController {
   private final AnonymousGroupService anonymousGroupService;
-  private final AGLocationStreams agLocationStreams;
+  private final AGStreams agStreams;
   private final AGMemberMessageService agMemberMessageService;
   private final AGPushService agPushService;
 
   public SecuredAGController(
       AnonymousGroupService anonymousGroupService,
-      AGLocationStreams agLocationStreams,
+      AGStreams agStreams,
       AGMemberMessageService agMemberMessageService,
       AGPushService agPushService) {
     this.anonymousGroupService = anonymousGroupService;
-    this.agLocationStreams = agLocationStreams;
+    this.agStreams = agStreams;
     this.agMemberMessageService = agMemberMessageService;
     this.agPushService = agPushService;
   }
@@ -149,12 +150,12 @@ public class SecuredAGController {
   public SseEmitter streamLocations(
       @PathVariable UUID anonymousGroupId, AGMemberAuthentication authentication)
       throws AGNotFoundException {
-    return agLocationStreams.open(anonymousGroupId, authentication.getId(), new SseEmitter(0L));
+    return agStreams.open(anonymousGroupId, authentication.getId(), new SseEmitter(0L));
   }
 
   @PostMapping("/{anonymousGroupId}/locations")
   @ResponseStatus(HttpStatus.OK)
-  public void postLocation(
+  public AGPostLocationResDto postLocation(
       @PathVariable UUID anonymousGroupId,
       @Valid @RequestBody AGPostLocationReqDto dto,
       AGMemberAuthentication authentication)
@@ -162,6 +163,6 @@ public class SecuredAGController {
           InvalidEncryptedDataException,
           AGNotFoundException,
           UnauthorizedException {
-    agMemberMessageService.postLocation(anonymousGroupId, authentication, dto);
+    return agMemberMessageService.postLocation(anonymousGroupId, authentication, dto);
   }
 }

@@ -144,6 +144,12 @@ public class AnonymousGroupService {
     return snapshotOf(agEntity);
   }
 
+  public long getCirclesVersion(UUID anonymousGroupId) throws AGNotFoundException {
+    return anonymousGroupRepository
+        .findCirclesVersionById(anonymousGroupId)
+        .orElseThrow(() -> new AGNotFoundException(anonymousGroupId));
+  }
+
   private AGFrameDto snapshotOf(AnonymousGroupEntity agEntity) {
     var circles =
         agCircleRepository.findByAnonymousGroupIdOrderByCreatedAtAscIdAsc(agEntity.getId()).stream()
@@ -180,6 +186,7 @@ public class AnonymousGroupService {
       existing.setEncryptedFields(coordinates, radius, name, now);
       circle = existing;
     }
+    anonymousGroupRepository.incrementCirclesVersion(anonymousGroupId);
     publishFrame(anonymousGroupId, AGFrameDto.circleUpserted(toCircleDto(circle)));
   }
 
@@ -190,6 +197,7 @@ public class AnonymousGroupService {
             .findByIdAndAnonymousGroupId(circleId, anonymousGroupId)
             .orElseThrow(() -> new AGCircleNotFoundException(circleId));
     agCircleRepository.delete(circle);
+    anonymousGroupRepository.incrementCirclesVersion(anonymousGroupId);
     publishFrame(anonymousGroupId, AGFrameDto.circleDeleted(circleId));
   }
 
