@@ -51,6 +51,7 @@ services:
       ADMIN_API_KEY: ${ADMIN_API_KEY:-change-me}
       ADMIN_UI_ORIGIN: ${ADMIN_UI_ORIGIN:-http://localhost:5173}
       SERVER_PORT: "3118"
+      PUSH_RELAY_URL: ${PUSH_RELAY_URL:-http://push-relay:8080}
     ports:
       - "3118:3118"
     depends_on:
@@ -61,6 +62,27 @@ services:
       valkey:
         condition: service_started
     command: mvn -Duser.home=/var/maven spring-boot:run -Pdev
+
+  # The push relay in JVM dev mode. It needs a service-account key of the Firebase project in
+  # push_relay/.secrets/service-account.json (not committed); without it pushes fail with 502 and
+  # everything else works
+  push-relay:
+    image: maven:3-amazoncorretto-25
+    user: "1000:1000"
+    working_dir: /app
+    volumes:
+      - ./push_relay:/app
+      - backend_m2:/var/maven/.m2
+    environment:
+      MAVEN_CONFIG: /var/maven/.m2
+      FCM_PROJECT_ID: ${FCM_PROJECT_ID:-lockate}
+      GOOGLE_APPLICATION_CREDENTIALS: /app/.secrets/service-account.json
+    ports:
+      - "3120:8080"
+    depends_on:
+      fix-volume-permissions:
+        condition: service_completed_successfully
+    command: mvn -Duser.home=/var/maven quarkus:dev -Dquarkus.http.host=0.0.0.0 -Dquarkus.console.enabled=false -Dquarkus.analytics.disabled=true
 
   admin-ui:
     image: node:22-alpine

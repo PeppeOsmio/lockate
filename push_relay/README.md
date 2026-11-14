@@ -43,6 +43,10 @@ make all
 # Dev mode
 FCM_PROJECT_ID=my-project ./mvnw quarkus:dev
 
+# In the dev Docker Compose, with the backend (JVM dev mode, on localhost:3120); put a
+# service-account key of the Firebase project in .secrets/service-account.json first
+docker compose -f ../dev-docker-compose.yml up push-relay
+
 # Native image
 docker build -f native.Dockerfile -t lockate-push-relay .
 ```
