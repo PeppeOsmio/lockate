@@ -50,7 +50,9 @@ class ManageConnectionsViewModel(
     private suspend fun loadVersionLabel(connection: Connection) {
         val label =
             try {
-                serverVersionLabel(connectionService.getServerVersion(connection))
+                serverVersionLabel(
+                    connectionService.getServerVersion(connection.url, connection.apiKey)
+                )
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

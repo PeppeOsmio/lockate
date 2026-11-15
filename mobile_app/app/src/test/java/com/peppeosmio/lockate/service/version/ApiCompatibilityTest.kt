@@ -39,4 +39,17 @@ class ApiCompatibilityTest {
             serverVersionLabel(ServerVersionDto("2.0.0", listOf(APP_API + 1))),
         )
     }
+
+    @Test
+    fun `only an incompatible server is refused, saying what to update`() {
+        assertEquals(null, incompatibilityMessage(ApiCompatibility.Compatible))
+        assertEquals(
+            "This server needs an update to work with this Lockate",
+            incompatibilityMessage(ApiCompatibility.ServerTooOld),
+        )
+        assertEquals(
+            "This server needs a newer version of Lockate",
+            incompatibilityMessage(ApiCompatibility.AppTooOld),
+        )
+    }
 }

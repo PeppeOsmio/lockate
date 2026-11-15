@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.peppeosmio.lockate.domain.Connection
 import com.peppeosmio.lockate.exceptions.InvalidApiKeyException
 import com.peppeosmio.lockate.service.ConnectionService
+import com.peppeosmio.lockate.service.version.apiCompatibility
+import com.peppeosmio.lockate.service.version.incompatibilityMessage
 import com.peppeosmio.lockate.utils.ErrorHandler
 import com.peppeosmio.lockate.utils.ErrorInfo
 import com.peppeosmio.lockate.utils.SnackbarErrorMessage
@@ -80,6 +82,22 @@ class ConnectionSettingsViewModel(private val connectionService: ConnectionServi
                 return@launch
             }
             _state.update { it.copy(showLoadingOverlay = true) }
+            // First, as a server speaking another API may not have the other endpoints below
+            val compatibility = ErrorHandler.runAndHandleException {
+                apiCompatibility(connectionService.getServerVersion(state.value.url, null)?.apis)
+            }
+            if (compatibility.errorInfo != null) {
+                _snackbarEvents.trySend(
+                    SnackbarErrorMessage("Connection error", errorInfo = compatibility.errorInfo)
+                )
+                _state.update { it.copy(showLoadingOverlay = false) }
+                return@launch
+            }
+            incompatibilityMessage(compatibility.value!!)?.let { message ->
+                _snackbarEvents.trySend(SnackbarErrorMessage(text = message))
+                _state.update { it.copy(showLoadingOverlay = false) }
+                return@launch
+            }
             if (!state.value.requireApiKey) {
                 val result = ErrorHandler.runAndHandleException {
                     connectionService.checkRequireApiKey(state.value.url)

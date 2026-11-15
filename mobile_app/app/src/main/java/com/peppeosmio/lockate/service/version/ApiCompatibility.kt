@@ -31,3 +31,11 @@ fun serverVersionLabel(server: ServerVersionDto?): String =
             server?.let { "Server ${it.version}, needs an update" } ?: "Server needs an update"
         ApiCompatibility.AppTooOld -> "Server ${server!!.version}, needs a newer Lockate"
     }
+
+/** Why a server can't be added, or null when it speaks our API. */
+fun incompatibilityMessage(compatibility: ApiCompatibility): String? =
+    when (compatibility) {
+        ApiCompatibility.Compatible -> null
+        ApiCompatibility.ServerTooOld -> "This server needs an update to work with this Lockate"
+        ApiCompatibility.AppTooOld -> "This server needs a newer version of Lockate"
+    }
