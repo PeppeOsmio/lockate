@@ -6,11 +6,14 @@ import com.peppeosmio.lockate.common.exceptions.InvalidEncryptedDataException;
 import com.peppeosmio.lockate.common.exceptions.NotFoundException;
 import com.peppeosmio.lockate.common.exceptions.UnauthorizedException;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.BindException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.context.request.ServletWebRequest;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 class GlobalExceptionHandlerTest {
 
@@ -54,6 +57,26 @@ class GlobalExceptionHandlerTest {
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     assertThat(response.getBody().error()).isEqualTo("invalid_encrypted_data");
+  }
+
+  @Test
+  void handleException_unknownPath_returns404() {
+    var request = new ServletWebRequest(new MockHttpServletRequest());
+    var response =
+        handler.handleException(
+            new NoResourceFoundException(HttpMethod.GET, "/api/nothing", "api/nothing"), request);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    assertThat(response.getBody().error()).isEqualTo("not_found");
+  }
+
+  @Test
+  void handleException_springErrorResponse_keepsItsStatus() {
+    var request = new ServletWebRequest(new MockHttpServletRequest());
+    var response =
+        handler.handleException(new HttpRequestMethodNotSupportedException("DELETE"), request);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.METHOD_NOT_ALLOWED);
   }
 
   @Test

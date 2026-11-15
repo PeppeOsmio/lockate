@@ -73,9 +73,10 @@ class ConnectionService(
                 url(Url("${url.trimEnd('/')}/api/version"))
                 headers { apiKey?.let { append("X-API-KEY", it) } }
             }
-            when (response.status.value) {
-                200 -> Unit
-                404 -> return@withContext null
+            when {
+                response.status.value == 200 -> Unit
+                isMissingEndpoint(response.status.value, response.bodyAsText()) ->
+                    return@withContext null
                 else -> ErrorHandler.handleGeneric(response)
             }
             response.body<ServerVersionDto>()
@@ -180,3 +181,10 @@ class ConnectionService(
             _events.tryEmit(ConnectionEvent.ConnectionDeletedEvent(connectionSettingsId))
         }
 }
+
+/**
+ * Whether the server answered that it has no such endpoint. Servers older than 0.7.1 answer an
+ * unknown path with 500 "No static resource …" instead of 404.
+ */
+internal fun isMissingEndpoint(status: Int, body: String): Boolean =
+    status == 404 || (status == 500 && body.contains("No static resource"))
