@@ -44,7 +44,6 @@ enum class ChannelState {
 }
 
 data class ChannelStatus(
-    val state: ChannelState = ChannelState.Connecting,
     val isLocationDisabled: Boolean = false,
     val isLocationUnavailable: Boolean = false,
 )

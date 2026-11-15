@@ -91,6 +91,12 @@ group start being shared (created, joined, sharing turned on), and on boot; with
 stops at once. Nothing else needs it: notifications come by push
 ([Push notifications](push.md)), and the stream of the group on screen is held by the screen.
 
+Its notification says only "Sharing your location", or "Location is off" while the location is
+disabled or unavailable, since sharing can't work then and only the user can fix it. It doesn't
+say whether the posts get through: one fails for a moment in a tunnel or on a network change, a
+server that stays unreachable is notified by the [health check](health-check.md), and the map shows
+a banner for the server of the group on screen.
+
 ## Keeping the circles current
 
 The tracker needs the group's circles, and with no stream open the phone isn't told when someone

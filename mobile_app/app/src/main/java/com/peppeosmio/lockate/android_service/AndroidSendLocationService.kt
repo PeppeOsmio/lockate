@@ -91,7 +91,7 @@ class AndroidSendLocationService : Service() {
                         if (!isRunning) return@post
                         // the service runs only while we share with some group; notifications
                         // come by push
-                        if (status.totalAGCount == 0) {
+                        if (status.sharedAGCount == 0) {
                             stop()
                         } else {
                             notificationManager.notify(
