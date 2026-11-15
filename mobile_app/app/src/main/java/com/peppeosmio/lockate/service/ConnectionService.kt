@@ -66,7 +66,7 @@ class ConnectionService(
             responseBody.required
         }
 
-    /** Null when the server has no `GET /api/version`: it is older than 1.0. */
+    /** Null when the server has no `GET /api/version`: it is older than 0.7.0. */
     suspend fun getServerVersion(url: String, apiKey: String?): ServerVersionDto? =
         withContext(Dispatchers.IO) {
             val response = httpClient.get {

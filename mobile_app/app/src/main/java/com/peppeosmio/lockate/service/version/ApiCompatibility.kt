@@ -13,7 +13,7 @@ enum class ApiCompatibility {
 
 /**
  * [serverApis] is what the server's `GET /api/version` lists; null when it has no such endpoint,
- * which only servers older than 1.0 lack.
+ * which only servers older than 0.7.0 lack.
  */
 fun apiCompatibility(serverApis: List<Int>?): ApiCompatibility =
     when {

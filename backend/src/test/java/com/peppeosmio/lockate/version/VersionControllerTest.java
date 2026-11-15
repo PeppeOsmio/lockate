@@ -9,11 +9,11 @@ class VersionControllerTest {
 
   @Test
   void getVersion_answersTheReleaseAndTheServedApis() {
-    var controller = new VersionController("1.0.0-alpha.1");
+    var controller = new VersionController("0.7.0");
 
     var version = controller.getVersion();
 
-    assertThat(version.version()).isEqualTo("1.0.0-alpha.1");
+    assertThat(version.version()).isEqualTo("0.7.0");
     assertThat(version.apis()).isEqualTo(List.of(1));
   }
 }

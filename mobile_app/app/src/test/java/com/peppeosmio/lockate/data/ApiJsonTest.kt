@@ -34,10 +34,8 @@ class ApiJsonTest {
     @Test
     fun `a server answers its version and the API majors it serves`() {
         assertEquals(
-            ServerVersionDto(version = "1.0.0-alpha.1", apis = listOf(1)),
-            apiJson.decodeFromString<ServerVersionDto>(
-                """{"version":"1.0.0-alpha.1","apis":[1]}"""
-            ),
+            ServerVersionDto(version = "0.7.0", apis = listOf(1)),
+            apiJson.decodeFromString<ServerVersionDto>("""{"version":"0.7.0","apis":[1]}"""),
         )
     }
 
