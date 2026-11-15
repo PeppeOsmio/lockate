@@ -13,9 +13,7 @@ import com.peppeosmio.lockate.common.exceptions.InvalidEncryptedDataException;
 import com.peppeosmio.lockate.common.exceptions.UnauthorizedException;
 import com.peppeosmio.lockate.invite.exceptions.TooManyRequestsException;
 import com.peppeosmio.lockate.redis.RedisService;
-import com.peppeosmio.lockate.utils.TTLMap;
 import java.time.Duration;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -27,14 +25,12 @@ import org.springframework.stereotype.Service;
 @Service
 public class AGMemberMessageService {
   static final int MAX_CIRCLE_EVENTS = 16;
-  // the app posts at most one fix every 1.5 s, 40 a minute
+  // the app posts every GPS fix, at most one every 2 s, 30 a minute
   static final int MAX_LOCATIONS_PER_MINUTE = 120;
 
   private final AnonymousGroupService anonymousGroupService;
   private final AGPresenceService presenceService;
   private final RedisService redisService;
-  private final TTLMap<UUID, LocalDateTime> lastSavedLocations =
-      new TTLMap<>(Duration.ofMinutes(5));
 
   public AGMemberMessageService(
       AnonymousGroupService anonymousGroupService,
@@ -76,13 +72,10 @@ public class AGMemberMessageService {
         && (dto.circlesVersion() == null || dto.circlesVersion() != circlesVersion)) {
       throw new CirclesChangedException(circlesVersion);
     }
-    var saved =
-        anonymousGroupService.relayMemberMessage(
-            anonymousGroupId,
-            authentication,
-            new AGMemberMessageReqDto(dto.encryptedCoordinates(), dto.encryptedActivity()),
-            lastSavedLocations.get(memberId).orElse(null));
-    saved.ifPresent(timestamp -> lastSavedLocations.put(memberId, timestamp));
+    anonymousGroupService.relayMemberMessage(
+        anonymousGroupId,
+        authentication,
+        new AGMemberMessageReqDto(dto.encryptedCoordinates(), dto.encryptedActivity()));
     presenceService.onLocation(anonymousGroupId, memberId);
     for (var circleEvent : circleEvents) {
       anonymousGroupService.relayCircleEvent(

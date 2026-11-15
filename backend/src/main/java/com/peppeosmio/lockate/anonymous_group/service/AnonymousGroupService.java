@@ -1,19 +1,17 @@
 package com.peppeosmio.lockate.anonymous_group.service;
 
-import com.peppeosmio.lockate.anonymous_group.configuration_properties.AGLocationConfigurationProperties;
 import com.peppeosmio.lockate.anonymous_group.dto.*;
 import com.peppeosmio.lockate.anonymous_group.entity.AGCircleEntity;
 import com.peppeosmio.lockate.anonymous_group.entity.AGMemberEntity;
-import com.peppeosmio.lockate.anonymous_group.entity.AGMemberLocationEntity;
 import com.peppeosmio.lockate.anonymous_group.entity.AnonymousGroupEntity;
 import com.peppeosmio.lockate.anonymous_group.exceptions.*;
+import com.peppeosmio.lockate.anonymous_group.location.AGLastLocationService;
 import com.peppeosmio.lockate.anonymous_group.mapper.AGMemberMapper;
 import com.peppeosmio.lockate.anonymous_group.mapper.AnonymousGroupMapper;
 import com.peppeosmio.lockate.anonymous_group.presence.AGPresenceService;
 import com.peppeosmio.lockate.anonymous_group.push.AGPushService;
 import com.peppeosmio.lockate.anonymous_group.repository.AGCircleRepository;
 import com.peppeosmio.lockate.anonymous_group.repository.AGGroupSummaryProjection;
-import com.peppeosmio.lockate.anonymous_group.repository.AGLocationRepository;
 import com.peppeosmio.lockate.anonymous_group.repository.AGMemberRepository;
 import com.peppeosmio.lockate.anonymous_group.repository.AnonymousGroupRepository;
 import com.peppeosmio.lockate.anonymous_group.security.AGMemberAuthentication;
@@ -26,10 +24,8 @@ import com.peppeosmio.lockate.common.exceptions.UnauthorizedException;
 import com.peppeosmio.lockate.invite.InviteService;
 import com.peppeosmio.lockate.invite.exceptions.InvalidJoinTokenException;
 import com.peppeosmio.lockate.redis.RedisService;
-import jakarta.annotation.Nullable;
 import jakarta.transaction.Transactional;
 import java.security.SecureRandom;
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.*;
@@ -45,10 +41,9 @@ import tools.jackson.databind.ObjectMapper;
 @Slf4j
 @Service
 public class AnonymousGroupService {
-  private final AGLocationConfigurationProperties agLocationConfigurationProperties;
   private final AnonymousGroupRepository anonymousGroupRepository;
   private final AGMemberRepository agMemberRepository;
-  private final AGLocationRepository agLocationRepository;
+  private final AGLastLocationService lastLocationService;
   private final AGCircleRepository agCircleRepository;
   private final RedisService redisService;
   private final InviteService inviteService;
@@ -59,10 +54,9 @@ public class AnonymousGroupService {
   private final AGPushService pushService;
 
   public AnonymousGroupService(
-      AGLocationConfigurationProperties agLocationConfigurationProperties,
       AnonymousGroupRepository anonymousGroupRepository,
       AGMemberRepository agMemberRepository,
-      AGLocationRepository agLocationRepository,
+      AGLastLocationService lastLocationService,
       AGCircleRepository agCircleRepository,
       RedisService redisService,
       InviteService inviteService,
@@ -71,10 +65,9 @@ public class AnonymousGroupService {
       AGMemberMapper agMemberMapper,
       AGPresenceService presenceService,
       AGPushService pushService) {
-    this.agLocationConfigurationProperties = agLocationConfigurationProperties;
     this.agMemberRepository = agMemberRepository;
     this.anonymousGroupRepository = anonymousGroupRepository;
-    this.agLocationRepository = agLocationRepository;
+    this.lastLocationService = lastLocationService;
     this.agCircleRepository = agCircleRepository;
     this.redisService = redisService;
     this.inviteService = inviteService;
@@ -257,8 +250,25 @@ public class AnonymousGroupService {
 
   @Transactional
   private List<AGMemberDto> listMembers(AnonymousGroupEntity agEntity) {
-    var agMemberEntities = agMemberRepository.findMembersWithLastLocation(agEntity.getId());
-    return agMemberEntities.stream().map(agMemberMapper::toDto).toList();
+    var members =
+        agMemberRepository.findMembersWithLastLocation(agEntity.getId()).stream()
+            .map(agMemberMapper::toDto)
+            .toList();
+    // the last position may be newer than the saved one
+    var lastLocations =
+        lastLocationService.get(agEntity.getId(), members.stream().map(AGMemberDto::id).toList());
+    return members.stream()
+        .map(
+            member ->
+                lastLocations.containsKey(member.id())
+                    ? new AGMemberDto(
+                        member.id(),
+                        member.encryptedName(),
+                        member.createdAt(),
+                        member.isAGAdmin(),
+                        Optional.of(lastLocations.get(member.id())))
+                    : member)
+        .toList();
   }
 
   @Transactional
@@ -336,78 +346,29 @@ public class AnonymousGroupService {
     }
     agMemberRepository.deleteById(agMemberAuthentication.getId());
     presenceService.forget(anonymousGroupId, agMemberAuthentication.getId());
+    lastLocationService.forget(anonymousGroupId, agMemberAuthentication.getId());
     publishFrame(anonymousGroupId, AGFrameDto.memberLeft(agMemberAuthentication.getId()));
   }
 
   /**
-   * @param anonymousGroupId
-   * @param authentication
-   * @param dto
-   * @param lastSavedLocationTimeStamp
-   * @return the LocalDateTime if it was saved in the db
-   * @throws AGNotFoundException
-   * @throws UnauthorizedException
+   * Relays a member message to the group's streams and keeps it as the member's last position;
+   * {@code LocationSaveJob} saves it to the database.
    */
-  @Transactional
-  public Optional<LocalDateTime> relayMemberMessage(
-      UUID anonymousGroupId,
-      AGMemberAuthentication authentication,
-      AGMemberMessageReqDto dto,
-      @Nullable LocalDateTime lastSavedLocationTimeStamp)
-      throws AGNotFoundException, UnauthorizedException, InvalidEncryptedDataException {
-    if (!(authentication instanceof AGMemberAuthentication agMemberAuthentication)) {
-      throw new UnauthorizedException();
-    }
+  public void relayMemberMessage(
+      UUID anonymousGroupId, AGMemberAuthentication authentication, AGMemberMessageReqDto dto)
+      throws InvalidEncryptedDataException {
     if (dto.encryptedCoordinates() == null || dto.encryptedActivity() == null) {
       throw new InvalidEncryptedDataException();
     }
-    var encryptedCoordinates =
-        dto.encryptedCoordinates().toEncryptedStringOfLength(COORDINATES_CIPHER_BYTES);
-    var encryptedActivity =
-        dto.encryptedActivity().toEncryptedStringOfLength(MEMBER_ACTIVITY_CIPHER_BYTES);
-    // should never throw
-    var anonymousGroupEntity =
-        anonymousGroupRepository
-            .findById(anonymousGroupId)
-            .orElseThrow(() -> new AGNotFoundException(anonymousGroupId));
-    // should never throw
-    var agMemberEntity =
-        agMemberRepository
-            .findById(agMemberAuthentication.getId())
-            .orElseThrow(UnauthorizedException::new);
-    var timestamp = LocalDateTime.now(ZoneOffset.UTC);
+    dto.encryptedCoordinates().toEncryptedStringOfLength(COORDINATES_CIPHER_BYTES);
+    dto.encryptedActivity().toEncryptedStringOfLength(MEMBER_ACTIVITY_CIPHER_BYTES);
+    var record =
+        new LocationRecordDto(
+            dto.encryptedCoordinates(), dto.encryptedActivity(), LocalDateTime.now(ZoneOffset.UTC));
     publish(
         getRedisAGLocationsChannel(anonymousGroupId),
-        new MemberLocationDto(
-            agMemberAuthentication.getId(),
-            new LocationRecordDto(dto.encryptedCoordinates(), dto.encryptedActivity(), timestamp)));
-    if (lastSavedLocationTimeStamp == null) {
-      var lastSavedLocation =
-          agLocationRepository
-              .findFirstByAgMemberEntityOrderByTimestampDescIdDesc(agMemberEntity)
-              .orElse(null);
-      if (lastSavedLocation != null) {
-        lastSavedLocationTimeStamp = lastSavedLocation.getTimestamp();
-      }
-    }
-    var shouldSave = false;
-    if (lastSavedLocationTimeStamp == null) {
-      shouldSave = true;
-    } else {
-      shouldSave =
-          Duration.between(lastSavedLocationTimeStamp, timestamp).toMillis()
-              >= agLocationConfigurationProperties.getSaveInterval().toMillis();
-    }
-    if (shouldSave) {
-      var lastLocation =
-          agLocationRepository.save(
-              new AGMemberLocationEntity(
-                  encryptedCoordinates, encryptedActivity, agMemberEntity, timestamp));
-      agMemberEntity.setLastLocation(lastLocation);
-      agMemberRepository.save(agMemberEntity);
-      return Optional.of(timestamp);
-    }
-    return Optional.empty();
+        new MemberLocationDto(authentication.getId(), record));
+    lastLocationService.put(anonymousGroupId, authentication.getId(), record);
   }
 
   /** Relays a circle event to the other members, without storing it. */
@@ -529,6 +490,7 @@ public class AnonymousGroupService {
     pushService.notifyMember(agMemberEntity, AGFrameDto.memberLeft(agMemberId));
     agMemberRepository.deleteById(agMemberEntity.getId());
     presenceService.forget(anonymousGroupId, agMemberId);
+    lastLocationService.forget(anonymousGroupId, agMemberId);
     publishFrame(anonymousGroupId, AGFrameDto.memberLeft(agMemberId));
   }
 

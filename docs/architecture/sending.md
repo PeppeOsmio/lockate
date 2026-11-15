@@ -9,14 +9,15 @@ service runs only while some group is shared.
 
 ```mermaid
 stateDiagram-v2
-    Moving: Moving<br/>GPS every 2 s, each fix posted (1.5 s throttle)
+    Moving: Moving<br/>GPS every 2 s, each fix posted
     Still: Still<br/>last good fix at once, then Fused high accuracy every 10 min
     Moving --> Still: Activity Recognition says still
     Still --> Moving: activity changes (sent at once)
 ```
 
-**Moving.** Each GPS fix is posted at once (at most one every 1.5 s; skipped while circle events
-wait for a post). Posts go one at a time, so they reach the server in order. OkHttp keeps the
+**Moving.** Each GPS fix is posted at once, at the pace of the GPS (every 2 s), with nothing
+dropped: a change of activity or a circle crossing goes out with the fix that brings it. Posts go
+one at a time, so they reach the server in order. OkHttp keeps the
 connection open between posts (HTTP/2 over TLS when the server or its proxy offers it, HTTP/1.1
 keep-alive otherwise; the reverse proxy must allow it), so a post costs about as much as a socket
 frame. In a tunnel nothing is
@@ -66,12 +67,12 @@ movement the GPS runs every 2 s again. It is one constant. The map colours are b
 - Circle events computed on circles the server no longer has are refused: with events, a
   `circlesVersion` other than the group's (or none) is a **409 `{circlesVersion}`** that relays
   nothing ([below](#keeping-the-circles-current)).
-- Then the position is relayed to the group's SSE streams, maybe saved (at most every 2 min,
-  [Retention](groups-and-auth.md#retention)), refreshes the sharing timer ([Sharing](sharing.md)),
+- Then the position is relayed to the group's SSE streams, kept as the member's last position
+  (saved every 2 min, [Retention](groups-and-auth.md#retention)), refreshes the sharing timer ([Sharing](sharing.md)),
   and each circle event is published in order ([Circles](circles.md)).
 - The answer is `{circlesVersion}`, the version of the group's circles.
 - At most 120 posts per member per minute (`rate:location:{memberId}`), 429 above. The app sends
-  at most 40, so only a broken or malicious client hits it.
+  at most 30, so only a broken or malicious client hits it.
 - A failed post is dropped; the next fix replaces it (its circle events are recomputed).
 
 `POST /api/v1/anonymous-groups/{id}/members/pause` is sent when sharing stops (best effort, 10 s
