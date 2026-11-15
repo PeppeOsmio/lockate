@@ -27,12 +27,15 @@ one project, so the staging app gets pushes only through a staging relay.
 | Google Cloud / Firebase project | `lockate` | `lockate-staging` |
 | Relays | Cloud Run | Cloud Run, and the dev Docker Compose |
 
-For development, `dev-docker-compose.yml` runs the relay in JVM dev mode next to the backend
-(`localhost:3120`, already the compose backend's `PUSH_RELAY_URL`, `FCM_PROJECT_ID=lockate-staging`)
-with the key of the `push-relay-dev` service account, which `terragrunt apply` in
-`live/staging` writes to `push_relay/.secrets/service-account.json` (git-ignored). A backend run on
-the host sets `PUSH_RELAY_URL=http://localhost:3120`. Keys exist only for staging; prod's relay uses
-its Cloud Run identity. Several relays can serve one project: each holds the project's credentials,
+The backend's `PUSH_RELAY_URL` defaults to the prod relay on Cloud Run, so a server set up from
+the released images pushes to the released app with nothing to configure. The compose backend in
+`dev-docker-compose.yml` uses the staging relay on Cloud Run instead, for the staging app flavor; a
+backend run on the host sets `PUSH_RELAY_URL` to it. To work on the relay itself,
+`docker compose --profile relay` also runs it in JVM dev mode (`localhost:3120`,
+`FCM_PROJECT_ID=lockate-staging`, used with `PUSH_RELAY_URL=http://push-relay:8080`) with the key
+of the `push-relay-dev` service account, which `terragrunt apply` in `live/staging` writes to
+`push_relay/.secrets/service-account.json` (git-ignored). Keys exist only for staging; prod's relay
+uses its Cloud Run identity. Several relays can serve one project: each holds the project's credentials,
 and their rate limits are counted separately.
 
 A staging backend is just another Lockate server, with its own database and Valkey; the app picks

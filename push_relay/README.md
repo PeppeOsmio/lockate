@@ -45,7 +45,7 @@ FCM_PROJECT_ID=my-project ./mvnw quarkus:dev
 
 # In the dev Docker Compose, with the backend (JVM dev mode, on localhost:3120, for the staging
 # Firebase project); `terragrunt apply` in terraform/live/staging writes its key first
-docker compose -f ../dev-docker-compose.yml up push-relay
+PUSH_RELAY_URL=http://push-relay:8080 docker compose -f ../dev-docker-compose.yml --profile relay up
 
 # Native image
 docker build -f native.Dockerfile -t lockate-push-relay .

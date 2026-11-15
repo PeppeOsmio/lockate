@@ -51,7 +51,8 @@ services:
       ADMIN_API_KEY: ${ADMIN_API_KEY:-change-me}
       ADMIN_UI_ORIGIN: ${ADMIN_UI_ORIGIN:-http://localhost:5173}
       SERVER_PORT: "3118"
-      PUSH_RELAY_URL: ${PUSH_RELAY_URL:-http://push-relay:8080}
+      # The staging relay, for the staging app flavor; http://push-relay:8080 for the local one
+      PUSH_RELAY_URL: ${PUSH_RELAY_URL:-https://lockate-push-relay-srwbosu4la-ew.a.run.app}
     ports:
       - "3118:3118"
     depends_on:
@@ -63,11 +64,13 @@ services:
         condition: service_started
     command: mvn -Duser.home=/var/maven spring-boot:run -Pdev
 
-  # The push relay in JVM dev mode, for the staging Firebase project (the staging app flavor). It
-  # needs the key that `terragrunt apply` in push_relay/terraform/live/staging writes to
-  # push_relay/.secrets/service-account.json (not committed); without it pushes fail with 502 and
-  # everything else works
+  # The push relay in JVM dev mode, for working on the relay itself: started only with
+  # `--profile relay`, and used by the backend with PUSH_RELAY_URL=http://push-relay:8080. It is for
+  # the staging Firebase project (the staging app flavor) and needs the key that `terragrunt apply` in
+  # push_relay/terraform/live/staging writes to push_relay/.secrets/service-account.json (not
+  # committed); without it pushes fail with 502 and everything else works
   push-relay:
+    profiles: [relay]
     image: maven:3-amazoncorretto-25
     user: "1000:1000"
     working_dir: /app
