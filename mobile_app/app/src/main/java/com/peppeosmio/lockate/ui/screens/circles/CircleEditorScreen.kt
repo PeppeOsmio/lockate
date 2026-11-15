@@ -57,6 +57,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -91,6 +92,7 @@ import com.peppeosmio.lockate.service.Place
 import com.peppeosmio.lockate.ui.composables.PeekHeaderBottomSheetScaffold
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.CircleOverlay
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.CircleStyle
+import com.peppeosmio.lockate.ui.screens.anonymous_group_details.MemberMarker
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.MyMarker
 import com.peppeosmio.lockate.ui.screens.map.circleWidthFraction
 import com.peppeosmio.lockate.ui.screens.map.resolveMapStyleUrl
@@ -179,8 +181,6 @@ private fun EditorContent(
             bottomSheetState = rememberStandardBottomSheetState(skipHiddenState = true),
             snackbarHostState = snackbarHostState,
         )
-    // a new circle starts with the hint in view, since there is nothing to see on the map yet
-    LaunchedEffect(Unit) { if (!state.isEditing) scaffoldState.bottomSheetState.expand() }
     LaunchedEffect(Unit) {
         viewModel.snackbarEvents.collect { snackbarHostState.showSnackbar(it.text) }
     }
@@ -289,7 +289,13 @@ private fun EditorContent(
     }
 
     val hasCenter = state.center != null
-    LaunchedEffect(hasCenter) { if (hasCenter) showCircleWhenSheetSettles(recenter = false) }
+    LaunchedEffect(hasCenter) {
+        if (!hasCenter) return@LaunchedEffect
+        // a new circle opens the fields once it has a point: until then the sheet stays down, so
+        // the map, the members and the my-location button are in view
+        if (!state.isEditing) scaffoldState.bottomSheetState.expand()
+        showCircleWhenSheetSettles(recenter = false)
+    }
 
     fun copyCoordinates(coordinates: Coordinates) {
         coroutineScope.launch {
@@ -313,7 +319,14 @@ private fun EditorContent(
                         if (state.isEditing) "Edit circle" else "Add circle",
                         style = MaterialTheme.typography.titleLarge,
                     )
-                    state.center?.let { center ->
+                    val center = state.center
+                    if (center == null) {
+                        Text(
+                            "Tap the map, or search a place or coordinates",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else {
                         Row(
                             modifier =
                                 Modifier.clip(RoundedCornerShape(8.dp)).clickable(
@@ -543,14 +556,7 @@ private fun EditorFields(
                 .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        if (state.center == null) {
-            Text(
-                "Tap the map, or search a place or coordinates",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            return@Column
-        }
+        if (state.center == null) return@Column
         OutlinedTextField(
             modifier = Modifier.fillMaxWidth(),
             value = state.name,
@@ -643,6 +649,28 @@ private fun EditorMap(
     }
 
     state.otherCircles.forEach { CircleOverlay(mapState, it, CircleStyle.Faint) }
+    state.members.forEach { member ->
+        key(member.id) {
+            val projection by
+                remember(mapState.cameraPosition, member) {
+                    derivedStateOf {
+                        mapState.screenLocationFromPosition(
+                            member.coordinates.toMapLibreComposePosition()
+                        )
+                    }
+                }
+            projection?.let {
+                MemberMarker(
+                    center = it,
+                    member = member,
+                    isMe = false,
+                    isOld = member.isOld,
+                    // a tap puts the circle where the member is
+                    onClick = { currentSetCenter(member.coordinates) },
+                )
+            }
+        }
+    }
     state.myLocation?.let { myLocation ->
         val projection by
             remember(mapState.cameraPosition, myLocation) {

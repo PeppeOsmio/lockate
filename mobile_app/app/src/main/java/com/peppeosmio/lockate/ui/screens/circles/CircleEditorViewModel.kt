@@ -3,6 +3,7 @@ package com.peppeosmio.lockate.ui.screens.circles
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.peppeosmio.lockate.domain.Coordinates
+import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.domain.anonymous_group.AnonymousGroup
 import com.peppeosmio.lockate.domain.anonymous_group.Circle
 import com.peppeosmio.lockate.exceptions.LocationDisabledException
@@ -14,12 +15,17 @@ import com.peppeosmio.lockate.service.Place
 import com.peppeosmio.lockate.service.PlaceSearchService
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
 import com.peppeosmio.lockate.service.anonymous_group.PayloadCodec
+import com.peppeosmio.lockate.ui.screens.anonymous_group_details.LastSeenFreshness
+import com.peppeosmio.lockate.ui.screens.anonymous_group_details.MapPoint
+import com.peppeosmio.lockate.ui.screens.anonymous_group_details.lastSeenFreshness
 import com.peppeosmio.lockate.utils.ErrorInfo
 import com.peppeosmio.lockate.utils.SnackbarErrorMessage
 import java.util.UUID
 import kotlin.math.roundToInt
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -52,6 +58,8 @@ data class CircleEditorState(
     val searchFailed: Boolean = false,
     // shown as a still dot: the editor takes one fix and doesn't keep the GPS on
     val myLocation: Coordinates? = null,
+    // the other members where they were last seen, to put a circle where one of them is
+    val members: List<MapPoint> = emptyList(),
 ) {
     val canSave
         get() =
@@ -60,6 +68,23 @@ data class CircleEditorState(
                 center != null &&
                 !isSaving &&
                 parseRadiusMeters(radiusText) != null
+}
+
+/** The other members with a known position, faded like on the group's map once not live. */
+internal fun memberPoints(
+    members: List<AGMember>,
+    myMemberId: String,
+    now: Instant,
+): List<MapPoint> = members.mapNotNull { member ->
+    val record = member.lastLocationRecord
+    if (member.id == myMemberId || record == null) return@mapNotNull null
+    MapPoint(
+        id = member.id,
+        name = member.name,
+        coordinates = record.coordinates,
+        isOld = lastSeenFreshness(record.timestamp, now) != LastSeenFreshness.Live,
+        isSelected = false,
+    )
 }
 
 /** The "lat, lng" written in the search, or null when it isn't a pair of numbers on the globe. */
@@ -113,9 +138,16 @@ class CircleEditorViewModel(
         this.circleId = circleId
         viewModelScope.launch {
             try {
-                group = anonymousGroupService.getAGByInternalId(anonymousGroupInternalId)
+                val group =
+                    anonymousGroupService.getAGByInternalId(anonymousGroupInternalId).also {
+                        this@CircleEditorViewModel.group = it
+                    }
+                val members = anonymousGroupService.getLocalAGMembers(group)
                 val circles = anonymousGroupService.listCircles(anonymousGroupInternalId)
                 val circle = circles.firstOrNull { it.id == circleId }
+                // a new circle starts where we are; one being edited starts on itself, so our
+                // position comes after, without holding the map back
+                val startLocation = if (circle == null) myLocation() else null
                 _state.update {
                     it.copy(
                         isLoading = false,
@@ -125,9 +157,16 @@ class CircleEditorViewModel(
                         radiusText =
                             (circle?.radiusMeters ?: DEFAULT_RADIUS_METERS).roundToInt().toString(),
                         center = circle?.center,
-                        initialCamera = circle?.center ?: myLocation() ?: Coordinates.NAPOLI,
+                        initialCamera = circle?.center ?: startLocation ?: Coordinates.NAPOLI,
+                        myLocation = startLocation,
                         otherCircles = circles.filter { c -> c.id != circle?.id },
+                        members = memberPoints(members, group.memberId, Clock.System.now()),
                     )
+                }
+                if (circle != null) {
+                    myLocation()?.let { location ->
+                        _state.update { it.copy(myLocation = location) }
+                    }
                 }
             } catch (e: CancellationException) {
                 throw e
