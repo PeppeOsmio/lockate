@@ -67,8 +67,11 @@ characters; 404 FCM says the token is unregistered; 429 over 30 a minute per tok
   a request is handled, so billed per request: the relay calls FCM inside the request), and
   optionally a `push-relay-dev` service account whose key a locally run relay uses; run per
   environment from `live/prod` and `live/staging` ([Environments](environments.md)).
+- Every backend pushes through the prod relay unless told otherwise: it is `PUSH_RELAY_URL`'s
+  default. Its Cloud Run URL stays the same across deploys; it would change only with another
+  service name, region or project, or off Cloud Run, which is when a domain of ours is needed.
 - A self-hoster who builds the app with their own Firebase project runs their own relay and sets
-  `PUSH_RELAY_URL` to it.
+  `PUSH_RELAY_URL` to it; one who wants no pushes sets it empty.
 
 ## Releasing and deploying
 

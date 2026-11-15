@@ -57,7 +57,8 @@ member:
 | `group.deleted` | every member but the one who deleted it, read before the delete |
 
 A 404 from the relay (FCM no longer knows the token) clears the registration, if it is still the
-same one. The relay URL is `lockate.push.relay-url` (`PUSH_RELAY_URL`); empty pushes nothing, and
+same one. The relay URL is `lockate.push.relay-url` (`PUSH_RELAY_URL`), by default our prod relay; empty
+pushes nothing, and
 without a relay, or with one unreachable, everything works except notifications.
 
 ## On the phone

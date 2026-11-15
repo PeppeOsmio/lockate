@@ -35,9 +35,10 @@ lockate:
   # The release version (set by the release image), answered by GET /api/version
   version: ${LOCKATE_VERSION:dev}
   require-api-key: ${REQUIRE_API_KEY:false}
-  # The push relay that forwards notifications to FCM; empty sends none
+  # The push relay that forwards notifications to FCM: ours for the released app by default, empty
+  # sends none
   push:
-    relay-url: ${PUSH_RELAY_URL:}
+    relay-url: ${PUSH_RELAY_URL:https://lockate-push-relay-oz6s3hiamq-ew.a.run.app}
   admin-api-key: ${ADMIN_API_KEY:}
   admin-ui-origin: ${ADMIN_UI_ORIGIN:http://localhost:5173}
   retention:
