@@ -83,9 +83,6 @@ val appModule = module {
                 config {
                     // the SSE heartbeats come every 15 s
                     readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-                    // OkHttp resends a request when a reused connection fails after it went out,
-                    // and a POST the server already handled must not be sent twice
-                    retryOnConnectionFailure(false)
                 }
             }
             install(SSE)
