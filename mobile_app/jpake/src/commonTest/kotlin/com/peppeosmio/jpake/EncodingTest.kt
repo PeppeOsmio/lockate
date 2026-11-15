@@ -25,6 +25,12 @@ class EncodingTest {
     }
 
     @Test
+    fun lvSplitRejectsALengthThatOverflows() {
+        val negative = byteArrayOf(0x80.toByte(), 0x80.toByte(), 0x80.toByte(), 0x80.toByte(), 0x7c)
+        assertNull(lvSplit(negative + ByteArray(16)))
+    }
+
+    @Test
     fun constantTimeEqualsComparesContent() {
         assertTrue(constantTimeEquals(byteArrayOf(1, 2, 3), byteArrayOf(1, 2, 3)))
         assertFalse(constantTimeEquals(byteArrayOf(1, 2, 3), byteArrayOf(1, 2, 4)))
