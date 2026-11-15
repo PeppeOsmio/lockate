@@ -2,9 +2,9 @@
 
 [← Architecture](architecture.md)
 
-Lockate has four released components. Their versions say at a glance what works with what: **the
-major version is the version of the API the component speaks**, the same number that is in its
-URLs.
+Lockate has four released components. Their versions say at a glance what works with what: **from
+1.0.0 on, the major version is the version of the API the component speaks**, the same number that
+is in its URLs.
 
 ## The interfaces
 
@@ -30,54 +30,46 @@ URLs.
 - **Patch** fixes without changing what the component speaks.
 - Backend, app and relay are released apart: a fix in the app alone is a new `mobile-v` tag only.
 
+Versions are plain `X.Y.Z`, with no pre-release suffixes.
+
+## Before 1.0.0
+
+The 0.x versions are the early ones: they speak `/api/v1` and `/v1/push`, but **those APIs aren't
+frozen yet**, and any minor may break what the previous one spoke. Such a change is released on
+both sides at once, backend and app with the same new minor (0.7.0 and 0.7.0), so during 0.x the
+safe pair is a backend and an app of the same minor. The compatibility promise above starts with
+1.0.0, when the v1 APIs are frozen.
+
 ## What is a breaking change
 
 Anything an older version of the other side can't understand: a removed or changed endpoint or
 field, a different size or AAD of an encrypted field, a new push or frame format that old apps
-can't open. A breaking change takes a new major **and** a new path: `/api/v2` with backend 2.0 and
-app 2.0. The backend may serve `/api/v1` and `/api/v2` side by side for a while, so phones can
-update at their own pace.
+can't open. From 1.0.0 on, a breaking change takes a new major **and** a new path: `/api/v2` with
+backend 2.0 and app 2.0. The backend may serve `/api/v1` and `/api/v2` side by side for a while, so
+phones can update at their own pace.
 
 ## Asking a server what it speaks
 
 `GET /api/version` (no API version in the path, no API key needed) answers
 `{"version": "1.4.0", "apis": [1]}`: the backend's version and every major of the Lockate API it
-serves. The app asks it first when a server is added or edited and refuses one that doesn't serve
-its API, saying which side needs an update; it shows the version in the server list and the hourly
-[health check](architecture/health-check.md) notifies once when a server doesn't serve the app's
-API: a server without the endpoint, or serving only older majors, needs an update; one serving only
-newer majors needs a newer app.
+serves (a 0.x backend answers `[1]` too). The app asks it first when a server is added or edited
+and refuses one that doesn't serve its API, saying which side needs an update; it shows the version
+in the server list and the hourly [health check](architecture/health-check.md) notifies once when a
+server doesn't serve the app's API: a server without the endpoint (older than 0.7.0), or serving
+only older majors, needs an update; one serving only newer majors needs a newer app.
 
-## Pre-releases
+## Releasing
 
-A version can carry a pre-release suffix, in semver order:
-
-| Suffix | Means |
-|---|---|
-| `-alpha.N` | Being built; anything may still change. |
-| `-beta.N` | Complete, being tested; only fixes. |
-| `-rc.N` | Candidate: the release unless a problem shows up. |
-
-Until `1.0.0` is final, **the v1 API isn't frozen**: an alpha or beta may break what the previous
-one spoke. Such a change is released on both sides at once (backend and app with the same version),
-and the compatibility promise above starts with `1.0.0`. After that, pre-releases of a later version
-(`1.3.0-beta.1`) keep it like any release.
-
-Every tag, pre-release or not, is released from `main`. A pre-release:
-
-- is published to Docker Hub only under its full version, never as `latest`, `X` or `X.Y`;
-- is a GitHub pre-release for the app;
-- is a version like any other for the relay, deployed where it should be tried (see
-  [Push relay](architecture/push-relay.md#releasing-and-deploying)).
+Every tag is released from `main`. Each release is published to Docker Hub under `X.Y.Z`, `X.Y`,
+`X` and `latest` (backend, admin UI, relay) or as a GitHub release with the APKs (app). The relay is
+then deployed by hand (see [Push relay](architecture/push-relay.md#releasing-and-deploying)).
 
 ## Android version codes
 
-Android updates an app only to a higher `versionCode`, so the code orders pre-releases too:
+Android updates an app only to a higher `versionCode`:
 
 ```
-major × 100 000 000 + minor × 100 000 + patch × 1 000 + stage
+major × 1 000 000 + minor × 1 000 + patch
 ```
 
-with `stage` = 100 + N for `alpha.N`, 200 + N for `beta.N`, 300 + N for `rc.N` and 999 for a
-release (N below 100, minor below 1000, patch below 100). `1.0.0-alpha.2` is 100 000 102, `1.0.0`
-is 100 000 999.
+(minor and patch below 1000): `0.7.0` is 7 000, `1.0.0` is 1 000 000.

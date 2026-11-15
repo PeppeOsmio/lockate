@@ -61,12 +61,12 @@ Three core domain entities:
 
 ## Releases
 
-Versions follow `docs/versioning.md`: a component's major is the version of the API it speaks (`/api/v1` for backend and app, `/v1/push` for the relay), so the same major means compatible; a breaking change takes a new major and a new path. Pre-releases are `-alpha.N`, `-beta.N`, `-rc.N`; until `1.0.0` is final the v1 API may still change. Every tag is released from `main`.
+Versions follow `docs/versioning.md`: plain `X.Y.Z`, and from `1.0.0` on a component's major is the version of the API it speaks (`/api/v1` for backend and app, `/v1/push` for the relay), so the same major means compatible; a breaking change takes a new major and a new path. The 0.x versions speak the v1 APIs before they are frozen: any minor may break them, and backend and app then release the same new minor together. Every tag is released from `main`.
 
 - `backend-vX.Y.Z` tag → `.github/workflows/release-backend.yml` publishes `lockate-backend` and `lockate-admin-ui` to Docker Hub with the same version (`prod-docker-compose.yml` pins both with `LOCKATE_VERSION`). The backend reports its version and the API majors it serves at `GET /api/version`.
-- `mobile-vX.Y.Z` tag → `.github/workflows/release-mobile.yml` builds the signed APKs and attaches them to a GitHub release (a pre-release for a pre-release version); the `versionCode` orders pre-releases too.
+- `mobile-vX.Y.Z` tag → `.github/workflows/release-mobile.yml` builds the signed APKs and attaches them to a GitHub release, with `versionCode` = major × 1000000 + minor × 1000 + patch.
 - `relay-vX.Y.Z` tag → `.github/workflows/release-relay.yml` publishes `lockate-push-relay`; deploying it is a Terragrunt apply with that version (`docs/architecture/push-relay.md`).
-- Only a release gets the `latest`, `X` and `X.Y` image tags. Release workflows only build and publish; the `checks-*` workflows run on pull requests only.
+- Images get the `X.Y.Z`, `X.Y`, `X` and `latest` tags. Release workflows only build and publish; the `checks-*` workflows run on pull requests only.
 
 ## Backend
 

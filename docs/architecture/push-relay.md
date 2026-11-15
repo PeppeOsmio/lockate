@@ -72,15 +72,16 @@ characters; 404 FCM says the token is unregistered; 429 over 30 a minute per tok
 
 ## Releasing and deploying
 
-The relay has its own tags, `relay-vX.Y.Z`, and its major is the version of the API it serves:
-relay 1.x serves `/v1/push`, so any backend 1.x pushes through any relay 1.x
-([Versioning](../versioning.md)). A relay that changes rarely isn't tied to the backend's releases.
+The relay has its own tags, `relay-vX.Y.Z`. From 1.0.0 on its major is the version of the API it
+serves: relay 1.x serves `/v1/push`, so any backend 1.x pushes through any relay 1.x; a 0.x relay
+serves `/v1/push` before it is frozen ([Versioning](../versioning.md)). A relay that changes rarely
+isn't tied to the backend's releases.
 
-1. A `relay-vX.Y.Z` tag on `main` (pre-releases like `relay-v1.1.0-rc.1` too) runs
-   `.github/workflows/release-relay.yml`: one native build per architecture, merged into one image
-   `lockate-push-relay:X.Y.Z`. Only a release also gets `X.Y`, `X` and `latest`.
-2. Deploying is a Terragrunt apply with that version, by hand: a pre-release on staging first,
-   then the release on prod.
+1. A `relay-vX.Y.Z` tag on `main` runs `.github/workflows/release-relay.yml`: one native build per
+   architecture, merged into one image `lockate-push-relay:X.Y.Z`, also tagged `X.Y`, `X` and
+   `latest`.
+2. Deploying is a Terragrunt apply with that version, by hand: on staging first, then on prod once
+   pushes arrive.
 
    ```bash
    cd push_relay/terraform/live/staging   # or prod
