@@ -21,6 +21,10 @@ RUN useradd --system --no-create-home lockate
 
 COPY --from=builder /app/target/lockate lockate
 
+# The release version, answered by GET /api/version; set last so it doesn't invalidate the build cache
+ARG LOCKATE_VERSION=dev
+ENV LOCKATE_VERSION=$LOCKATE_VERSION
+
 USER lockate
 
 EXPOSE 3118

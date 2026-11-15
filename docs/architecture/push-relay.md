@@ -56,7 +56,7 @@ characters; 404 FCM says the token is unregistered; 429 over 30 a minute per tok
   starts in milliseconds, so it can scale to zero. No Firebase Admin SDK (heavy, awkward in a native
   image): the access token comes from the metadata server on Google Cloud, or from a JWT signed with
   a service-account key file (`GOOGLE_APPLICATION_CREDENTIALS`).
-- Docker image `lockate-push-relay`, released with the backend under the same tag.
+- Docker image `lockate-push-relay`, released on its own (see below).
 - Hosted on **Cloud Run** in the Firebase project: free tier, scales to zero, and it calls FCM with
   its own identity, so there is no key file to guard. The price: Google also sees which servers'
   IPs push. An EU VPS with a key file is the alternative; a domain of ours in front would make the
@@ -69,3 +69,22 @@ characters; 404 FCM says the token is unregistered; 429 over 30 a minute per tok
   environment from `live/prod` and `live/staging` ([Environments](environments.md)).
 - A self-hoster who builds the app with their own Firebase project runs their own relay and sets
   `PUSH_RELAY_URL` to it.
+
+## Releasing and deploying
+
+The relay has its own tags, `relay-vX.Y.Z`, and its major is the version of the API it serves:
+relay 1.x serves `/v1/push`, so any backend 1.x pushes through any relay 1.x
+([Versioning](../versioning.md)). A relay that changes rarely isn't tied to the backend's releases.
+
+1. A `relay-vX.Y.Z` tag on `main` (pre-releases like `relay-v1.1.0-rc.1` too) runs
+   `.github/workflows/release-relay.yml`: one native build per architecture, merged into one image
+   `lockate-push-relay:X.Y.Z`. Only a release also gets `X.Y`, `X` and `latest`.
+2. Deploying is a Terragrunt apply with that version, by hand: a pre-release on staging first,
+   then the release on prod.
+
+   ```bash
+   cd push_relay/terraform/live/staging   # or prod
+   DOCKERHUB_USERNAME=<Docker Hub user> RELAY_VERSION=X.Y.Z terragrunt apply
+   ```
+
+   Cloud Run pins the exact version and starts a new revision; traffic moves only once it answers.

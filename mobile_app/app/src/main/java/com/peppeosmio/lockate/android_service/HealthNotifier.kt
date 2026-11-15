@@ -7,13 +7,51 @@ import android.content.Intent
 import androidx.core.app.NotificationCompat
 import com.peppeosmio.lockate.MainActivity
 import com.peppeosmio.lockate.R
+import com.peppeosmio.lockate.service.version.ApiCompatibility
 
-/** The notification of a server the health check couldn't reach for hours, one per server. */
+/**
+ * The health check's notifications, per server: one when it couldn't reach it for hours, one when
+ * it doesn't speak this app's API.
+ */
 class HealthNotifier(private val context: Context) {
     private val notificationManager =
         context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-    fun show(connectionId: Long, serverName: String) {
+    fun showUnreachable(connectionId: Long, serverName: String) {
+        show(
+            unreachableTag(connectionId),
+            "Can't reach $serverName",
+            "Your groups on it haven't been updated for hours.",
+        )
+    }
+
+    fun clearUnreachable(connectionId: Long) {
+        notificationManager.cancel(unreachableTag(connectionId), 0)
+    }
+
+    fun showIncompatible(connectionId: Long, serverName: String, compatibility: ApiCompatibility) {
+        when (compatibility) {
+            ApiCompatibility.ServerTooOld ->
+                show(
+                    incompatibleTag(connectionId),
+                    "$serverName needs an update",
+                    "It runs an older version of Lockate, so your groups on it aren't updated.",
+                )
+            ApiCompatibility.AppTooOld ->
+                show(
+                    incompatibleTag(connectionId),
+                    "Update Lockate to use $serverName",
+                    "It runs a newer version of Lockate, so your groups on it aren't updated.",
+                )
+            ApiCompatibility.Compatible -> Unit
+        }
+    }
+
+    fun clearIncompatible(connectionId: Long) {
+        notificationManager.cancel(incompatibleTag(connectionId), 0)
+    }
+
+    private fun show(tag: String, title: String, text: String) {
         val openApp =
             PendingIntent.getActivity(
                 context,
@@ -24,19 +62,17 @@ class HealthNotifier(private val context: Context) {
         val notification =
             NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_launcher_background)
-                .setContentTitle("Can't reach $serverName")
-                .setContentText("Your groups on it haven't been updated for hours.")
+                .setContentTitle(title)
+                .setContentText(text)
                 .setContentIntent(openApp)
                 .setAutoCancel(true)
                 .build()
-        notificationManager.notify(tag(connectionId), 0, notification)
+        notificationManager.notify(tag, 0, notification)
     }
 
-    fun clear(connectionId: Long) {
-        notificationManager.cancel(tag(connectionId), 0)
-    }
+    private fun unreachableTag(connectionId: Long) = "health:$connectionId"
 
-    private fun tag(connectionId: Long) = "health:$connectionId"
+    private fun incompatibleTag(connectionId: Long) = "health-api:$connectionId"
 
     companion object {
         const val CHANNEL_ID = "lockateHealth"

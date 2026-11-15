@@ -45,7 +45,8 @@ Since 5b notifications come only by push: a server without `PUSH_RELAY_URL` send
 ## Accepted trade-offs
 
 - No notifications without Google Play services, and no F-Droid build.
-- Old app versions stop working against the new server; backend and app are released together.
+- Old app versions stop working against the new server: the redesign is released as 1.0.0, a new
+  major of both ([Versioning](versioning.md)).
 - Every existing group was deleted by the SHA-256 change.
 - A dead phone is reported as "stopped sharing" after 30 min.
 - No notifications from a server without a push relay (no socket to fall back on since 5b).

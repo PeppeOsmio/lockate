@@ -76,6 +76,6 @@ terragrunt apply
 ```
 
 `terragrunt output url` prints the environment's `PUSH_RELAY_URL`. The image exists once a
-`backend-vX.Y.Z` release has run. The state is `terraform.tfstate` in the environment's folder (not
+`relay-vX.Y.Z` release has run. The state is `terraform.tfstate` in the environment's folder (not
 committed, and it holds the dev key): keep it, or switch `remote_state` in `live/root.hcl` to a GCS
 bucket.

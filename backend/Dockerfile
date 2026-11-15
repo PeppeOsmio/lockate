@@ -20,6 +20,10 @@ RUN apk add --no-cache curl
 
 COPY --from=builder /app/target/*.jar lockate.jar
 
+# The release version, answered by GET /api/version
+ARG LOCKATE_VERSION=dev
+ENV LOCKATE_VERSION=$LOCKATE_VERSION
+
 EXPOSE 3118
 
 # Run the application
