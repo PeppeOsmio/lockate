@@ -34,7 +34,8 @@ fun lvSplit(data: ByteArray): List<ByteArray>? {
             if (byte and 0x80 == 0) break
             shift += 7
         }
-        if (length > data.size - offset) return null
+        // a fifth length byte can overflow the Int into a negative length
+        if (length < 0 || length > data.size - offset) return null
         parts.add(data.copyOfRange(offset, offset + length))
         offset += length
     }
