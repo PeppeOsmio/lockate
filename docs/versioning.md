@@ -42,7 +42,8 @@ update at their own pace.
 
 `GET /api/version` (no API version in the path, no API key needed) answers
 `{"version": "1.4.0", "apis": [1]}`: the backend's version and every major of the Lockate API it
-serves. The app shows the version in the server's settings and the hourly
+serves. The app asks it first when a server is added or edited and refuses one that doesn't serve
+its API, saying which side needs an update; it shows the version in the server list and the hourly
 [health check](architecture/health-check.md) notifies once when a server doesn't serve the app's
 API: a server without the endpoint, or serving only older majors, needs an update; one serving only
 newer majors needs a newer app.

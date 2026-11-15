@@ -210,7 +210,9 @@ val appModule = module {
             compatibility = { connectionId ->
                 try {
                     val connection = connectionService.getConnectionSettingsById(connectionId)
-                    apiCompatibility(connectionService.getServerVersion(connection)?.apis)
+                    apiCompatibility(
+                        connectionService.getServerVersion(connection.url, connection.apiKey)?.apis
+                    )
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {

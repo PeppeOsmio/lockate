@@ -67,11 +67,11 @@ class ConnectionService(
         }
 
     /** Null when the server has no `GET /api/version`: it is older than 1.0. */
-    suspend fun getServerVersion(connection: Connection): ServerVersionDto? =
+    suspend fun getServerVersion(url: String, apiKey: String?): ServerVersionDto? =
         withContext(Dispatchers.IO) {
             val response = httpClient.get {
-                url(Url("${connection.url.trimEnd('/')}/api/version"))
-                headers { connection.apiKey?.let { append("X-API-KEY", it) } }
+                url(Url("${url.trimEnd('/')}/api/version"))
+                headers { apiKey?.let { append("X-API-KEY", it) } }
             }
             when (response.status.value) {
                 200 -> Unit
