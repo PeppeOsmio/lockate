@@ -95,8 +95,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
@@ -641,32 +639,6 @@ class AnonymousGroupService(
         listLocalAnonymousGroups(connectionSettingsId).forEach { deleteLocalAnonymousGroup(it) }
     }
 
-    private suspend fun getAvailableConnections(
-        connectionList: List<Connection>
-    ): List<Connection> = coroutineScope {
-        connectionList
-            .map { settings ->
-                async {
-                    try {
-                        connectionService.isApiAvailable(settings.url)
-                        settings
-                    } catch (_: Exception) {
-                        null
-                    }
-                }
-            }
-            .awaitAll()
-            .filterNotNull()
-    }
-
-    private suspend fun getAvailableAGs(availableConnections: List<Connection>): Int {
-        var availableAGs = 0
-        availableConnections.forEach {
-            availableAGs += anonymousGroupDao.listAGToSendLocationOfConnection(it.id!!).size
-        }
-        return availableAGs
-    }
-
     private val _groupFrames = MutableSharedFlow<GroupFrame>(extraBufferCapacity = 64)
 
     /**
@@ -944,12 +916,8 @@ class AnonymousGroupService(
                         transitions,
                         circlesVersion,
                     )
-                if (response == null) {
-                    // the next position replaces this one, and carries the same transitions again
-                    channel.status.update { it.copy(state = ChannelState.Reconnecting) }
-                    return@collect
-                }
-                channel.status.update { it.copy(state = ChannelState.Connected) }
+                // the next position replaces this one, and carries the same transitions again
+                if (response == null) return@collect
                 val version = response.body<AGPostLocationResDto>().circlesVersion
                 val sent = response.status.value == 200
                 // The circles are replaced before the post is confirmed: a changed circle takes the
@@ -1346,10 +1314,9 @@ class AnonymousGroupService(
                 val snapshot = synchronized(statuses) { statuses.values.toList() }
                 onStatusUpdate(
                     SendLocationStatus(
-                        totalAGCount = snapshot.size,
-                        activeAGCount = snapshot.count { it.state == ChannelState.Connected },
-                        isLocationDisabled = snapshot.any { it.isLocationDisabled },
-                        isLocationUnavailable = snapshot.any { it.isLocationUnavailable },
+                        sharedAGCount = snapshot.size,
+                        isLocationOff =
+                            snapshot.any { it.isLocationDisabled || it.isLocationUnavailable },
                     )
                 )
             }

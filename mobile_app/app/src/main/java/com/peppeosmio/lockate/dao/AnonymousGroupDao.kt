@@ -107,17 +107,6 @@ interface AnonymousGroupDao {
 
     @Query(
         """
-        SELECT * FROM anonymous_group 
-        WHERE sendLocation = 1 AND isMember = 1 AND existsRemote = 1 AND connectionId = :connectionSettingsId
-        ORDER BY internalId DESC
-    """
-    )
-    suspend fun listAGToSendLocationOfConnection(
-        connectionSettingsId: Long
-    ): List<AnonymousGroupEntity>
-
-    @Query(
-        """
         SELECT * FROM anonymous_group
         WHERE isMember = 1 AND existsRemote = 1 AND sendLocation = 1
         ORDER BY internalId DESC
