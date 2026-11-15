@@ -6,7 +6,8 @@ phone with a key only the group's phones hold. The servers move and store cipher
 only what they can't avoid learning: who is in which group, and when each member sends.
 
 This document is the map. Each component has its own page with the details and the reasons behind
-them; [roadmap.md](roadmap.md) says what is built and what comes next.
+them; [roadmap.md](roadmap.md) says what is built and what comes next, and
+[versioning.md](versioning.md) which versions of the components work together.
 
 ## Components
 

@@ -1,6 +1,7 @@
 package com.peppeosmio.lockate.di
 
 import android.util.Log
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.room.Room
@@ -11,8 +12,6 @@ import com.peppeosmio.lockate.android_service.HealthNotifier
 import com.peppeosmio.lockate.dao.AnonymousGroupDao
 import com.peppeosmio.lockate.dao.ConnectionDao
 import com.peppeosmio.lockate.data.apiJson
-import com.peppeosmio.lockate.exceptions.AGMemberUnauthorizedException
-import com.peppeosmio.lockate.exceptions.RemoteAGNotFoundException
 import com.peppeosmio.lockate.platform_service.ActivityService
 import com.peppeosmio.lockate.platform_service.ConnectivityService
 import com.peppeosmio.lockate.platform_service.DeviceOrientationService
@@ -33,6 +32,7 @@ import com.peppeosmio.lockate.service.invite.InviteService
 import com.peppeosmio.lockate.service.location.PositionProvider
 import com.peppeosmio.lockate.service.location.STILL_FIX_INTERVAL_MILLIS
 import com.peppeosmio.lockate.service.push.PushRegistrationService
+import com.peppeosmio.lockate.service.version.apiCompatibility
 import com.peppeosmio.lockate.utils.SendLoopLog
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
@@ -207,43 +207,70 @@ val appModule = module {
                     HealthCheck.Group(it.connectionId, it.internalId)
                 }
             },
+            compatibility = { connectionId ->
+                try {
+                    val connection = connectionService.getConnectionSettingsById(connectionId)
+                    apiCompatibility(connectionService.getServerVersion(connection)?.apis)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    null
+                }
+            },
             verify = { group ->
+                // marks the group itself when we were removed or it was deleted
                 try {
                     anonymousGroupService.verifyMemberAuth(
                         group.connectionId,
                         group.anonymousGroupInternalId,
                     )
-                    HealthCheck.Outcome.Ok
                 } catch (e: CancellationException) {
                     throw e
-                } catch (e: AGMemberUnauthorizedException) {
-                    HealthCheck.Outcome.Gone
-                } catch (e: RemoteAGNotFoundException) {
-                    HealthCheck.Outcome.Gone
                 } catch (e: Exception) {
-                    HealthCheck.Outcome.Unreachable
+                    Log.w("HealthCheck", "Can't verify group ${group.anonymousGroupInternalId}", e)
                 }
             },
             registerPushes = { get<PushRegistrationService>().registerAll() },
-            failures =
-                object : HealthCheck.FailureCounts {
-                    private fun key(connectionId: Long) =
+            state =
+                object : HealthCheck.State {
+                    private fun failuresKey(connectionId: Long) =
                         intPreferencesKey("health_failures_$connectionId")
 
-                    override suspend fun get(connectionId: Long) =
-                        dataStore.data.first()[key(connectionId)] ?: 0
+                    private fun incompatibleKey(connectionId: Long) =
+                        booleanPreferencesKey("health_incompatible_$connectionId")
 
-                    override suspend fun set(connectionId: Long, count: Int) {
-                        dataStore.edit { it[key(connectionId)] = count }
+                    override suspend fun failures(connectionId: Long) =
+                        dataStore.data.first()[failuresKey(connectionId)] ?: 0
+
+                    override suspend fun setFailures(connectionId: Long, count: Int) {
+                        dataStore.edit { it[failuresKey(connectionId)] = count }
+                    }
+
+                    override suspend fun incompatibleNotified(connectionId: Long) =
+                        dataStore.data.first()[incompatibleKey(connectionId)] ?: false
+
+                    override suspend fun setIncompatibleNotified(
+                        connectionId: Long,
+                        notified: Boolean,
+                    ) {
+                        dataStore.edit { it[incompatibleKey(connectionId)] = notified }
                     }
                 },
             notifyUnreachable = { connectionId ->
-                healthNotifier.show(
+                healthNotifier.showUnreachable(
                     connectionId,
                     connectionService.getConnectionSettingsById(connectionId).name,
                 )
             },
-            clearUnreachable = { healthNotifier.clear(it) },
+            clearUnreachable = { healthNotifier.clearUnreachable(it) },
+            notifyIncompatible = { connectionId, compatibility ->
+                healthNotifier.showIncompatible(
+                    connectionId,
+                    connectionService.getConnectionSettingsById(connectionId).name,
+                    compatibility,
+                )
+            },
+            clearIncompatible = { healthNotifier.clearIncompatible(it) },
         )
     }
 

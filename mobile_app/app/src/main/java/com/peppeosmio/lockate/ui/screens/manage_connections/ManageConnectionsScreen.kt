@@ -1,5 +1,6 @@
 package com.peppeosmio.lockate.ui.screens.manage_connections
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -141,6 +142,7 @@ fun ManageConnectionsScreen(
             items(connections, key = { it.id!! }) { connection ->
                 ManageConnectionRow(
                     connection = connection,
+                    versionLabel = state.versionLabels[connection.id],
                     onEdit = {
                         navigateToConnectionSettings(
                             ConnectionSettingsRoute(
@@ -162,12 +164,18 @@ fun ManageConnectionsScreen(
 @Composable
 private fun ManageConnectionRow(
     connection: Connection,
+    versionLabel: String?,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
     ListItem(
         headlineContent = { Text(connection.name.ifBlank { connection.url }) },
-        supportingContent = { Text(connection.url) },
+        supportingContent = {
+            Column {
+                Text(connection.url)
+                versionLabel?.let { Text(it) }
+            }
+        },
         trailingContent = {
             Row {
                 IconButton(onClick = onEdit) {

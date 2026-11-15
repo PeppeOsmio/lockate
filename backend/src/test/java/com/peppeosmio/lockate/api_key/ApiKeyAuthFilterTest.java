@@ -69,6 +69,16 @@ class ApiKeyAuthFilterTest {
   }
 
   @Test
+  void doFilterInternal_versionPath_bypassesApiKeyCheck() throws Exception {
+    request.setRequestURI("/api/version");
+
+    filter.doFilterInternal(request, response, filterChain);
+
+    verify(filterChain).doFilter(request, response);
+    verify(apiKeyService, never()).verifyApiKey(any());
+  }
+
+  @Test
   void doFilterInternal_validKey_callsFilterChain() throws Exception {
     var header = UUID.randomUUID() + ":somesecret";
     request.setRequestURI("/api/v1/anonymous-groups");

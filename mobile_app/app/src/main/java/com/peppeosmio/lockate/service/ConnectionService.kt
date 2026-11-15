@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.edit
 import com.peppeosmio.lockate.dao.ConnectionDao
 import com.peppeosmio.lockate.data.anonymous_group.mappers.ConnectionMapper
 import com.peppeosmio.lockate.data.anonymous_group.remote.ApiKeyRequiredResDto
+import com.peppeosmio.lockate.data.version.ServerVersionDto
 import com.peppeosmio.lockate.domain.Connection
 import com.peppeosmio.lockate.exceptions.ConnectionSettingsNotFoundException
 import com.peppeosmio.lockate.exceptions.InvalidApiKeyException
@@ -63,6 +64,21 @@ class ConnectionService(
             }
             val responseBody = response.body<ApiKeyRequiredResDto>()
             responseBody.required
+        }
+
+    /** Null when the server has no `GET /api/version`: it is older than 1.0. */
+    suspend fun getServerVersion(connection: Connection): ServerVersionDto? =
+        withContext(Dispatchers.IO) {
+            val response = httpClient.get {
+                url(Url("${connection.url.trimEnd('/')}/api/version"))
+                headers { connection.apiKey?.let { append("X-API-KEY", it) } }
+            }
+            when (response.status.value) {
+                200 -> Unit
+                404 -> return@withContext null
+                else -> ErrorHandler.handleGeneric(response)
+            }
+            response.body<ServerVersionDto>()
         }
 
     @Throws(InvalidApiKeyException::class, UnauthorizedException::class)

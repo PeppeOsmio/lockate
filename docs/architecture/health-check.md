@@ -9,25 +9,34 @@ unnoticed until the app is opened. The health check notices them.
 
 ## What it does
 
-`HealthCheck`, run by `HealthCheckWorker` about every hour, for the groups we are still in:
+`HealthCheck`, run by `HealthCheckWorker` about every hour, for each server with a group we are
+still in:
 
-1. **Each group:** `GET …/members/auth/verify` (`AnonymousGroupService.verifyMemberAuth`).
-   - 200: fine.
-   - 401/403 or 404: we were removed or the group was deleted. The group is marked as such, as a
-     push or the stream would do, and the server counts as having answered.
-   - anything else (no connection, timeout, 5xx): no answer.
-2. **Each server:** answered if at least one of its groups did. Then its count of runs in a row
-   without an answer goes back to 0 and its notification, if any, is cleared. Otherwise the count
-   goes up, and at **3** (`UNREACHABLE_RUNS_TO_NOTIFY`, about 3 hours) a notification "Can't reach
-   *server*" is shown, once: the count keeps going up without notifying again until the server
-   answers.
+1. **Does it answer, and does it speak our API?** `GET /api/version`
+   ([Versioning](../versioning.md)), which has no API version in its path, so any server answers it.
+   - No answer (no connection, timeout, 5xx): the server's count of runs in a row without an answer
+     goes up, and at **3** (`UNREACHABLE_RUNS_TO_NOTIFY`, about 3 hours) a notification "Can't
+     reach *server*" is shown, once: the count keeps going up without notifying again until the
+     server answers. Nothing else is checked on it.
+   - Any answer: the count goes back to 0 and that notification, if any, is cleared.
+   - The server doesn't serve the app's API (`APP_API`): a notification "*server* needs an update"
+     (no `/api/version`, or only older majors) or "Update Lockate to use *server*" (only newer
+     majors) is shown once, and its groups aren't checked: answers to an API it doesn't speak mean
+     nothing, and a 404 would mark them deleted. When it speaks our API again the notification is
+     cleared.
+2. **Each group of a compatible server:** `GET …/members/auth/verify`
+   (`AnonymousGroupService.verifyMemberAuth`). A 401/403 or 404 means we were removed or the group
+   was deleted, and the group is marked as such, as a push or the stream would do.
 3. **Pushes:** every group is registered again (`PushRegistrationService.registerAll`), which
    replaces each registration with the current FCM token. A token change missed by `onNewToken` is
    fixed within the hour.
 
-With no group it does nothing. The counts are kept in DataStore (`health_failures_{connectionId}`),
-so they survive the process; the notification has one tag per server on its own channel ("Server
-problems").
+With no group it does nothing. The state is kept in DataStore per server
+(`health_failures_{connectionId}`, `health_incompatible_{connectionId}`), so it survives the
+process; each notification has its own tag per server on the "Server problems" channel.
+
+The server list (Manage connections) shows what each server's `GET /api/version` says: "Server
+1.2.0", or what needs an update.
 
 ## Scheduling
 

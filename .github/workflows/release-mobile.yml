@@ -46,8 +46,16 @@ jobs:
       - name: Build release APKs
         working-directory: mobile_app
         run: |
+          # docs/versioning.md: the code orders alpha < beta < rc < release
           IFS=. read -r major minor patch <<< "${VERSION%%-*}"
-          ./gradlew assembleProdRelease -PversionName="$VERSION" -PversionCode=$((major * 1000000 + minor * 1000 + patch))
+          case "$VERSION" in
+            *-alpha.*) stage=$((100 + ${VERSION##*-alpha.})) ;;
+            *-beta.*) stage=$((200 + ${VERSION##*-beta.})) ;;
+            *-rc.*) stage=$((300 + ${VERSION##*-rc.})) ;;
+            *-*) echo "unknown pre-release in $VERSION" >&2; exit 1 ;;
+            *) stage=999 ;;
+          esac
+          ./gradlew assembleProdRelease -PversionName="$VERSION" -PversionCode=$((major * 100000000 + minor * 100000 + patch * 1000 + stage))
       - name: Verify and rename APKs
         working-directory: mobile_app/app/build/outputs/apk/prod/release
         run: |

@@ -2,10 +2,13 @@ package com.peppeosmio.lockate.ui.screens.manage_connections
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.peppeosmio.lockate.domain.Connection
 import com.peppeosmio.lockate.service.ConnectionService
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
+import com.peppeosmio.lockate.service.version.serverVersionLabel
 import com.peppeosmio.lockate.utils.ErrorInfo
 import com.peppeosmio.lockate.utils.SnackbarErrorMessage
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,6 +34,7 @@ class ManageConnectionsViewModel(
             try {
                 val connections = connectionService.listConnectionSettings()
                 _state.update { it.copy(showLoadingOverlay = false, connections = connections) }
+                connections.forEach { connection -> launch { loadVersionLabel(connection) } }
             } catch (e: Exception) {
                 _state.update { it.copy(showLoadingOverlay = false) }
                 _snackbarEvents.trySend(
@@ -41,6 +45,18 @@ class ManageConnectionsViewModel(
                 )
             }
         }
+    }
+
+    private suspend fun loadVersionLabel(connection: Connection) {
+        val label =
+            try {
+                serverVersionLabel(connectionService.getServerVersion(connection))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                return
+            }
+        _state.update { it.copy(versionLabels = it.versionLabels + (connection.id!! to label)) }
     }
 
     fun selectForDelete(connectionId: Long) {

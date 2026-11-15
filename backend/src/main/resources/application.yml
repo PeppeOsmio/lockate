@@ -32,6 +32,8 @@ logging:
     org.springframework.web.filter.CommonsRequestLoggingFilter: ${REQUEST_LOGGING_LEVEL:DEBUG}
 
 lockate:
+  # The release version (set by the release image), answered by GET /api/version
+  version: ${LOCKATE_VERSION:dev}
   require-api-key: ${REQUIRE_API_KEY:false}
   # The push relay that forwards notifications to FCM; empty sends none
   push:

@@ -4,6 +4,7 @@ import com.peppeosmio.lockate.data.anonymous_group.remote.AGFrameDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGPostLocationReqDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGPostLocationResDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.EncryptedDataDto
+import com.peppeosmio.lockate.data.version.ServerVersionDto
 import kotlinx.datetime.LocalDateTime
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -28,6 +29,16 @@ class ApiJsonTest {
 
         assertEquals(false, frame.online)
         assertEquals(LocalDateTime(2026, 11, 8, 12, 3), frame.lastSeen)
+    }
+
+    @Test
+    fun `a server answers its version and the API majors it serves`() {
+        assertEquals(
+            ServerVersionDto(version = "1.0.0-alpha.1", apis = listOf(1)),
+            apiJson.decodeFromString<ServerVersionDto>(
+                """{"version":"1.0.0-alpha.1","apis":[1]}"""
+            ),
+        )
     }
 
     @Test
