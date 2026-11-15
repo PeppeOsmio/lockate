@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.BindException;
+import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.context.request.WebRequest;
@@ -46,6 +47,15 @@ public class GlobalExceptionHandler {
 
   @ExceptionHandler(Exception.class)
   public ResponseEntity<ErrorResponseDto> handleException(Exception e, WebRequest request) {
+    // Spring's own errors (unknown path, wrong method...) carry their status: without this an
+    // unknown path answered 500, and a client couldn't tell an endpoint it lacks from a failure
+    if (e instanceof ErrorResponse errorResponse) {
+      var status = errorResponse.getStatusCode();
+      return ResponseEntity.status(status)
+          .body(
+              new ErrorResponseDto(
+                  status.value() == HttpStatus.NOT_FOUND.value() ? "not_found" : e.getMessage()));
+    }
     e.printStackTrace();
     return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
         .body(new ErrorResponseDto(e.getMessage()));
