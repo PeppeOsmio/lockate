@@ -1,9 +1,7 @@
 package com.peppeosmio.lockate.anonymous_group.repository;
 
-import com.peppeosmio.lockate.anonymous_group.entity.AGMemberEntity;
 import com.peppeosmio.lockate.anonymous_group.entity.AGMemberLocationEntity;
 import java.time.Instant;
-import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.NativeQuery;
@@ -28,7 +26,4 @@ public interface AGLocationRepository extends CrudRepository<AGMemberLocationEnt
             )
             """)
   int deleteOldLocations(@Param("cutoff") Instant cutoff);
-
-  Optional<AGMemberLocationEntity> findFirstByAgMemberEntityOrderByTimestampDescIdDesc(
-      AGMemberEntity agMemberEntity);
 }

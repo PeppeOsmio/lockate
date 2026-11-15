@@ -3,12 +3,10 @@ package com.peppeosmio.lockate.anonymous_group.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -24,17 +22,14 @@ import com.peppeosmio.lockate.common.exceptions.InvalidEncryptedDataException;
 import com.peppeosmio.lockate.invite.exceptions.TooManyRequestsException;
 import com.peppeosmio.lockate.redis.RedisService;
 import java.time.Duration;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -94,8 +89,6 @@ class AGMemberMessageServiceTest {
   @Test
   void postLocation_relaysThePositionThenEachCircleEventInOrder() throws Exception {
     underTheRateLimit();
-    when(anonymousGroupService.relayMemberMessage(eq(groupId), eq(authentication), any(), any()))
-        .thenReturn(Optional.empty());
     var first = circleEvent((byte) 1);
     var second = circleEvent((byte) 2);
     var dto = post(List.of(first, second));
@@ -108,8 +101,7 @@ class AGMemberMessageServiceTest {
         .relayMemberMessage(
             groupId,
             authentication,
-            new AGMemberMessageReqDto(dto.encryptedCoordinates(), dto.encryptedActivity()),
-            null);
+            new AGMemberMessageReqDto(dto.encryptedCoordinates(), dto.encryptedActivity()));
     order.verify(presenceService).onLocation(groupId, memberId);
     order
         .verify(anonymousGroupService)
@@ -122,8 +114,6 @@ class AGMemberMessageServiceTest {
   @Test
   void postLocation_answersTheGroupsCirclesVersion() throws Exception {
     underTheRateLimit();
-    when(anonymousGroupService.relayMemberMessage(eq(groupId), eq(authentication), any(), any()))
-        .thenReturn(Optional.empty());
 
     var res = service.postLocation(groupId, authentication, post(null));
 
@@ -144,7 +134,7 @@ class AGMemberMessageServiceTest {
             CirclesChangedException.class,
             e -> assertThat(e.getCirclesVersion()).isEqualTo(CIRCLES_VERSION));
     verifyNoInteractions(presenceService);
-    verify(anonymousGroupService, never()).relayMemberMessage(any(), any(), any(), any());
+    verify(anonymousGroupService, never()).relayMemberMessage(any(), any(), any());
     verify(anonymousGroupService, never()).relayCircleEvent(any(), any(), any());
   }
 
@@ -163,8 +153,6 @@ class AGMemberMessageServiceTest {
   void postLocation_noEventsOnOtherCircles_relaysThePositionAndAnswersTheNewVersion()
       throws Exception {
     underTheRateLimit();
-    when(anonymousGroupService.relayMemberMessage(eq(groupId), eq(authentication), any(), any()))
-        .thenReturn(Optional.empty());
 
     var res = service.postLocation(groupId, authentication, post(List.of(), null));
 
@@ -175,31 +163,11 @@ class AGMemberMessageServiceTest {
   @Test
   void postLocation_withoutCircleEvents_relaysOnlyThePosition() throws Exception {
     underTheRateLimit();
-    when(anonymousGroupService.relayMemberMessage(eq(groupId), eq(authentication), any(), any()))
-        .thenReturn(Optional.empty());
 
     service.postLocation(groupId, authentication, post(null));
 
     verify(presenceService).onLocation(groupId, memberId);
     verify(anonymousGroupService, never()).relayCircleEvent(any(), any(), any());
-  }
-
-  @Test
-  void postLocation_passesTheTimestampItSavedLastTime() throws Exception {
-    underTheRateLimit();
-    var saved = LocalDateTime.now();
-    when(anonymousGroupService.relayMemberMessage(eq(groupId), any(), any(), isNull()))
-        .thenReturn(Optional.of(saved));
-    service.postLocation(groupId, authentication, post(List.of()));
-    when(anonymousGroupService.relayMemberMessage(eq(groupId), any(), any(), eq(saved)))
-        .thenReturn(Optional.empty());
-
-    service.postLocation(groupId, authentication, post(List.of()));
-
-    var captor = ArgumentCaptor.forClass(LocalDateTime.class);
-    verify(anonymousGroupService, times(2))
-        .relayMemberMessage(eq(groupId), any(), any(), captor.capture());
-    assertThat(captor.getAllValues()).containsExactly(null, saved);
   }
 
   @Test
@@ -242,8 +210,9 @@ class AGMemberMessageServiceTest {
   @Test
   void postLocation_invalidPosition_touchesNeitherPresenceNorCircleEvents() throws Exception {
     underTheRateLimit();
-    when(anonymousGroupService.relayMemberMessage(any(), any(), any(), any()))
-        .thenThrow(new InvalidEncryptedDataException());
+    doThrow(new InvalidEncryptedDataException())
+        .when(anonymousGroupService)
+        .relayMemberMessage(any(), any(), any());
 
     assertThatThrownBy(
             () ->
@@ -269,8 +238,6 @@ class AGMemberMessageServiceTest {
   void postLocation_atTheRateLimit_isAccepted() throws Exception {
     when(redisService.increment(rateKey, Duration.ofMinutes(1)))
         .thenReturn((long) AGMemberMessageService.MAX_LOCATIONS_PER_MINUTE);
-    when(anonymousGroupService.relayMemberMessage(any(), any(), any(), any()))
-        .thenReturn(Optional.empty());
 
     service.postLocation(groupId, authentication, post(List.of()));
 

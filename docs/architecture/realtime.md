@@ -13,7 +13,7 @@ pushes:
 
 | Frame | |
 |---|---|
-| `snapshot` | Members with their last saved record, and circles. First on every stream, in the join response, and from `GET …/snapshot`. |
+| `snapshot` | Members with their last position, and circles. First on every stream, in the join response, and from `GET …/snapshot`. |
 | `member.joined` / `left` / `updated` | Membership changes. A `member.left` with our own id is our removal. |
 | `circle.upserted` / `deleted` | [Circles](circles.md). |
 | `circle.event` | Another member's circle event, with the server's timestamp, never stored. |

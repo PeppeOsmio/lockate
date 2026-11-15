@@ -23,7 +23,7 @@ All under `/api/v1/anonymous-groups`; `🔒` = `@SecuredAGMember`.
 | `POST /` | Create a group; the creator is its first member and admin. |
 | `POST /{id}/members/join` | Join with an invite's single-use join token. |
 | 🔒 `GET /{id}/members/auth/verify` | Is this member still valid. |
-| 🔒 `GET /{id}/members`, `…/members/count` | Members, with their last saved record. |
+| 🔒 `GET /{id}/members`, `…/members/count` | Members, with their last position. |
 | 🔒 `POST /{id}/members/leave` | Leave. |
 | 🔒 `POST /{id}/members/{memberId}/promote` | An admin makes another member admin. |
 | 🔒 `DELETE /{id}` | An admin deletes the group, for everyone. |
@@ -67,8 +67,13 @@ registration is keyed by the authenticated member.
 
 ## Retention
 
-A member's positions are relayed every time but saved at most every 2 minutes
-(`lockate.retention.anonymous-group.location.save-interval`, a `TTLMap` per instance), and the
+A member's positions are relayed every time and kept in Redis as its last position
+(`ag-location:{groupId}:{memberId}`, for the retention), which snapshots give at once. The member
+goes into the set `ag-unsaved-locations`, and `LocationSaveJob` saves the last position of each
+member in it every 2 minutes (`lockate.retention.anonymous-group.location.save-interval`): it pops
+the whole set, so with several backend instances each member is saved by one of them, and the last
+position of a burst (the switch to still right after moving) is always saved, at most 2 minutes
+late. A member who leaves loses its key. The
 `LocationRetentionJob` deletes saved positions older than 7 days
 (`…location.duration`, daily `…location.cron`). The saved record is only there so a member who
 opens the map sees where the others last were.

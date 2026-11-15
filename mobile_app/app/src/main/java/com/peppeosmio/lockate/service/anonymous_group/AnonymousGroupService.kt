@@ -90,7 +90,6 @@ import kotlin.math.min
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
-import kotlin.time.Instant
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -115,7 +114,6 @@ import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
-import org.koin.core.time.inMs
 
 internal enum class StreamRetryAction {
     Stop,
@@ -861,7 +859,6 @@ class AnonymousGroupService(
             throw LocationTimeoutException()
         }
 
-        var lastSent: Instant? = null
         var lastMode: Pair<UserActivity, Boolean>? = null
         // null until the first post: the circles may have changed while we weren't sharing
         var circlesVersion: Long? = null
@@ -898,10 +895,6 @@ class AnonymousGroupService(
                     }
             val nowMillis = now.toEpochMilliseconds()
             var transitions = tracker.update(position.fix, nowMillis)
-            // a crossing goes out at once, whatever the throttle
-            if (transitions.isEmpty() && lastSent?.let { (now - it).inMs < 1500 } == true) {
-                return@collect
-            }
 
             // The events are computed on the circles of `circlesVersion`; when the server has
             // other circles it refuses them (409) or, without events, says so in its answer. Then
@@ -933,7 +926,6 @@ class AnonymousGroupService(
                         }
                 if (sent) {
                     tracker.confirm(transitions, nowMillis)
-                    lastSent = now
                     _events.tryEmit(
                         AnonymousGroupEvent.AGLocationSentEvent(
                             anonymousGroupInternalId = anonymousGroup.internalId,

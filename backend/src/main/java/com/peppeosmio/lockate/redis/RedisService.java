@@ -64,6 +64,24 @@ public class RedisService {
     return Optional.ofNullable(result);
   }
 
+  /** Null for each key that doesn't exist */
+  public List<String> getValues(List<String> keys) {
+    return redisTemplate.opsForValue().multiGet(keys);
+  }
+
+  public void addToSet(String key, String member) {
+    redisTemplate.opsForSet().add(key, member);
+  }
+
+  /** Removes and returns every member; one popped by an instance is never seen by another */
+  public List<String> popAllFromSet(String key) {
+    var size = redisTemplate.opsForSet().size(key);
+    if (size == null || size == 0) {
+      return List.of();
+    }
+    return redisTemplate.opsForSet().pop(key, size);
+  }
+
   public void deleteValue(String key) {
     redisTemplate.delete(key);
   }
