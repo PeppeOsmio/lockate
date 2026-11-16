@@ -806,7 +806,9 @@ class AnonymousGroupService(
     /**
      * Posts [body] to the group's [path] as us. Null when it didn't get through; a removal or a
      * deleted group is applied here, which stops the sharing. A 409 is the answer of a location
-     * post whose circle events were computed on circles that changed, and is returned.
+     * post whose circle events were computed on circles that changed, and is returned. A post that
+     * failed on the network (timeout, connection closed) while the network is there is sent once
+     * more on a new connection: the next fix may be 10 minutes away.
      */
     private suspend fun postAsMember(
         anonymousGroup: AnonymousGroup,
@@ -815,7 +817,7 @@ class AnonymousGroupService(
         body: AGPostLocationReqDto?,
     ): HttpResponse? =
         try {
-            val response = httpClient.post {
+            suspend fun post() = httpClient.post {
                 url("${connectionSettings.url}/api/v1/anonymous-groups/${anonymousGroup.id}/$path")
                 timeout { requestTimeoutMillis = POST_TIMEOUT_MILLIS }
                 headers {
@@ -830,6 +832,14 @@ class AnonymousGroupService(
                     setBody(it)
                 }
             }
+            val response =
+                try {
+                    post()
+                } catch (e: IOException) {
+                    if (!connectivityService.isNetworkAvailable()) throw e
+                    sendLoopLog.log("post $path ${anonymousGroup.id} again: ${e::class.simpleName}")
+                    post()
+                }
             when (response.status.value) {
                 200,
                 409 -> response
