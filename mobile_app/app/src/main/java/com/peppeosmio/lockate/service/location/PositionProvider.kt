@@ -2,13 +2,18 @@ package com.peppeosmio.lockate.service.location
 
 import com.peppeosmio.lockate.domain.LocationFix
 import com.peppeosmio.lockate.domain.UserActivity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.launch
 
@@ -42,15 +47,21 @@ data class Position(val fix: LocationFix, val isFresh: Boolean, val activity: Us
  * GPS stays on until one arrives, or for at most [STILL_ACQUIRE_MILLIS] if any fix came, since
  * indoors an accurate one may never come. When the user moves again the GPS is back, and the last
  * good fix is held until an accurate one arrives (at most [WARM_UP_MILLIS]). A change of activity
- * is sent at once, with the last good fix if the GPS hasn't answered yet.
+ * is sent at once, with the last good fix if the GPS hasn't answered yet. Every group's send loop
+ * collects [positions], and they all share one [stillFixes] request, which runs only while one of
+ * them is still.
  */
 class PositionProvider(
     private val gpsFixes: () -> Flow<LocationFix>,
-    private val stillFixes: () -> Flow<LocationFix>,
+    stillFixes: () -> Flow<LocationFix>,
     private val passiveFixes: () -> Flow<LocationFix>,
     private val activities: () -> Flow<UserActivity>,
+    scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
     private val now: () -> Long = System::currentTimeMillis,
 ) {
+    private val sharedStillFixes =
+        stillFixes().shareIn(scope, SharingStarted.WhileSubscribed(), replay = 0)
+
     // shared by the groups' send loops, so a group that starts later is still right away
     @Volatile private var lastGoodFix: LocationFix? = null
 
@@ -94,7 +105,7 @@ class PositionProvider(
             channelFlow {
                 launch { passiveFixes().collect { remember(it) } }
                 send(Position(lastGoodFix!!, isFresh = false, UserActivity.Still))
-                stillFixes().collect { fix ->
+                sharedStillFixes.collect { fix ->
                     remember(fix)
                     val good = lastGoodFix!!
                     send(Position(good, isFresh = good == fix, UserActivity.Still))

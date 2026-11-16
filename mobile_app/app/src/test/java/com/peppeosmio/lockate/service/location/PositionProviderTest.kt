@@ -69,6 +69,7 @@ class PositionProviderTest {
                 },
                 passiveFixes = { passive },
                 activities = { activity },
+                scope = scope.backgroundScope,
                 now = { scope.testScheduler.currentTime },
             )
     }
@@ -184,6 +185,49 @@ class PositionProviderTest {
         runCurrent()
 
         assertEquals(1, fakes.gpsCollectors)
+    }
+
+    @Test
+    fun `every collector gets the slow fixes from one request`() = runTest {
+        val fakes = Fakes()
+        val provider = fakes.provider(this)
+        val first = collect(provider.positions())
+        val second = collect(provider.positions())
+        fakes.gps.emit(fix(1.0, 5f, 0))
+        runCurrent()
+        fakes.activity.value = UserActivity.Still
+        runCurrent()
+        first.clear()
+        second.clear()
+
+        fakes.still.emit(fix(3.0, 5f, 1000))
+        runCurrent()
+
+        assertEquals(1, fakes.stillCollectors)
+        assertEquals(listOf(3.0), first.map { it.fix.coordinates.latitude })
+        assertEquals(listOf(3.0), second.map { it.fix.coordinates.latitude })
+    }
+
+    @Test
+    fun `the slow request stops when the last collector stops`() = runTest {
+        val fakes = Fakes()
+        val provider = fakes.provider(this)
+        val first = backgroundScope.launch { provider.positions().collect {} }
+        val second = backgroundScope.launch { provider.positions().collect {} }
+        runCurrent()
+        fakes.gps.emit(fix(1.0, 5f, 0))
+        runCurrent()
+        fakes.activity.value = UserActivity.Still
+        runCurrent()
+        assertEquals(1, fakes.stillCollectors)
+
+        first.cancel()
+        runCurrent()
+        assertEquals(1, fakes.stillCollectors)
+
+        second.cancel()
+        runCurrent()
+        assertEquals(0, fakes.stillCollectors)
     }
 
     @Test
