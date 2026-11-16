@@ -73,7 +73,10 @@ movement the GPS runs every 2 s again. It is one constant. The map colours are b
 - The answer is `{circlesVersion}`, the version of the group's circles.
 - At most 120 posts per member per minute (`rate:location:{memberId}`), 429 above. The app sends
   at most 30, so only a broken or malicious client hits it.
-- A failed post is dropped; the next fix replaces it (its circle events are recomputed).
+- A failed post is dropped; the next fix replaces it (its circle events are recomputed). One that
+  failed while offline is posted again as soon as the network returns (`postEach`), unless a newer
+  fix comes first: while still the next fix is 10 minutes away. With the network there (the server
+  is down) nothing is resent, so there is no burst, and the next fix retries.
 
 `POST /api/v1/anonymous-groups/{id}/members/pause` is sent when sharing stops (best effort, 10 s
 timeout): the others are told at once instead of when the timer expires.

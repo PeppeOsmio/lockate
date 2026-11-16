@@ -102,6 +102,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -873,34 +874,19 @@ class AnonymousGroupService(
             locationService.awaitLocationDisabled()
             throw LocationDisabledException()
         }
-        positionProvider.positions().collect { position ->
-            val now = Clock.System.now()
-            val coordinates = position.fix.coordinates
-            val mode = position.activity to position.isFresh
-            if (mode != lastMode) {
-                lastMode = mode
-                sendLoopLog.log(
-                    "channel ${anonymousGroup.id} activity=${mode.first} fresh=${mode.second}"
-                )
-            }
-            channel.status.update { it.copy(isLocationUnavailable = false) }
 
-            timeoutJob?.cancel()
-            // while still the position comes every STILL_FIX_INTERVAL_MILLIS
-            timeoutJob =
-                if (position.activity == UserActivity.Still) null
-                else
-                    launch {
-                        getTimeoutJob()
-                    }
-            val nowMillis = now.toEpochMilliseconds()
+        /** Whether the server got [position]; its circle events are confirmed when it did */
+        suspend fun send(position: Position): Boolean {
+            val nowMillis = Clock.System.now().toEpochMilliseconds()
             var transitions = tracker.update(position.fix, nowMillis)
+            var delivered = false
 
             // The events are computed on the circles of `circlesVersion`; when the server has
             // other circles it refuses them (409) or, without events, says so in its answer. Then
             // we fetch the circles and look at the same fix again: the events go out only computed
             // on the circles the server has, and a new circle we just crossed isn't missed.
             repeat(MAX_CIRCLE_REFRESHES + 1) {
+                // the next position replaces this one, and carries the same transitions again
                 val response =
                     postLocation(
                         anonymousGroup,
@@ -908,9 +894,7 @@ class AnonymousGroupService(
                         position,
                         transitions,
                         circlesVersion,
-                    )
-                // the next position replaces this one, and carries the same transitions again
-                if (response == null) return@collect
+                    ) ?: return delivered
                 val version = response.body<AGPostLocationResDto>().circlesVersion
                 val sent = response.status.value == 200
                 // The circles are replaced before the post is confirmed: a changed circle takes the
@@ -925,6 +909,7 @@ class AnonymousGroupService(
                             }
                         }
                 if (sent) {
+                    delivered = true
                     tracker.confirm(transitions, nowMillis)
                     _events.tryEmit(
                         AnonymousGroupEvent.AGLocationSentEvent(
@@ -933,18 +918,48 @@ class AnonymousGroupService(
                             connectionId = anonymousGroup.connectionId,
                             locationRecord =
                                 LocationRecord(
-                                    coordinates = coordinates,
+                                    coordinates = position.fix.coordinates,
                                     timestamp = Clock.System.now().toLocalDateTime(TimeZone.UTC),
                                     activity = position.activity,
                                 ),
                         )
                     )
                 }
-                if (!refreshed) return@collect
+                if (!refreshed) return delivered
                 transitions = tracker.update(position.fix, nowMillis)
-                if (sent && transitions.isEmpty()) return@collect
+                if (sent && transitions.isEmpty()) return true
             }
+            return delivered
         }
+
+        positionProvider
+            .positions()
+            .onEach { position ->
+                val mode = position.activity to position.isFresh
+                if (mode != lastMode) {
+                    lastMode = mode
+                    sendLoopLog.log(
+                        "channel ${anonymousGroup.id} activity=${mode.first} fresh=${mode.second}"
+                    )
+                }
+                channel.status.update { it.copy(isLocationUnavailable = false) }
+
+                timeoutJob?.cancel()
+                // while still the position comes every STILL_FIX_INTERVAL_MILLIS
+                timeoutJob =
+                    if (position.activity == UserActivity.Still) null
+                    else
+                        launch {
+                            getTimeoutJob()
+                        }
+            }
+            // while still the next position is 10 minutes away, so one lost offline is sent again
+            // when the network returns
+            .postEach(
+                post = { send(it) },
+                isNetworkAvailable = connectivityService::isNetworkAvailable,
+                awaitNetworkAvailable = connectivityService::awaitNetworkAvailable,
+            )
     }
 
     private suspend fun decryptSnapshot(
