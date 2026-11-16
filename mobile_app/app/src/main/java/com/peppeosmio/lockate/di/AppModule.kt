@@ -18,6 +18,7 @@ import com.peppeosmio.lockate.platform_service.FirebasePushTokenSource
 import com.peppeosmio.lockate.platform_service.KeyStoreService
 import com.peppeosmio.lockate.platform_service.LocationService
 import com.peppeosmio.lockate.platform_service.PushTokenSource
+import com.peppeosmio.lockate.platform_service.WakeLockService
 import com.peppeosmio.lockate.service.ConnectionService
 import com.peppeosmio.lockate.service.MapStyleService
 import com.peppeosmio.lockate.service.PermissionsService
@@ -35,6 +36,7 @@ import com.peppeosmio.lockate.service.version.apiCompatibility
 import com.peppeosmio.lockate.utils.SendLoopLog
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.logging.Logger
 import io.ktor.client.plugins.logging.Logging
@@ -85,6 +87,9 @@ val appModule = module {
                 }
             }
             install(SSE)
+            // no default: OkHttp's callTimeout would also cut the SSE streams, so each request
+            // that needs a deadline sets its own
+            install(HttpTimeout)
 
             install(ContentNegotiation) {
                 json(apiJson)
@@ -182,8 +187,11 @@ val appModule = module {
             keyStoreService = get(),
             payloadCodec = get(),
             sendLoopLog = get(),
+            wakeLockService = get(),
         )
     }
+
+    single<WakeLockService> { WakeLockService(androidContext()) }
 
     single<PushTokenSource> { FirebasePushTokenSource() }
 

@@ -51,6 +51,7 @@ import com.peppeosmio.lockate.exceptions.UnauthorizedException
 import com.peppeosmio.lockate.platform_service.ConnectivityService
 import com.peppeosmio.lockate.platform_service.KeyStoreService
 import com.peppeosmio.lockate.platform_service.LocationService
+import com.peppeosmio.lockate.platform_service.WakeLockService
 import com.peppeosmio.lockate.service.ConnectionService
 import com.peppeosmio.lockate.service.crypto.CryptoException
 import com.peppeosmio.lockate.service.crypto.CryptoService
@@ -68,6 +69,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.sse.SSEClientException
 import io.ktor.client.plugins.sse.sse
+import io.ktor.client.plugins.timeout
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.headers
@@ -142,6 +144,13 @@ private val PAUSE_TIMEOUT = 10.seconds
 // a group whose circles keep changing while we post gives up until the next position
 private const val MAX_CIRCLE_REFRESHES = 2
 
+// A post on a connection that died silently (NAT dropped, no FIN) waits for an answer that never
+// comes; it must fail while the phone is awake, so the next fix gets a new connection
+private const val POST_TIMEOUT_MILLIS = 15_000L
+
+// bounds a send (a post, its circle refreshes and their reposts) if it never returns
+private const val POST_WAKE_LOCK_MILLIS = 60_000L
+
 class AnonymousGroupService(
     private val anonymousGroupDao: AnonymousGroupDao,
     private val cryptoService: CryptoService,
@@ -153,6 +162,7 @@ class AnonymousGroupService(
     private val keyStoreService: KeyStoreService,
     private val payloadCodec: PayloadCodec,
     private val sendLoopLog: SendLoopLog,
+    private val wakeLockService: WakeLockService,
 ) {
 
     // tryEmit drops what doesn't fit, and losing a NewAnonymousGroupEvent or a
@@ -807,6 +817,7 @@ class AnonymousGroupService(
         try {
             val response = httpClient.post {
                 url("${connectionSettings.url}/api/v1/anonymous-groups/${anonymousGroup.id}/$path")
+                timeout { requestTimeoutMillis = POST_TIMEOUT_MILLIS }
                 headers {
                     connectionSettings.apiKey?.let { ak -> append("X-API-KEY", ak) }
                     append(
@@ -956,7 +967,10 @@ class AnonymousGroupService(
             // while still the next position is 10 minutes away, so one lost offline is sent again
             // when the network returns
             .postEach(
-                post = { send(it) },
+                // A still phone sleeps again when the fix's wake lock times out, maybe mid-post.
+                // The timeouts don't count the time the CPU sleeps, so a stuck post would wait out
+                // its timeout over many 10-minute wakes, and nothing else is sent meanwhile.
+                post = { wakeLockService.held("lockate:post", POST_WAKE_LOCK_MILLIS) { send(it) } },
                 isNetworkAvailable = connectivityService::isNetworkAvailable,
                 awaitNetworkAvailable = connectivityService::awaitNetworkAvailable,
             )
