@@ -25,7 +25,9 @@ posted, and there is no connection state to clean up.
 
 **Still.** `PositionProvider` releases the 2 s GPS request, posts the last good fix at once, then
 one on every fix of a high-accuracy Fused request every 10 minutes (`STILL_FIX_INTERVAL_MILLIS`).
-`pickGoodFix` keeps an inaccurate indoor fix from replacing the last good one.
+Every group's send loop collects the positions, and they share that one request, which runs only
+while one of them is still, so the phone gets one callback and takes one wake lock for all the
+groups. `pickGoodFix` keeps an inaccurate indoor fix from replacing the last good one.
 
 **Moving again.** The GPS comes back and the last good fix is held until an accurate one arrives
 (at most 20 s), so a poor first fix can't fake a departure.
