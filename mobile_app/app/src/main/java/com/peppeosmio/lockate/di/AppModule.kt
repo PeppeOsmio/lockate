@@ -3,7 +3,6 @@ package com.peppeosmio.lockate.di
 import android.util.Log
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.room.Room
 import com.google.android.gms.location.LocationServices
 import com.peppeosmio.lockate.AppDatabase
@@ -232,18 +231,8 @@ val appModule = module {
             registerPushes = { get<PushRegistrationService>().registerAll() },
             state =
                 object : HealthCheck.State {
-                    private fun failuresKey(connectionId: Long) =
-                        intPreferencesKey("health_failures_$connectionId")
-
                     private fun incompatibleKey(connectionId: Long) =
                         booleanPreferencesKey("health_incompatible_$connectionId")
-
-                    override suspend fun failures(connectionId: Long) =
-                        dataStore.data.first()[failuresKey(connectionId)] ?: 0
-
-                    override suspend fun setFailures(connectionId: Long, count: Int) {
-                        dataStore.edit { it[failuresKey(connectionId)] = count }
-                    }
 
                     override suspend fun incompatibleNotified(connectionId: Long) =
                         dataStore.data.first()[incompatibleKey(connectionId)] ?: false
@@ -255,13 +244,6 @@ val appModule = module {
                         dataStore.edit { it[incompatibleKey(connectionId)] = notified }
                     }
                 },
-            notifyUnreachable = { connectionId ->
-                healthNotifier.showUnreachable(
-                    connectionId,
-                    connectionService.getConnectionSettingsById(connectionId).name,
-                )
-            },
-            clearUnreachable = { healthNotifier.clearUnreachable(it) },
             notifyIncompatible = { connectionId, compatibility ->
                 healthNotifier.showIncompatible(
                     connectionId,

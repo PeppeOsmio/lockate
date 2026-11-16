@@ -9,25 +9,10 @@ import com.peppeosmio.lockate.MainActivity
 import com.peppeosmio.lockate.R
 import com.peppeosmio.lockate.service.version.ApiCompatibility
 
-/**
- * The health check's notifications, per server: one when it couldn't reach it for hours, one when
- * it doesn't speak this app's API.
- */
+/** The health check's notification, per server, when it doesn't speak this app's API. */
 class HealthNotifier(private val context: Context) {
     private val notificationManager =
         context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-    fun showUnreachable(connectionId: Long, serverName: String) {
-        show(
-            unreachableTag(connectionId),
-            "Can't reach $serverName",
-            "Your groups on it haven't been updated for hours.",
-        )
-    }
-
-    fun clearUnreachable(connectionId: Long) {
-        notificationManager.cancel(unreachableTag(connectionId), 0)
-    }
 
     fun showIncompatible(connectionId: Long, serverName: String, compatibility: ApiCompatibility) {
         when (compatibility) {
@@ -69,8 +54,6 @@ class HealthNotifier(private val context: Context) {
                 .build()
         notificationManager.notify(tag, 0, notification)
     }
-
-    private fun unreachableTag(connectionId: Long) = "health:$connectionId"
 
     private fun incompatibleTag(connectionId: Long) = "health-api:$connectionId"
 

@@ -3,9 +3,9 @@
 [← Architecture](../architecture.md)
 
 Since the switch-over nothing in the background talks to a server unless we share with one of its
-groups, and notifications come only by push. A server that went away, a group we were removed
-from, or a push registration that broke (a new FCM token whose `onNewToken` was missed) would go
-unnoticed until the app is opened. The health check notices them.
+groups, and notifications come only by push. A group we were removed from, a server that no longer
+speaks our API, or a push registration that broke (a new FCM token whose `onNewToken` was missed)
+would go unnoticed until the app is opened. The health check notices them.
 
 ## What it does
 
@@ -14,11 +14,10 @@ still in:
 
 1. **Does it answer, and does it speak our API?** `GET /api/version`
    ([Versioning](../versioning.md)), which has no API version in its path, so any server answers it.
-   - No answer (no connection, timeout, 5xx): the server's count of runs in a row without an answer
-     goes up, and at **3** (`UNREACHABLE_RUNS_TO_NOTIFY`, about 3 hours) a notification "Can't
-     reach *server*" is shown, once: the count keeps going up without notifying again until the
-     server answers. Nothing else is checked on it.
-   - Any answer: the count goes back to 0 and that notification, if any, is cleared.
+   - No answer (no connection, timeout, 5xx): nothing else is checked on it until the next run,
+     and nothing is notified. A server out of reach is most often reachable only through a VPN
+     that was turned off, and a notification for it was only noise; the map shows a banner for
+     the server of the group on screen.
    - The server doesn't serve the app's API (`APP_API`): a notification "*server* needs an update"
      (no `/api/version`, or only older majors) or "Update Lockate to use *server*" (only newer
      majors) is shown once, and its groups aren't checked: answers to an API it doesn't speak mean
@@ -31,9 +30,9 @@ still in:
    replaces each registration with the current FCM token. A token change missed by `onNewToken` is
    fixed within the hour.
 
-With no group it does nothing. The state is kept in DataStore per server
-(`health_failures_{connectionId}`, `health_incompatible_{connectionId}`), so it survives the
-process; each notification has its own tag per server on the "Server problems" channel.
+With no group it does nothing. Whether a server was notified as incompatible is kept in DataStore
+(`health_incompatible_{connectionId}`), so it survives the process; the notification has its own
+tag per server on the "Server problems" channel.
 
 The server list (Manage connections) shows what each server's `GET /api/version` says: "Server
 1.2.0", or what needs an update.
@@ -41,8 +40,8 @@ The server list (Manage connections) shows what each server's `GET /api/version`
 ## Scheduling
 
 WorkManager, a periodic work of 1 hour (`enqueueUniquePeriodicWork`, `KEEP`, scheduled at every app
-start), with a network constraint: without a network no server can be reached anyway, so a day
-offline doesn't count against any server, and the run waits for the network to come back.
+start), with a network constraint: without a network no server can be reached anyway, so the run waits
+for the network to come back.
 WorkManager keeps the work across reboots and fits it into Doze's maintenance windows, so "about
 every hour" can stretch while the phone sleeps; that is fine for a check that only needs to catch
 problems lasting hours.
@@ -50,9 +49,3 @@ problems lasting hours.
 WorkManager was dropped for the location heartbeat ([Sending positions](sending.md)) because its
 periodic work can't run more often than every 15 minutes and is deferred by design; an hourly check
 is what it's for. An exact alarm would need the "Alarms & reminders" permission.
-
-## Why 3
-
-One failed run is often just a phone switching networks or a server being redeployed; three in a
-row (about 3 hours) is a real outage, without waiting so long that the user has already noticed
-silent groups by themselves. It is one constant.

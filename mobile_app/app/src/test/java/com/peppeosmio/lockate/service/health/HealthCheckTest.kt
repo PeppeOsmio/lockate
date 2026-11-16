@@ -12,10 +12,7 @@ class HealthCheckTest {
         var groups = listOf(HealthCheck.Group(connectionId = 1, anonymousGroupInternalId = 10))
         val compatibility = mutableMapOf<Long, ApiCompatibility?>()
         val verified = mutableListOf<Long>()
-        val failures = mutableMapOf<Long, Int>()
         val incompatibleNotified = mutableMapOf<Long, Boolean>()
-        val notifiedUnreachable = mutableListOf<Long>()
-        val clearedUnreachable = mutableListOf<Long>()
         val notifiedIncompatible = mutableListOf<Pair<Long, ApiCompatibility>>()
         val clearedIncompatible = mutableListOf<Long>()
         var registrations = 0
@@ -31,13 +28,6 @@ class HealthCheckTest {
                 registerPushes = { registrations++ },
                 state =
                     object : HealthCheck.State {
-                        override suspend fun failures(connectionId: Long) =
-                            failures[connectionId] ?: 0
-
-                        override suspend fun setFailures(connectionId: Long, count: Int) {
-                            failures[connectionId] = count
-                        }
-
                         override suspend fun incompatibleNotified(connectionId: Long) =
                             incompatibleNotified[connectionId] ?: false
 
@@ -48,8 +38,6 @@ class HealthCheckTest {
                             incompatibleNotified[connectionId] = notified
                         }
                     },
-                notifyUnreachable = { notifiedUnreachable += it },
-                clearUnreachable = { clearedUnreachable += it },
                 notifyIncompatible = { id, compatibility ->
                     notifiedIncompatible += id to compatibility
                 },
@@ -58,37 +46,28 @@ class HealthCheckTest {
     }
 
     @Test
-    fun `a reachable server resets its count, clears its notification and verifies its groups`() =
-        runTest {
-            val f = Fakes()
-            f.failures[1] = 2
-
-            f.check.run()
-
-            assertEquals(0, f.failures[1])
-            assertEquals(listOf(1L), f.clearedUnreachable)
-            assertTrue(f.notifiedUnreachable.isEmpty())
-            assertEquals(listOf(10L), f.verified)
-        }
-
-    @Test
-    fun `an unreachable server is notified once, at the third run in a row`() = runTest {
+    fun `a reachable server has its groups verified`() = runTest {
         val f = Fakes()
-        f.compatibility[1] = null
-
-        repeat(2) { f.check.run() }
-        assertTrue(f.notifiedUnreachable.isEmpty())
 
         f.check.run()
-        f.check.run()
 
-        assertEquals(listOf(1L), f.notifiedUnreachable)
-        assertEquals(4, f.failures[1])
-        assertTrue(f.verified.isEmpty())
+        assertEquals(listOf(10L), f.verified)
     }
 
     @Test
-    fun `servers are counted apart`() = runTest {
+    fun `an unreachable server is skipped without a notification`() = runTest {
+        val f = Fakes()
+        f.compatibility[1] = null
+
+        repeat(5) { f.check.run() }
+
+        assertTrue(f.verified.isEmpty())
+        assertTrue(f.notifiedIncompatible.isEmpty())
+        assertEquals(5, f.registrations)
+    }
+
+    @Test
+    fun `an unreachable server doesn't stop the others`() = runTest {
         val f = Fakes()
         f.groups =
             listOf(
@@ -99,8 +78,6 @@ class HealthCheckTest {
 
         f.check.run()
 
-        assertEquals(0, f.failures[1])
-        assertEquals(1, f.failures[2])
         assertEquals(listOf(10L), f.verified)
     }
 
@@ -109,12 +86,10 @@ class HealthCheckTest {
         runTest {
             val f = Fakes()
             f.compatibility[1] = ApiCompatibility.ServerTooOld
-            f.failures[1] = 2
 
             f.check.run()
             f.check.run()
 
-            assertEquals(0, f.failures[1])
             assertEquals(listOf(1L to ApiCompatibility.ServerTooOld), f.notifiedIncompatible)
             assertTrue(f.verified.isEmpty())
         }
@@ -151,6 +126,6 @@ class HealthCheckTest {
         f.check.run()
 
         assertEquals(0, f.registrations)
-        assertTrue(f.clearedUnreachable.isEmpty())
+        assertTrue(f.verified.isEmpty())
     }
 }

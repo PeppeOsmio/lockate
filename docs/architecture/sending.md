@@ -97,9 +97,8 @@ stops at once. Nothing else needs it: notifications come by push
 
 Its notification says only "Sharing your location", or "Location is off" while the location is
 disabled or unavailable, since sharing can't work then and only the user can fix it. It doesn't
-say whether the posts get through: one fails for a moment in a tunnel or on a network change, a
-server that stays unreachable is notified by the [health check](health-check.md), and the map shows
-a banner for the server of the group on screen.
+say whether the posts get through: one fails for a moment in a tunnel or on a network change, and the
+map shows a banner for the server of the group on screen when it can't reach it.
 
 ## Keeping the circles current
 

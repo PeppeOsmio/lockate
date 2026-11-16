@@ -2,8 +2,7 @@ package com.peppeosmio.lockate.domain.anonymous_group
 
 /**
  * What the foreground service's notification shows. Whether the posts get through isn't shown: a
- * post fails for a moment in a tunnel or on a network change, and an unreachable server is notified
- * by the health check.
+ * post fails for a moment in a tunnel or on a network change.
  */
 data class SendLocationStatus(val sharedAGCount: Int, val isLocationOff: Boolean) {
     companion object {
