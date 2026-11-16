@@ -69,7 +69,8 @@ class LocationService(
     @OptIn(ExperimentalAtomicApi::class) private val activeCollectors = AtomicInt(0)
     private var locationCallback: LocationCallback? = null
 
-    // shared by every group's post, so it's never released by hand: it times out
+    // Fused keeps the CPU on only while it calls us: this lock keeps it on until the send loops
+    // take the fix and their own lock for the post. Nothing knows when they did, so it times out.
     private val stillFixWakeLock =
         context
             .getSystemService(PowerManager::class.java)
@@ -166,7 +167,8 @@ class LocationService(
     /**
      * High-accuracy fixes every [intervalMillis], for when we are still. Fused delivers them in
      * Doze to a location foreground service, so the request is also what wakes the phone; the CPU
-     * is then held for [STILL_FIX_WAKE_LOCK_MILLIS] so the fix gets posted before it sleeps again.
+     * is then held for [STILL_FIX_WAKE_LOCK_MILLIS] so the fix reaches the send loops before it
+     * sleeps again.
      */
     fun getStillLocationUpdates(intervalMillis: Long): Flow<LocationFix> = callbackFlow {
         val request =
