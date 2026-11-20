@@ -42,14 +42,4 @@ public interface AGMemberRepository extends JpaRepository<AGMemberEntity, UUID> 
     """)
   List<AGMemberEntity> findMembersWithLastLocation(
       @Param("anonymousGroupId") UUID anonymousGroupId);
-
-  @Query(
-      """
-        SELECT m.anonymousGroupId AS groupId, COUNT(m) AS memberCount, MAX(l.timestamp) AS lastLocationAt
-        FROM AGMemberEntity m LEFT JOIN m.lastLocation l
-        WHERE m.anonymousGroupId IN :anonymousGroupIds
-        GROUP BY m.anonymousGroupId
-    """)
-  List<AGGroupSummaryProjection> summarizeByGroupIds(
-      @Param("anonymousGroupIds") Collection<UUID> anonymousGroupIds);
 }

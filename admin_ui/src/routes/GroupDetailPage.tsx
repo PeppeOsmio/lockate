@@ -1,14 +1,19 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom'
+import CheckIcon from '@mui/icons-material/Check'
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
 import PersonRemoveOutlinedIcon from '@mui/icons-material/PersonRemoveOutlined'
 import Alert from '@mui/material/Alert'
+import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
+import Paper from '@mui/material/Paper'
 import Switch from '@mui/material/Switch'
+import Tooltip from '@mui/material/Tooltip'
+import Typography from '@mui/material/Typography'
 import { isNotFound } from '../api/client'
-import { useGroupMembers, useRemoveMember, useSetMemberAdmin } from '../api/queries'
-import type { AGMember } from '../api/types'
+import { useGroup, useGroupMembers, useRemoveMember, useSetMemberAdmin } from '../api/queries'
+import type { AdminGroup, AGMember } from '../api/types'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { Id } from '../components/Id'
 import { PageHeader } from '../components/PageHeader'
@@ -20,9 +25,13 @@ import { usePageTitle } from '../hooks/usePageTitle'
 import { shortId } from '../utils/id'
 import { DeleteGroupDialog } from './DeleteGroupDialog'
 
+const LAST_ADMIN_WARNING =
+  'Nobody in the group could then delete it or make other members admins: only you, from here.'
+
 export function GroupDetailPage() {
   const { groupId = '' } = useParams<{ groupId: string }>()
   usePageTitle(`Group ${shortId(groupId)}`)
+  const group = useGroup(groupId)
   const members = useGroupMembers(groupId)
   const removeMember = useRemoveMember(groupId)
   const setMemberAdmin = useSetMemberAdmin(groupId)
@@ -30,24 +39,34 @@ export function GroupDetailPage() {
   const navigate = useNavigate()
   const [deletingGroup, setDeletingGroup] = useState(false)
   const [removing, setRemoving] = useState<AGMember | null>(null)
+  const [demotingLastAdmin, setDemotingLastAdmin] = useState<AGMember | null>(null)
+  const admins = members.data?.filter((m) => m.isAGAdmin).length ?? 0
 
-  function toggleAdmin(member: AGMember, isAGAdmin: boolean) {
-    setMemberAdmin.mutate(
-      { memberId: member.id, isAGAdmin },
-      {
-        onSuccess: () =>
-          notify(
-            isAGAdmin
-              ? `Member ${shortId(member.id)} is now an admin.`
-              : `Member ${shortId(member.id)} is no longer an admin.`,
-          ),
-        onError: (e) =>
-          notify(isNotFound(e) ? 'That member is no longer in the group.' : e.message, 'error'),
-      },
-    )
+  async function setAdmin(member: AGMember, isAGAdmin: boolean) {
+    try {
+      await setMemberAdmin.mutateAsync({ memberId: member.id, isAGAdmin })
+      notify(
+        isAGAdmin
+          ? `Member ${shortId(member.id)} is now an admin.`
+          : `Member ${shortId(member.id)} is no longer an admin.`,
+      )
+    } catch (e) {
+      notify(
+        isNotFound(e) ? 'That member is no longer in the group.' : (e as Error).message,
+        'error',
+      )
+    }
   }
 
-  if (members.isError && isNotFound(members.error)) {
+  function toggleAdmin(member: AGMember, isAGAdmin: boolean) {
+    if (!isAGAdmin && admins === 1) setDemotingLastAdmin(member)
+    else void setAdmin(member, isAGAdmin)
+  }
+
+  if (
+    (members.isError && isNotFound(members.error)) ||
+    (group.isError && isNotFound(group.error))
+  ) {
     return (
       <>
         <PageHeader
@@ -91,13 +110,39 @@ export function GroupDetailPage() {
           </Button>
         }
       />
+      {group.isError && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {group.error.message}
+        </Alert>
+      )}
+      {group.data && <GroupStats group={group.data} />}
       {members.isPending && <CircularProgress />}
       {members.isError && <Alert severity="error">{members.error.message}</Alert>}
+      {members.data && admins === 0 && members.data.length > 0 && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          The group has no admin: nobody in it can delete it or make other members admins, only you
+          from here.
+        </Alert>
+      )}
       {members.data && (
         <Table
           columns={[
             { header: 'Member', render: (m) => <Id value={m.id} /> },
             { header: 'Joined', render: (m) => <Time value={m.createdAt} /> },
+            { header: 'Status', render: (m) => <Online online={m.online} /> },
+            {
+              header: 'Notifications',
+              render: (m) =>
+                m.pushRegistered ? (
+                  <Tooltip title="Its app registered for push notifications">
+                    <CheckIcon fontSize="small" color="success" aria-label="Registered" />
+                  </Tooltip>
+                ) : (
+                  <Typography variant="inherit" color="text.secondary">
+                    Not registered
+                  </Typography>
+                ),
+            },
             {
               header: 'Admin',
               render: (m) => (
@@ -110,7 +155,7 @@ export function GroupDetailPage() {
                 />
               ),
             },
-            { header: 'Last position saved', render: (m) => <Time value={m.lastLocationAt} /> },
+            { header: 'Last position', render: (m) => <Time value={m.lastLocationAt} /> },
             {
               render: (m) => (
                 <RowAction
@@ -147,8 +192,77 @@ export function GroupDetailPage() {
         >
           The member leaves the group and its app is told by push (when the server has a push
           relay). It can come back only with a new invite.
+          {removing.isAGAdmin && admins === 1 && (members.data?.length ?? 0) > 1 && (
+            <Alert severity="warning" sx={{ mt: 2 }}>
+              This is the group's last admin. {LAST_ADMIN_WARNING}
+            </Alert>
+          )}
+        </ConfirmDialog>
+      )}
+      {demotingLastAdmin && (
+        <ConfirmDialog
+          title="Remove the last admin?"
+          confirmLabel="Remove admin"
+          onConfirm={() => setAdmin(demotingLastAdmin, false)}
+          onClose={() => setDemotingLastAdmin(null)}
+        >
+          Member {shortId(demotingLastAdmin.id)} is the group's only admin. {LAST_ADMIN_WARNING}
         </ConfirmDialog>
       )}
     </>
+  )
+}
+
+function Online({ online }: { online: boolean }) {
+  return (
+    <Tooltip
+      title={online ? 'Sent a position in the last 30 minutes' : 'No position for 30 minutes'}
+    >
+      <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
+        <Box
+          component="span"
+          sx={{
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            bgcolor: online ? 'success.main' : 'action.disabled',
+          }}
+        />
+        {online ? 'Online' : 'Offline'}
+      </Box>
+    </Tooltip>
+  )
+}
+
+function GroupStats({ group }: { group: AdminGroup }) {
+  const stats: [string, ReactNode][] = [
+    ['Created', <Time key="created" value={group.createdAt} />],
+    ['Members', group.memberCount],
+    ['Online', group.onlineCount],
+    ['Admins', group.adminCount],
+    ['Circles', group.circleCount],
+    ['Notifications', `${group.pushRegisteredCount} of ${group.memberCount}`],
+    ['Last position', <Time key="last" value={group.lastLocationAt} />],
+  ]
+  return (
+    <Box
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
+        gap: 1.5,
+        mb: 3,
+      }}
+    >
+      {stats.map(([label, value]) => (
+        <Paper key={label} variant="outlined" sx={{ px: 2, py: 1.5 }}>
+          <Typography variant="caption" color="text.secondary">
+            {label}
+          </Typography>
+          <Typography variant="h6" component="div" sx={{ fontSize: '1.1rem' }}>
+            {value}
+          </Typography>
+        </Paper>
+      ))}
+    </Box>
   )
 }

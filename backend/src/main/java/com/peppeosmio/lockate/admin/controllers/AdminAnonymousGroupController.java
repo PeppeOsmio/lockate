@@ -1,13 +1,14 @@
 package com.peppeosmio.lockate.admin.controllers;
 
+import com.peppeosmio.lockate.admin.dto.AdminGroupDto;
+import com.peppeosmio.lockate.admin.dto.AdminGroupQueryDto;
+import com.peppeosmio.lockate.admin.dto.AdminMemberDto;
 import com.peppeosmio.lockate.admin.security.SecuredAdmin;
-import com.peppeosmio.lockate.anonymous_group.dto.AGAdminMemberDto;
+import com.peppeosmio.lockate.admin.service.AdminGroupService;
 import com.peppeosmio.lockate.anonymous_group.dto.AGAdminMemberUpdateDto;
-import com.peppeosmio.lockate.anonymous_group.dto.AGAdminSummaryDto;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.service.AnonymousGroupService;
-import com.peppeosmio.lockate.common.dto.PageQueryDto;
 import com.peppeosmio.lockate.common.dto.PageResponseDto;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -21,22 +22,30 @@ import org.springframework.web.bind.annotation.*;
 public class AdminAnonymousGroupController {
 
   private final AnonymousGroupService anonymousGroupService;
+  private final AdminGroupService adminGroupService;
 
-  public AdminAnonymousGroupController(AnonymousGroupService anonymousGroupService) {
+  public AdminAnonymousGroupController(
+      AnonymousGroupService anonymousGroupService, AdminGroupService adminGroupService) {
     this.anonymousGroupService = anonymousGroupService;
+    this.adminGroupService = adminGroupService;
   }
 
   @GetMapping("")
   @ResponseStatus(HttpStatus.OK)
-  PageResponseDto<AGAdminSummaryDto> listGroups(@Valid @ModelAttribute PageQueryDto query) {
-    return anonymousGroupService.listGroupsForAdmin(query);
+  PageResponseDto<AdminGroupDto> listGroups(@Valid @ModelAttribute AdminGroupQueryDto query) {
+    return adminGroupService.list(query);
+  }
+
+  @GetMapping("/{anonymousGroupId}")
+  @ResponseStatus(HttpStatus.OK)
+  AdminGroupDto getGroup(@PathVariable UUID anonymousGroupId) throws AGNotFoundException {
+    return adminGroupService.get(anonymousGroupId);
   }
 
   @GetMapping("/{anonymousGroupId}/members")
   @ResponseStatus(HttpStatus.OK)
-  List<AGAdminMemberDto> listMembers(@PathVariable UUID anonymousGroupId)
-      throws AGNotFoundException {
-    return anonymousGroupService.listMembersForAdmin(anonymousGroupId);
+  List<AdminMemberDto> listMembers(@PathVariable UUID anonymousGroupId) throws AGNotFoundException {
+    return adminGroupService.members(anonymousGroupId);
   }
 
   @DeleteMapping("/{anonymousGroupId}")

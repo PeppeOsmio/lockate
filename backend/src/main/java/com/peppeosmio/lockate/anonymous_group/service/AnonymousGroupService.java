@@ -11,14 +11,11 @@ import com.peppeosmio.lockate.anonymous_group.mapper.AnonymousGroupMapper;
 import com.peppeosmio.lockate.anonymous_group.presence.AGPresenceService;
 import com.peppeosmio.lockate.anonymous_group.push.AGPushService;
 import com.peppeosmio.lockate.anonymous_group.repository.AGCircleRepository;
-import com.peppeosmio.lockate.anonymous_group.repository.AGGroupSummaryProjection;
 import com.peppeosmio.lockate.anonymous_group.repository.AGMemberRepository;
 import com.peppeosmio.lockate.anonymous_group.repository.AnonymousGroupRepository;
 import com.peppeosmio.lockate.anonymous_group.security.AGMemberAuthentication;
 import com.peppeosmio.lockate.common.classes.EncryptedString;
 import com.peppeosmio.lockate.common.dto.EncryptedDataDto;
-import com.peppeosmio.lockate.common.dto.PageQueryDto;
-import com.peppeosmio.lockate.common.dto.PageResponseDto;
 import com.peppeosmio.lockate.common.exceptions.InvalidEncryptedDataException;
 import com.peppeosmio.lockate.common.exceptions.UnauthorizedException;
 import com.peppeosmio.lockate.invite.InviteService;
@@ -29,10 +26,7 @@ import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.*;
-import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -385,52 +379,6 @@ public class AnonymousGroupService {
             new CircleEventDto(dto.encryptedEvent(), LocalDateTime.now(ZoneOffset.UTC)));
     publishFrame(anonymousGroupId, frame);
     pushService.notifyGroup(anonymousGroupId, authentication.getId(), frame);
-  }
-
-  @Transactional
-  public PageResponseDto<AGAdminSummaryDto> listGroupsForAdmin(PageQueryDto query) {
-    var pageable = PageRequest.of(query.page(), query.size(), Sort.by("createdAt").descending());
-    var page = anonymousGroupRepository.findAll(pageable);
-    var groups = page.getContent();
-    var groupIds = groups.stream().map(AnonymousGroupEntity::getId).toList();
-    var summaries =
-        groupIds.isEmpty()
-            ? Map.<UUID, AGGroupSummaryProjection>of()
-            : agMemberRepository.summarizeByGroupIds(groupIds).stream()
-                .collect(
-                    Collectors.toMap(AGGroupSummaryProjection::getGroupId, summary -> summary));
-    var items =
-        groups.stream()
-            .map(
-                group -> {
-                  var summary = summaries.get(group.getId());
-                  return new AGAdminSummaryDto(
-                      group.getId(),
-                      group.getCreatedAt(),
-                      summary == null ? 0 : summary.getMemberCount(),
-                      summary == null ? null : summary.getLastLocationAt());
-                })
-            .toList();
-    return PageResponseDto.of(page, items);
-  }
-
-  @Transactional
-  public List<AGAdminMemberDto> listMembersForAdmin(UUID anonymousGroupId)
-      throws AGNotFoundException {
-    if (!anonymousGroupRepository.existsById(anonymousGroupId)) {
-      throw new AGNotFoundException(anonymousGroupId);
-    }
-    return agMemberRepository.findMembersWithLastLocation(anonymousGroupId).stream()
-        .map(
-            member ->
-                new AGAdminMemberDto(
-                    member.getId(),
-                    member.getCreatedAt(),
-                    member.isAGAdmin(),
-                    member.getLastLocation() == null
-                        ? null
-                        : member.getLastLocation().getTimestamp()))
-        .toList();
   }
 
   @Transactional
