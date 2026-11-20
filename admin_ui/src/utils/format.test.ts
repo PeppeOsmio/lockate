@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatDuration, formatRelative, parseServerDate } from './format'
+import { formatDuration, formatRelative, parseServerDate, toServerDate } from './format'
 
 describe('parseServerDate', () => {
   it('reads a time without an offset as UTC', () => {
@@ -10,6 +10,14 @@ describe('parseServerDate', () => {
     expect(parseServerDate('2026-11-20T23:12:52+01:00').toISOString()).toBe(
       '2026-11-20T22:12:52.000Z',
     )
+  })
+})
+
+describe('toServerDate', () => {
+  it('writes UTC without an offset, as parseServerDate reads it', () => {
+    const date = new Date('2026-11-20T22:12:52.000Z')
+    expect(toServerDate(date)).toBe('2026-11-20T22:12:52.000')
+    expect(parseServerDate(toServerDate(date))).toEqual(date)
   })
 })
 
