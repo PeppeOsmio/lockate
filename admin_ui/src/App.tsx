@@ -160,10 +160,9 @@ function AdminLayout() {
           component="main"
           sx={{
             flex: 1,
+            minWidth: 0,
             p: 3,
-            ml: isDesktop ? `${DRAWER_WIDTH}px` : 0,
             mt: isDesktop ? 0 : '64px',
-            maxWidth: isDesktop ? `calc(100% - ${DRAWER_WIDTH}px)` : '100%',
           }}
         >
           <Routes>
