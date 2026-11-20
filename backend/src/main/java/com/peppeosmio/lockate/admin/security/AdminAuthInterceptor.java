@@ -4,6 +4,8 @@ import com.peppeosmio.lockate.common.dto.ErrorResponseDto;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -16,7 +18,7 @@ import tools.jackson.databind.ObjectMapper;
 @Slf4j
 public class AdminAuthInterceptor implements HandlerInterceptor {
 
-  private final String adminApiKey;
+  private final byte[] adminApiKey;
   private final ObjectMapper objectMapper;
 
   public AdminAuthInterceptor(
@@ -25,7 +27,7 @@ public class AdminAuthInterceptor implements HandlerInterceptor {
       throw new IllegalStateException(
           "ADMIN_API_KEY environment variable must be set to a non-empty value");
     }
-    this.adminApiKey = adminApiKey.trim();
+    this.adminApiKey = adminApiKey.trim().getBytes(StandardCharsets.UTF_8);
     this.objectMapper = objectMapper;
   }
 
@@ -51,7 +53,7 @@ public class AdminAuthInterceptor implements HandlerInterceptor {
       return false;
     }
 
-    if (!adminApiKey.equals(apiKeyHeader)) {
+    if (!MessageDigest.isEqual(adminApiKey, apiKeyHeader.getBytes(StandardCharsets.UTF_8))) {
       writeError(response, 401, "invalid_api_key");
       return false;
     }

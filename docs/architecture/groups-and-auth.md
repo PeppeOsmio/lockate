@@ -63,7 +63,8 @@ registration is keyed by the authenticated member.
   asks for it with the server URL.
 - **Admin** (`X-API-KEY` = `ADMIN_API_KEY`, `@SecuredAdmin`): `/api/v1/admin/api-keys` creates and
   revokes keys; `/api/v1/admin/anonymous-groups` lists groups and members, deletes them and sets the
-  admin flag. The admin UI (`admin_ui/`, Vite) is a front end for these and sees only ciphertext.
+  admin flag. The key is compared in constant time. The admin UI (`admin_ui/`, Vite) is a front end
+  for these and sees only ciphertext.
 
 ## Retention
 
