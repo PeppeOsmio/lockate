@@ -12,7 +12,7 @@ export const INACTIVE_DAYS = [7, 30, 90]
 // What a group or member id can start with; anything else can't match and the server refuses it
 export const ID_PREFIX = /^[0-9a-f-]{1,36}$/
 
-// Search, sort and the inactivity filter live in the URL, like the page, which they reset
+// Search, sort and the filters live in the URL, like the page, which they reset
 export function useGroupFilters() {
   const [params, setParams] = useSearchParams()
   const q = params.get('q') ?? ''
@@ -20,6 +20,7 @@ export function useGroupFilters() {
   const sort = SORTS.find((s) => s.value === sortParam)?.value ?? 'created'
   const inactiveParam = Number(params.get('inactive'))
   const inactiveDays = INACTIVE_DAYS.includes(inactiveParam) ? inactiveParam : undefined
+  const noAdmin = params.get('admin') === 'none'
 
   function update(key: string, value: string | null) {
     const next = new URLSearchParams(params)
@@ -33,9 +34,11 @@ export function useGroupFilters() {
     q,
     sort,
     inactiveDays,
+    noAdmin,
     setQ: (value: string) => update('q', value),
     setSort: (value: GroupSort) => update('sort', value === 'created' ? null : value),
     setInactiveDays: (value: number | undefined) =>
       update('inactive', value ? String(value) : null),
+    setNoAdmin: (value: boolean) => update('admin', value ? 'none' : null),
   }
 }

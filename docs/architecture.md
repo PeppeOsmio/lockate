@@ -44,7 +44,7 @@ flowchart LR
 |---|---|---|
 | Android app (`mobile_app/`) | Encrypts and decrypts everything, follows our position, computes circle crossings, shows the map and notifications. | The user's phone |
 | Backend (`backend/`) | Groups, members, circles, invites, relays ciphertext, decides who is sharing, sends pushes. | Anyone's server, with PostgreSQL and Valkey |
-| Admin UI (`admin_ui/`) | Lists and deletes groups and members, manages API keys. Sees only ids, counts and times. | Next to the backend |
+| Admin UI (`admin_ui/`) | An overview of the server's health and setup; lists and deletes groups and members, manages API keys. Sees only ids, counts and times. | Next to the backend |
 | Push relay (`push_relay/`) | Forwards a backend's sealed pushes to FCM with our Firebase credentials. | Us, once for every server |
 | `jpake` / `jpake-native` | EC-JPAKE (RFC 8236) for invites, Mbed TLS behind a Kotlin Multiplatform API. | Inside the app |
 

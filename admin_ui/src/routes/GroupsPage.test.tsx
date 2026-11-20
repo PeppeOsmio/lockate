@@ -66,6 +66,18 @@ describe('GroupsPage', () => {
     )
   })
 
+  it('keeps only the groups without an admin', async () => {
+    const listAnonymousGroups = vi.fn().mockResolvedValue(page([group]))
+    renderPage(<GroupsPage />, {
+      client: { listAnonymousGroups },
+      path: '/groups',
+      route: '/groups?admin=none',
+    })
+
+    await screen.findByText('449bfe1b')
+    expect(listAnonymousGroups).toHaveBeenCalledWith(expect.objectContaining({ noAdmin: true }))
+  })
+
   it('does not search for what no id can start with', async () => {
     const listAnonymousGroups = vi.fn().mockResolvedValue(page([group]))
     renderPage(<GroupsPage />, {

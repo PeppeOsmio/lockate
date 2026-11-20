@@ -12,6 +12,15 @@ async function ignoreNotFound(request: Promise<void>): Promise<void> {
   }
 }
 
+export function useOverview() {
+  const client = useAdminApiClient()
+  return useQuery({
+    queryKey: ['overview'],
+    queryFn: () => client.getOverview(),
+    refetchInterval: 60_000,
+  })
+}
+
 export function useGroups(query: GroupQuery) {
   const client = useAdminApiClient()
   return useQuery({

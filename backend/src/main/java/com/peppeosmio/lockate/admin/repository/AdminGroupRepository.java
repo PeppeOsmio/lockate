@@ -33,8 +33,11 @@ public class AdminGroupRepository {
       boolean pushRegistered,
       LocalDateTime lastLocationAt) {}
 
-  /** Both optional: an id prefix (lowercase), and the time since which a group must be inactive */
-  public record Filter(String idPrefix, LocalDateTime inactiveSince) {}
+  /**
+   * An id prefix (lowercase) and the time since which a group must be inactive, both optional, and
+   * whether to keep only the groups without an admin
+   */
+  public record Filter(String idPrefix, LocalDateTime inactiveSince, boolean noAdmin) {}
 
   public enum Sort {
     CREATED("g.created_at DESC, g.id"),
@@ -71,9 +74,10 @@ public class AdminGroupRepository {
                               AND CAST(s.id AS text) LIKE :idPrefix || '%'))
             AND (CAST(:inactiveSince AS timestamp) IS NULL OR g.created_at < :inactiveSince)
           GROUP BY g.id
-          HAVING CAST(:inactiveSince AS timestamp) IS NULL
-              OR MAX(l.timestamp) IS NULL
-              OR MAX(l.timestamp) < :inactiveSince
+          HAVING (CAST(:inactiveSince AS timestamp) IS NULL
+                  OR MAX(l.timestamp) IS NULL
+                  OR MAX(l.timestamp) < :inactiveSince)
+             AND (NOT :noAdmin OR COUNT(m.id) FILTER (WHERE m.is_admin) = 0)
           """;
 
   private final NamedParameterJdbcTemplate jdbc;
@@ -85,7 +89,8 @@ public class AdminGroupRepository {
   private static MapSqlParameterSource params(Filter filter) {
     return new MapSqlParameterSource()
         .addValue("idPrefix", filter.idPrefix(), Types.VARCHAR)
-        .addValue("inactiveSince", filter.inactiveSince(), Types.TIMESTAMP);
+        .addValue("inactiveSince", filter.inactiveSince(), Types.TIMESTAMP)
+        .addValue("noAdmin", filter.noAdmin());
   }
 
   public long countGroups(Filter filter) {

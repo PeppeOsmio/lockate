@@ -21,19 +21,22 @@ class LocationRetentionJobTest {
 
   @Mock private AGLocationConfigurationProperties agLocationConfigurationProperties;
   @Mock private AGLocationRepository agLocationRepository;
+  @Mock private JobRunService jobRunService;
 
   private LocationRetentionJob job;
 
   @BeforeEach
   void setUp() {
-    job = new LocationRetentionJob(agLocationConfigurationProperties, agLocationRepository);
+    job =
+        new LocationRetentionJob(
+            agLocationConfigurationProperties, agLocationRepository, jobRunService);
   }
 
   @Test
   void cleanupOldLocations_passesCutoffBasedOnConfiguredRetentionDuration() {
     var retention = Duration.ofDays(30);
     when(agLocationConfigurationProperties.getDuration()).thenReturn(retention);
-    when(agLocationRepository.deleteOldLocations(any())).thenReturn(0);
+    when(agLocationRepository.deleteOldLocations(any())).thenReturn(5);
     var before = Instant.now();
 
     job.cleanupOldLocations();
@@ -46,5 +49,6 @@ class LocationRetentionJobTest {
     assertThat(captor.getValue())
         .isBetween(
             expectedCutoffLowerBound.minusSeconds(1), expectedCutoffUpperBound.plusSeconds(1));
+    verify(jobRunService).recorded(JobRunService.Job.LOCATION_RETENTION, 5);
   }
 }

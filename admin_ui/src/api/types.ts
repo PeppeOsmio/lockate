@@ -35,6 +35,42 @@ export interface GroupQuery {
   q?: string
   sort: GroupSort
   inactiveDays?: number
+  noAdmin?: boolean
+}
+
+export interface JobStatus {
+  lastRunAt: string | null
+  lastCount: number | null
+  overdue: boolean
+}
+
+export interface OverviewCounts {
+  groups: number
+  members: number
+  pushRegisteredMembers: number
+  circles: number
+  groupsWithoutAdmin: number
+  inactiveGroups: number
+  savedLocations: number
+  apiKeys: number
+}
+
+// What the database knows is null when it is down, what Redis knows when Redis is
+export interface Overview {
+  version: string
+  apis: number[]
+  startedAt: string
+  requireApiKey: boolean
+  pushRelayUrl: string | null
+  locationRetentionSeconds: number
+  locationSaveIntervalSeconds: number
+  locationRetentionCron: string
+  databaseUp: boolean
+  redisUp: boolean
+  counts: OverviewCounts | null
+  onlineMembers: number | null
+  locationSave: JobStatus | null
+  locationRetention: JobStatus | null
 }
 
 export interface AGMember {
