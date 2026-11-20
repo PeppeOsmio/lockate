@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
 import Typography from '@mui/material/Typography'
 import { useAdminApiClient } from '../api/AdminAPIClientContext'
+import { isNotFound } from '../api/client'
 import type { ApiKey, ApiKeyCreated, Page } from '../api/types'
 import { ConfirmButton } from '../components/ConfirmButton'
 import { Table } from '../components/Table'
@@ -17,39 +18,49 @@ export function ApiKeysPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [revealedKey, setRevealedKey] = useState<ApiKeyCreated | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [reloads, setReloads] = useState(0)
   const client = useAdminApiClient()
 
-  const refresh = useCallback(
-    (targetPage = page) => {
-      setLoading(true)
-      client
-        .listApiKeys(targetPage)
-        .then(setResult)
-        .catch(() => setError('Failed to load API keys.'))
-        .finally(() => setLoading(false))
-    },
-    [client, page],
-  )
-
   useEffect(() => {
-    refresh(page)
-  }, [client, page]) // eslint-disable-line react-hooks/exhaustive-deps
+    setLoading(true)
+    setError(null)
+    client
+      .listApiKeys(page)
+      .then(setResult)
+      .catch(() => setError('Failed to load API keys.'))
+      .finally(() => setLoading(false))
+  }, [client, page, reloads])
 
   async function handleCreate() {
-    const created = await client.createApiKey()
-    setRevealedKey(created)
-    refresh(page)
+    setActionError(null)
+    try {
+      setRevealedKey(await client.createApiKey())
+    } catch {
+      setActionError('Failed to create the API key.')
+      return
+    }
+    setReloads((n) => n + 1)
   }
 
   async function handleRevoke(id: string) {
-    await client.revokeApiKey(id)
+    setActionError(null)
+    try {
+      await client.revokeApiKey(id)
+    } catch (e) {
+      // a key already gone is what was asked
+      if (!isNotFound(e)) {
+        setActionError('Failed to revoke the API key.')
+        return
+      }
+    }
     const newTotal = (result?.totalElements ?? 1) - 1
     const maxPage = Math.max(0, Math.ceil(newTotal / (result?.size ?? 20)) - 1)
     const targetPage = Math.min(page, maxPage)
     if (targetPage !== page) {
       setPage(targetPage)
     } else {
-      refresh(page)
+      setReloads((n) => n + 1)
     }
   }
 
@@ -81,6 +92,11 @@ export function ApiKeysPage() {
 
       {loading && <CircularProgress />}
       {error && <Alert severity="error">{error}</Alert>}
+      {actionError && (
+        <Alert severity="error" onClose={() => setActionError(null)} sx={{ mb: 2 }}>
+          {actionError}
+        </Alert>
+      )}
 
       {!loading && !error && result && (
         <>

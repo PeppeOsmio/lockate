@@ -9,17 +9,39 @@ export function ConfirmButton({
 }: {
   label: string
   confirmLabel: string
-  onConfirm: () => void
+  onConfirm: () => Promise<void>
 }) {
   const [confirming, setConfirming] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  async function handleConfirm() {
+    setBusy(true)
+    try {
+      await onConfirm()
+    } finally {
+      setBusy(false)
+      setConfirming(false)
+    }
+  }
 
   if (confirming) {
     return (
       <Stack direction="row" spacing={1}>
-        <Button size="small" color="error" variant="outlined" onClick={onConfirm}>
+        <Button
+          size="small"
+          color="error"
+          variant="outlined"
+          disabled={busy}
+          onClick={handleConfirm}
+        >
           {confirmLabel}
         </Button>
-        <Button size="small" variant="outlined" onClick={() => setConfirming(false)}>
+        <Button
+          size="small"
+          variant="outlined"
+          disabled={busy}
+          onClick={() => setConfirming(false)}
+        >
           Cancel
         </Button>
       </Stack>
