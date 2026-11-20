@@ -44,7 +44,7 @@ class AdminAnonymousGroupControllerTest {
         new AdminGroupDto(
             UUID.randomUUID(), LocalDateTime.now(ZoneOffset.UTC), 2, 1, 0, 1, 0, null);
     var page = new PageResponseDto<>(List.of(dto), 0, 20, 1L, 1);
-    var query = new AdminGroupQueryDto(0, 20, "449b", "members", 7);
+    var query = new AdminGroupQueryDto(0, 20, "449b", "members", 7, null);
     when(adminGroupService.list(query)).thenReturn(page);
 
     var result = controller.listGroups(query);

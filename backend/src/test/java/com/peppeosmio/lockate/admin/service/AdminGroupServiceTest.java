@@ -75,7 +75,7 @@ class AdminGroupServiceTest {
     when(presenceService.online(List.of(refA, refB))).thenReturn(Set.of(refA));
     when(lastLocationService.lastTimes(List.of(refA, refB))).thenReturn(Map.of(refA, live));
 
-    var result = service.list(new AdminGroupQueryDto(null, null, null, null, null));
+    var result = service.list(new AdminGroupQueryDto(null, null, null, null, null, null));
 
     assertThat(result.totalElements()).isEqualTo(1);
     assertThat(result.totalPages()).isEqualTo(1);
@@ -100,7 +100,8 @@ class AdminGroupServiceTest {
     when(presenceService.online(List.of(refA))).thenReturn(Set.of());
     when(lastLocationService.lastTimes(List.of(refA))).thenReturn(Map.of());
 
-    var dto = service.list(new AdminGroupQueryDto(null, null, null, null, null)).items().getFirst();
+    var dto =
+        service.list(new AdminGroupQueryDto(null, null, null, null, null, null)).items().getFirst();
 
     assertThat(dto.lastLocationAt()).isEqualTo(saved);
     assertThat(dto.onlineCount()).isZero();
@@ -111,7 +112,7 @@ class AdminGroupServiceTest {
     when(repository.countGroups(any())).thenReturn(45L);
     when(repository.findGroups(any(), any(), anyLong(), anyInt())).thenReturn(List.of());
 
-    var result = service.list(new AdminGroupQueryDto(2, 20, "449BFE1B", "activity", 7));
+    var result = service.list(new AdminGroupQueryDto(2, 20, "449BFE1B", "activity", 7, true));
 
     var filter = ArgumentCaptor.forClass(Filter.class);
     verify(repository)
@@ -121,6 +122,7 @@ class AdminGroupServiceTest {
             org.mockito.Mockito.eq(40L),
             org.mockito.Mockito.eq(20));
     assertThat(filter.getValue().idPrefix()).isEqualTo("449bfe1b");
+    assertThat(filter.getValue().noAdmin()).isTrue();
     assertThat(filter.getValue().inactiveSince())
         .isCloseTo(
             LocalDateTime.now(ZoneOffset.UTC).minusDays(7),

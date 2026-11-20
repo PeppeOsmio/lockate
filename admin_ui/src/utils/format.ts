@@ -35,3 +35,17 @@ export function formatRelative(date: Date, now: Date = new Date()): string {
   }
   return 'just now'
 }
+
+const DURATION_UNITS: [string, number][] = [
+  ['day', 24 * 3600],
+  ['hour', 3600],
+  ['minute', 60],
+  ['second', 1],
+]
+
+// A setting's length in its largest whole unit: "7 days", "90 minutes"
+export function formatDuration(seconds: number): string {
+  const [unit, unitSeconds] = DURATION_UNITS.find(([, s]) => seconds % s === 0) ?? ['second', 1]
+  const count = seconds / unitSeconds
+  return `${count} ${unit}${count === 1 ? '' : 's'}`
+}

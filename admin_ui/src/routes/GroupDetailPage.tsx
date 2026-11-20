@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useState } from 'react'
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom'
 import CheckIcon from '@mui/icons-material/Check'
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
@@ -7,7 +7,6 @@ import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
-import Paper from '@mui/material/Paper'
 import Switch from '@mui/material/Switch'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
@@ -18,6 +17,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog'
 import { Id } from '../components/Id'
 import { PageHeader } from '../components/PageHeader'
 import { RowAction } from '../components/RowAction'
+import { Stats } from '../components/Stats'
 import { Table } from '../components/Table'
 import { Time } from '../components/Time'
 import { useNotify } from '../feedback/notify'
@@ -235,34 +235,17 @@ function Online({ online }: { online: boolean }) {
 }
 
 function GroupStats({ group }: { group: AdminGroup }) {
-  const stats: [string, ReactNode][] = [
-    ['Created', <Time key="created" value={group.createdAt} />],
-    ['Members', group.memberCount],
-    ['Online', group.onlineCount],
-    ['Admins', group.adminCount],
-    ['Circles', group.circleCount],
-    ['Notifications', `${group.pushRegisteredCount} of ${group.memberCount}`],
-    ['Last position', <Time key="last" value={group.lastLocationAt} />],
-  ]
   return (
-    <Box
-      sx={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
-        gap: 1.5,
-        mb: 3,
-      }}
-    >
-      {stats.map(([label, value]) => (
-        <Paper key={label} variant="outlined" sx={{ px: 2, py: 1.5 }}>
-          <Typography variant="caption" color="text.secondary">
-            {label}
-          </Typography>
-          <Typography variant="h6" component="div" sx={{ fontSize: '1.1rem' }}>
-            {value}
-          </Typography>
-        </Paper>
-      ))}
-    </Box>
+    <Stats
+      stats={[
+        { label: 'Created', value: <Time value={group.createdAt} /> },
+        { label: 'Members', value: group.memberCount },
+        { label: 'Online', value: group.onlineCount },
+        { label: 'Admins', value: group.adminCount, warning: group.adminCount === 0 },
+        { label: 'Circles', value: group.circleCount },
+        { label: 'Notifications', value: `${group.pushRegisteredCount} of ${group.memberCount}` },
+        { label: 'Last position', value: <Time value={group.lastLocationAt} /> },
+      ]}
+    />
   )
 }

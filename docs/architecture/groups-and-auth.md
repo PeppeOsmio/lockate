@@ -75,4 +75,6 @@ position of a burst (the switch to still right after moving) is always saved, at
 late. A member who leaves loses its key. The
 `LocationRetentionJob` deletes saved positions older than 7 days
 (`…location.duration`, daily `…location.cron`). The saved record is only there so a member who
-opens the map sees where the others last were.
+opens the map sees where the others last were. Each job, once its transaction commits, keeps when
+it ran and how many positions it saved or deleted in Redis (`JobRunService`, `job-run:{job}`), so
+the [admin overview](admin.md) can tell a job that stopped running.

@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 public class VersionController {
-  private static final List<Integer> SERVED_APIS = List.of(1);
+  public static final List<Integer> SERVED_APIS = List.of(1);
 
   private final String version;
 

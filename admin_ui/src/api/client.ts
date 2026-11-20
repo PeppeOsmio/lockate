@@ -1,5 +1,13 @@
 import { clearToken, getToken } from '../auth/tokenStorage'
-import type { AdminGroup, AGMember, ApiKey, ApiKeyCreated, GroupQuery, Page } from './types'
+import type {
+  AdminGroup,
+  AGMember,
+  ApiKey,
+  ApiKeyCreated,
+  GroupQuery,
+  Overview,
+  Page,
+} from './types'
 
 export class ApiError extends Error {
   status: number
@@ -72,6 +80,10 @@ export class AdminAPIClient {
     return response.ok
   }
 
+  getOverview(): Promise<Overview> {
+    return this.apiFetch('/api/v1/admin/overview')
+  }
+
   listAnonymousGroups(query: GroupQuery): Promise<Page<AdminGroup>> {
     const params = new URLSearchParams({
       page: String(query.page),
@@ -80,6 +92,7 @@ export class AdminAPIClient {
     })
     if (query.q) params.set('q', query.q)
     if (query.inactiveDays) params.set('inactiveDays', String(query.inactiveDays))
+    if (query.noAdmin) params.set('noAdmin', 'true')
     return this.apiFetch(`/api/v1/admin/anonymous-groups?${params}`)
   }
 

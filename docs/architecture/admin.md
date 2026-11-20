@@ -15,7 +15,8 @@ constant time. The backend refuses to start without one. CORS allows only `ADMIN
 
 | Endpoint | What it does |
 |---|---|
-| `GET /anonymous-groups?page&size&q&sort&inactiveDays` | Groups with their counts (members, admins, online, push registered, circles) and last position. `q` is the start of a group's or one of its members' id; `sort` is `created` (default, newest first), `members` or `activity`; `inactiveDays` keeps the groups older than that with no position saved since. |
+| `GET /overview` | The server at a glance: version and served APIs, when it started, `REQUIRE_API_KEY`, the push relay, the position settings (kept for, saved every, deletion cron), whether the database and Redis answer, counts (groups, members, members registered for push, circles, groups without an admin, groups inactive for 30 days, saved positions, API keys), members online now, and the last run of `LocationSaveJob` and `LocationRetentionJob` with whether the next one is late. |
+| `GET /anonymous-groups?page&size&q&sort&inactiveDays&noAdmin` | Groups with their counts (members, admins, online, push registered, circles) and last position. `q` is the start of a group's or one of its members' id; `sort` is `created` (default, newest first), `members` or `activity`; `inactiveDays` keeps the groups older than that with no position saved since; `noAdmin=true` the groups where nobody is an admin. |
 | `GET /anonymous-groups/{id}` | One group, with the same counts. |
 | `GET /anonymous-groups/{id}/members` | A group's members: joined, admin flag, online, push registered, last position. |
 | `DELETE /anonymous-groups/{id}` | Deletes the group; every member gets `group.deleted` by push. |
@@ -36,6 +37,16 @@ only Redis knows: who is online (`ag-online`, a position in the last 30 minutes,
 newer of the two; sorting by activity and the inactivity filter use the saved one. All of it is
 metadata the server already has, none of it new.
 
+`AdminOverviewService` asks the database (one query of counts, `AdminOverviewRepository`) and Redis
+(the `ag-online` keys counted with `SCAN`, and `job-run:{job}`) at the same time, and gives each 5
+seconds: a store that is down can otherwise block a request for its whole timeout (a minute for
+Redis). A store that fails or is late is reported down and what it knows is left out (null), the
+rest is still answered. Each job keeps when it last ran and how many positions it saved or deleted
+(`JobRunService`, written after its transaction commits, with no expiry), from whichever instance
+ran it. The save job is late after three intervals with no run, the retention job an hour after the
+time its cron (in the server's time zone) set for the next run; until a job first runs, counting
+starts from when the backend started.
+
 The admin API is on the same port as the app's, so the proxy in front of the backend is where to
 limit who reaches `/api/v1/admin/**`.
 
@@ -46,8 +57,12 @@ the `lockate-admin-ui` image; `config.json`, filled at container start from `VIT
 tells it where the backend is. The admin signs in with `ADMIN_API_KEY`, kept in `sessionStorage`,
 so it is gone with the tab; a 401 signs out and drops everything loaded.
 
-- **Groups**: paged list with search by group or member id, sorting and a filter for groups with
-  no position for 7, 30 or 90 days, all in the URL. Each row shows members (and how many are
+- **Overview** (the home page): what is wrong first (database or Redis down, a late job, no push
+  relay, API keys not required), then the counts, each linking to the list it counts (groups
+  without an admin, inactive groups, API keys), and the server's version and settings. It is
+  refreshed every minute.
+- **Groups**: paged list with search by group or member id, sorting and filters for groups with
+  no position for 7, 30 or 90 days and groups without an admin, all in the URL. Each row shows members (and how many are
   online), admins (a warning when there is none), circles, members registered for notifications
   and the last position. Rows can be selected to delete several groups at once, one request each,
   after typing how many.

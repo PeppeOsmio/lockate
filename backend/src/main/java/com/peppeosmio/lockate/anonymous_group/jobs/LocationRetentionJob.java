@@ -16,12 +16,15 @@ public class LocationRetentionJob {
 
   private final AGLocationConfigurationProperties agLocationConfigurationProperties;
   private final AGLocationRepository repository;
+  private final JobRunService jobRunService;
 
   public LocationRetentionJob(
       AGLocationConfigurationProperties agLocationConfigurationProperties,
-      AGLocationRepository repository) {
+      AGLocationRepository repository,
+      JobRunService jobRunService) {
     this.agLocationConfigurationProperties = agLocationConfigurationProperties;
     this.repository = repository;
+    this.jobRunService = jobRunService;
     log.info("[RetentionJob] Starting retention job");
   }
 
@@ -34,5 +37,6 @@ public class LocationRetentionJob {
     var after = System.nanoTime();
     var durationMs = (after - before) / 1_000_000;
     log.info("[RetentionJob] Deleted {} old location records in {} ms", deleted, durationMs);
+    jobRunService.recorded(JobRunService.Job.LOCATION_RETENTION, deleted);
   }
 }

@@ -13,6 +13,7 @@ import org.springframework.data.redis.connection.MessageListener;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.data.redis.listener.ChannelTopic;
@@ -57,6 +58,19 @@ public class RedisService {
 
   public void saveValue(String key, String value, Duration ttl) {
     redisTemplate.opsForValue().set(key, value, ttl);
+  }
+
+  /** Sets the value with no expiry */
+  public void setValue(String key, String value) {
+    redisTemplate.opsForValue().set(key, value);
+  }
+
+  /** Counts the keys matching the pattern, with SCAN so Redis is never blocked */
+  public long countKeys(String pattern) {
+    var options = ScanOptions.scanOptions().match(pattern).count(1000).build();
+    try (var keys = redisTemplate.scan(options)) {
+      return keys.stream().count();
+    }
   }
 
   public Optional<String> getValue(String key) {

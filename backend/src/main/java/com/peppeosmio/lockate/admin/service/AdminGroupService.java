@@ -50,7 +50,8 @@ public class AdminGroupService {
             query.q() == null ? null : query.q().toLowerCase(Locale.ROOT),
             query.inactiveDays() == null
                 ? null
-                : LocalDateTime.now(ZoneOffset.UTC).minusDays(query.inactiveDays()));
+                : LocalDateTime.now(ZoneOffset.UTC).minusDays(query.inactiveDays()),
+            Boolean.TRUE.equals(query.noAdmin()));
     var total = repository.countGroups(filter);
     var rows =
         repository.findGroups(
