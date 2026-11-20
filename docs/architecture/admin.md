@@ -22,8 +22,9 @@ constant time. The backend refuses to start without one. CORS allows only `ADMIN
 | `DELETE /anonymous-groups/{id}` | Deletes the group; every member gets `group.deleted` by push. |
 | `DELETE /anonymous-groups/{id}/members/{memberId}` | Removes a member, who gets `member.left` by push. |
 | `PATCH /anonymous-groups/{id}/members/{memberId}` | Sets the admin flag (`{isAGAdmin}`). |
-| `GET /api-keys?page&size` | API keys, newest first, with when each was last used. |
-| `POST /api-keys` | Creates a key; the answer is the only time it is shown. |
+| `GET /api-keys?page&size` | API keys, newest first, with their label, expiry and when each was last used (within 10 minutes). |
+| `POST /api-keys` | Creates a key, with an optional `{label, expiresAt}` (label at most 60 characters); the answer is the only time the key is shown. |
+| `PATCH /api-keys/{id}` | Replaces a key's label and expiry (`{label, expiresAt}`, null for none): to rename it, renew it or make it expire. |
 | `DELETE /api-keys/{id}` | Revokes a key. |
 
 Pages are 0-based and hold at most 100 items. Times are UTC without an offset (Java
@@ -70,7 +71,10 @@ so it is gone with the tab; a 401 signs out and drops everything loaded.
   registered for notifications, the admin switch and the last position. Taking the admin flag from
   the last admin, or removing the last admin, asks first: nobody in the group could then delete it
   or promote anyone.
-- **API keys**: creating, shown once in a dialog, and revoking.
+- **API keys**: creating with a label and an expiry (never, in 30 or 90 days, in a year, or from
+  the start of a chosen day in the admin's time zone), the key shown once in a dialog; editing the
+  label and expiry; revoking. Expired keys are flagged, and the page says when the server doesn't
+  require keys at all.
 - Ids are shown by their first 8 characters, with the full id on hover and a copy button; times
   relative ("3 minutes ago") with the full local time on hover.
 - Deleting a group, removing a member and revoking a key ask first and say what follows; deleting a

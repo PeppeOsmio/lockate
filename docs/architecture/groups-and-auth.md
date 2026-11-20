@@ -60,7 +60,11 @@ registration is keyed by the authenticated member.
 
 - **API keys** (`X-API-KEY`): with `REQUIRE_API_KEY=true` the server accepts only clients that
   present a key (`ApiKeyAuthFilter`), so a self-hoster can keep strangers off their server. The app
-  asks for it with the server URL.
+  asks for it with the server URL. A key is `{id}:{secret}`; the server keeps the SHA-256 of the
+  secret, compared in constant time, an optional label set by the admin and an optional expiry,
+  from which the key is refused like a wrong one. When a key was last used is written at most every
+  10 minutes, so checking a key isn't a database write on every request. The filter leaves
+  `/api/v1/admin/**` alone: the admin key comes in the same header and is checked there.
 - **Admin** (`X-API-KEY` = `ADMIN_API_KEY`, `@SecuredAdmin`): the admin API and the admin UI on top
   of it manage groups, members and API keys. → [Administration](admin.md)
 

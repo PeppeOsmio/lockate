@@ -31,7 +31,8 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
       throws ServletException, IOException {
     var path = request.getRequestURI();
     var whitelistPaths = List.of("/api/v1/api-key/required", "/api/v1/health", "/api/version");
-    if (whitelistPaths.contains(path)) {
+    // The admin API has its own key in the same header, checked by AdminAuthInterceptor
+    if (whitelistPaths.contains(path) || path.startsWith("/api/v1/admin/")) {
       filterChain.doFilter(request, response);
       return;
     }
