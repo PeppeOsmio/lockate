@@ -54,6 +54,10 @@ public class AdminAuthInterceptor implements HandlerInterceptor {
     }
 
     if (!MessageDigest.isEqual(adminApiKey, apiKeyHeader.getBytes(StandardCharsets.UTF_8))) {
+      log.warn(
+          "[Admin] Refused a wrong admin key on {} {}",
+          request.getMethod(),
+          request.getRequestURI());
       writeError(response, 401, "invalid_api_key");
       return false;
     }

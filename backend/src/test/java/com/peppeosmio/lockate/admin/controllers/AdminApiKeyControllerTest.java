@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.peppeosmio.lockate.api_key.ApiKeyService;
+import com.peppeosmio.lockate.api_key.dto.ApiKeyCreatedDto;
 import com.peppeosmio.lockate.api_key.dto.ApiKeyDto;
 import com.peppeosmio.lockate.api_key.dto.ApiKeyWriteDto;
 import com.peppeosmio.lockate.common.dto.PageQueryDto;
@@ -70,6 +71,12 @@ class AdminApiKeyControllerTest {
 
   @Test
   void createApiKey_withoutABody_createsAKeyWithNoLabelOrExpiry() {
+    var id = UUID.randomUUID();
+    when(apiKeyService.createApiKey(any()))
+        .thenReturn(
+            new ApiKeyCreatedDto(
+                id, id + ":secret", null, LocalDateTime.now(ZoneOffset.UTC), null));
+
     controller.createApiKey(null);
 
     verify(apiKeyService).createApiKey(new ApiKeyWriteDto(null, null));
