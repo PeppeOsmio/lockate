@@ -5,6 +5,11 @@ export function parseServerDate(value: string): Date {
   return new Date(hasOffset ? value : `${value}Z`)
 }
 
+// What the backend expects: UTC without an offset
+export function toServerDate(date: Date): string {
+  return date.toISOString().slice(0, -1)
+}
+
 const dateTimeFormat = new Intl.DateTimeFormat(undefined, {
   dateStyle: 'medium',
   timeStyle: 'medium',

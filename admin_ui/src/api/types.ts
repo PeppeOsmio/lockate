@@ -8,12 +8,21 @@ export interface Page<T> {
 
 export interface ApiKey {
   id: string
+  label: string | null
   createdAt: string
+  expiresAt: string | null
+  // At most 10 minutes older than the last use
   lastValidated: string | null
 }
 
-export interface ApiKeyCreated extends ApiKey {
+export interface ApiKeyCreated extends Omit<ApiKey, 'lastValidated'> {
   key: string
+}
+
+// What the admin sets on a key; expiresAt is a server time (UTC, no offset)
+export interface ApiKeyWrite {
+  label: string | null
+  expiresAt: string | null
 }
 
 export interface AdminGroup {

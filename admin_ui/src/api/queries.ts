@@ -1,7 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAdminApiClient } from './adminApiClient'
 import { isNotFound } from './client'
-import type { GroupQuery } from './types'
+import type { ApiKeyWrite, GroupQuery } from './types'
 
 // Deleting what is already gone is what was asked
 async function ignoreNotFound(request: Promise<void>): Promise<void> {
@@ -121,7 +121,16 @@ export function useCreateApiKey() {
   const client = useAdminApiClient()
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: () => client.createApiKey(),
+    mutationFn: (body: ApiKeyWrite) => client.createApiKey(body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['api-keys'] }),
+  })
+}
+
+export function useUpdateApiKey() {
+  const client = useAdminApiClient()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: ApiKeyWrite }) => client.updateApiKey(id, body),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['api-keys'] }),
   })
 }

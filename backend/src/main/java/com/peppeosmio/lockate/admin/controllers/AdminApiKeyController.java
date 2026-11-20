@@ -4,6 +4,7 @@ import com.peppeosmio.lockate.admin.security.SecuredAdmin;
 import com.peppeosmio.lockate.api_key.ApiKeyService;
 import com.peppeosmio.lockate.api_key.dto.ApiKeyCreatedDto;
 import com.peppeosmio.lockate.api_key.dto.ApiKeyDto;
+import com.peppeosmio.lockate.api_key.dto.ApiKeyWriteDto;
 import com.peppeosmio.lockate.common.dto.ErrorResponseDto;
 import com.peppeosmio.lockate.common.dto.PageQueryDto;
 import com.peppeosmio.lockate.common.dto.PageResponseDto;
@@ -32,8 +33,20 @@ public class AdminApiKeyController {
 
   @PostMapping("")
   @ResponseStatus(HttpStatus.CREATED)
-  ApiKeyCreatedDto createApiKey() {
-    return apiKeyService.createApiKey();
+  ApiKeyCreatedDto createApiKey(@Valid @RequestBody(required = false) ApiKeyWriteDto request) {
+    return apiKeyService.createApiKey(request == null ? new ApiKeyWriteDto(null, null) : request);
+  }
+
+  @PatchMapping("/{id}")
+  ResponseEntity<?> updateApiKey(
+      @PathVariable UUID id, @Valid @RequestBody ApiKeyWriteDto request) {
+    return apiKeyService
+        .updateApiKey(id, request)
+        .<ResponseEntity<?>>map(ResponseEntity::ok)
+        .orElseGet(
+            () ->
+                ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new ErrorResponseDto("api_key_not_found")));
   }
 
   @DeleteMapping("/{id}")

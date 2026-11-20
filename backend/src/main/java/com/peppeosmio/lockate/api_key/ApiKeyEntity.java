@@ -14,9 +14,12 @@ import lombok.Setter;
 @NoArgsConstructor
 public class ApiKeyEntity {
 
-  public ApiKeyEntity(String secretHash, LocalDateTime createdAt) {
+  public ApiKeyEntity(
+      String secretHash, String label, LocalDateTime createdAt, LocalDateTime expiresAt) {
     this.secretHash = secretHash;
+    this.label = label;
     this.createdAt = createdAt;
+    this.expiresAt = expiresAt;
   }
 
   @Id
@@ -27,8 +30,14 @@ public class ApiKeyEntity {
   @Column(name = "secret_hash", nullable = false)
   private String secretHash;
 
+  @Column(name = "label")
+  private String label;
+
   @Column(name = "created_at", nullable = false)
   private LocalDateTime createdAt;
+
+  @Column(name = "expires_at")
+  private LocalDateTime expiresAt;
 
   @Column(name = "last_validated")
   private LocalDateTime lastValidated;

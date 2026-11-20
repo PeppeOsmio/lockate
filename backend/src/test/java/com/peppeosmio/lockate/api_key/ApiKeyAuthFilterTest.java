@@ -69,6 +69,17 @@ class ApiKeyAuthFilterTest {
   }
 
   @Test
+  void doFilterInternal_adminApi_isLeftToTheAdminKeyCheck() throws Exception {
+    request.setRequestURI("/api/v1/admin/api-keys");
+    request.addHeader("X-API-KEY", "the-admin-key");
+
+    filter.doFilterInternal(request, response, filterChain);
+
+    verify(filterChain).doFilter(request, response);
+    verify(apiKeyService, never()).verifyApiKey(any());
+  }
+
+  @Test
   void doFilterInternal_versionPath_bypassesApiKeyCheck() throws Exception {
     request.setRequestURI("/api/version");
 

@@ -4,6 +4,7 @@ import type {
   AGMember,
   ApiKey,
   ApiKeyCreated,
+  ApiKeyWrite,
   GroupQuery,
   Overview,
   Page,
@@ -129,8 +130,15 @@ export class AdminAPIClient {
     return this.apiFetch(`/api/v1/admin/api-keys?page=${page}&size=${size}`)
   }
 
-  createApiKey(): Promise<ApiKeyCreated> {
-    return this.apiFetch('/api/v1/admin/api-keys', { method: 'POST' })
+  createApiKey(body: ApiKeyWrite): Promise<ApiKeyCreated> {
+    return this.apiFetch('/api/v1/admin/api-keys', { method: 'POST', body: JSON.stringify(body) })
+  }
+
+  updateApiKey(id: string, body: ApiKeyWrite): Promise<ApiKey> {
+    return this.apiFetch(`/api/v1/admin/api-keys/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    })
   }
 
   revokeApiKey(id: string): Promise<void> {

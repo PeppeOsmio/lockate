@@ -23,3 +23,5 @@ databaseChangeLog:
       file: classpath:db/changelog/push-registration.sql
   - include:
       file: classpath:db/changelog/circles-version.sql
+  - include:
+      file: classpath:db/changelog/api-key-label-expiry.sql
