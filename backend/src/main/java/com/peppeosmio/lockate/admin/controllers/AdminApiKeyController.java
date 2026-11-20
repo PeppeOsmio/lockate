@@ -9,11 +9,14 @@ import com.peppeosmio.lockate.common.dto.ErrorResponseDto;
 import com.peppeosmio.lockate.common.dto.PageQueryDto;
 import com.peppeosmio.lockate.common.dto.PageResponseDto;
 import jakarta.validation.Valid;
+import java.time.LocalDateTime;
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+@Slf4j
 @SecuredAdmin
 @RestController
 @RequestMapping("/api/v1/admin/api-keys")
@@ -34,7 +37,10 @@ public class AdminApiKeyController {
   @PostMapping("")
   @ResponseStatus(HttpStatus.CREATED)
   ApiKeyCreatedDto createApiKey(@Valid @RequestBody(required = false) ApiKeyWriteDto request) {
-    return apiKeyService.createApiKey(request == null ? new ApiKeyWriteDto(null, null) : request);
+    var created =
+        apiKeyService.createApiKey(request == null ? new ApiKeyWriteDto(null, null) : request);
+    log.info("[Admin] Created API key {} (expires {})", created.id(), expiry(created.expiresAt()));
+    return created;
   }
 
   @PatchMapping("/{id}")
@@ -42,7 +48,11 @@ public class AdminApiKeyController {
       @PathVariable UUID id, @Valid @RequestBody ApiKeyWriteDto request) {
     return apiKeyService
         .updateApiKey(id, request)
-        .<ResponseEntity<?>>map(ResponseEntity::ok)
+        .<ResponseEntity<?>>map(
+            dto -> {
+              log.info("[Admin] Updated API key {} (expires {})", id, expiry(dto.expiresAt()));
+              return ResponseEntity.ok(dto);
+            })
         .orElseGet(
             () ->
                 ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -53,10 +63,18 @@ public class AdminApiKeyController {
   ResponseEntity<?> deleteApiKey(@PathVariable UUID id) {
     return apiKeyService
         .deleteApiKey(id)
-        .<ResponseEntity<?>>map(dto -> ResponseEntity.noContent().build())
+        .<ResponseEntity<?>>map(
+            dto -> {
+              log.info("[Admin] Revoked API key {}", id);
+              return ResponseEntity.noContent().build();
+            })
         .orElseGet(
             () ->
                 ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(new ErrorResponseDto("api_key_not_found")));
+  }
+
+  private static Object expiry(LocalDateTime expiresAt) {
+    return expiresAt == null ? "never" : expiresAt;
   }
 }

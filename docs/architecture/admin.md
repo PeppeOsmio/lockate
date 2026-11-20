@@ -48,6 +48,11 @@ ran it. The save job is late after three intervals with no run, the retention jo
 time its cron (in the server's time zone) set for the next run; until a job first runs, counting
 starts from when the backend started.
 
+Every change made through the admin API is logged once it succeeds, at `INFO` with the `[Admin]`
+prefix and only ids: a group deleted, a member removed or its admin flag set, an API key created,
+updated (with its expiry) or revoked. A wrong admin key is logged at `WARN` with the method and
+path, never the key. There is no other record of what the admin did: the server's logs are it.
+
 The admin API is on the same port as the app's, so the proxy in front of the backend is where to
 limit who reaches `/api/v1/admin/**`.
 
