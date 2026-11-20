@@ -1,165 +1,154 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom'
+import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
+import PersonRemoveOutlinedIcon from '@mui/icons-material/PersonRemoveOutlined'
 import Alert from '@mui/material/Alert'
-import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
-import Stack from '@mui/material/Stack'
 import Switch from '@mui/material/Switch'
-import Typography from '@mui/material/Typography'
-import { useAdminApiClient } from '../api/AdminAPIClientContext'
 import { isNotFound } from '../api/client'
+import { useGroupMembers, useRemoveMember, useSetMemberAdmin } from '../api/queries'
 import type { AGMember } from '../api/types'
-import { ConfirmButton } from '../components/ConfirmButton'
+import { ConfirmDialog } from '../components/ConfirmDialog'
+import { Id } from '../components/Id'
+import { PageHeader } from '../components/PageHeader'
+import { RowAction } from '../components/RowAction'
 import { Table } from '../components/Table'
-import { formatDate } from '../utils/format'
+import { Time } from '../components/Time'
+import { useNotify } from '../feedback/notify'
+import { usePageTitle } from '../hooks/usePageTitle'
+import { shortId } from '../utils/id'
+import { DeleteGroupDialog } from './DeleteGroupDialog'
 
 export function GroupDetailPage() {
-  const { anonymousGroupId } = useParams<{ anonymousGroupId: string }>()
-  const [members, setMembers] = useState<AGMember[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [actionError, setActionError] = useState<string | null>(null)
-  const [pendingAdminIds, setPendingAdminIds] = useState<Set<string>>(new Set())
-  const client = useAdminApiClient()
+  const { groupId = '' } = useParams<{ groupId: string }>()
+  usePageTitle(`Group ${shortId(groupId)}`)
+  const members = useGroupMembers(groupId)
+  const removeMember = useRemoveMember(groupId)
+  const setMemberAdmin = useSetMemberAdmin(groupId)
+  const notify = useNotify()
   const navigate = useNavigate()
+  const [deletingGroup, setDeletingGroup] = useState(false)
+  const [removing, setRemoving] = useState<AGMember | null>(null)
 
-  useEffect(() => {
-    if (!anonymousGroupId) return
-    client
-      .listGroupMembers(anonymousGroupId)
-      .then(setMembers)
-      .catch((e) =>
-        setError(
-          isNotFound(e)
-            ? 'This group does not exist, it may have been deleted.'
-            : 'Failed to load members for this group.',
-        ),
-      )
-      .finally(() => setLoading(false))
-  }, [client, anonymousGroupId])
-
-  async function handleDeleteGroup() {
-    if (!anonymousGroupId) return
-    setActionError(null)
-    try {
-      await client.deleteAnonymousGroup(anonymousGroupId)
-    } catch (e) {
-      // a group already gone is what was asked
-      if (!isNotFound(e)) {
-        setActionError('Failed to delete the group.')
-        return
-      }
-    }
-    navigate('/anonymous-groups')
+  function toggleAdmin(member: AGMember, isAGAdmin: boolean) {
+    setMemberAdmin.mutate(
+      { memberId: member.id, isAGAdmin },
+      {
+        onSuccess: () =>
+          notify(
+            isAGAdmin
+              ? `Member ${shortId(member.id)} is now an admin.`
+              : `Member ${shortId(member.id)} is no longer an admin.`,
+          ),
+        onError: (e) =>
+          notify(isNotFound(e) ? 'That member is no longer in the group.' : e.message, 'error'),
+      },
+    )
   }
 
-  async function handleDeleteMember(memberId: string) {
-    if (!anonymousGroupId) return
-    setActionError(null)
-    try {
-      await client.deleteGroupMember(anonymousGroupId, memberId)
-    } catch (e) {
-      // a member already gone is what was asked
-      if (!isNotFound(e)) {
-        setActionError('Failed to remove the member.')
-        return
-      }
-    }
-    setMembers((prev) => prev.filter((m) => m.id !== memberId))
-  }
-
-  async function handleToggleAdmin(memberId: string, isAGAdmin: boolean) {
-    if (!anonymousGroupId) return
-    setActionError(null)
-    setPendingAdminIds((prev) => new Set(prev).add(memberId))
-    try {
-      await client.setGroupMemberAdmin(anonymousGroupId, memberId, isAGAdmin)
-      setMembers((prev) => prev.map((m) => (m.id === memberId ? { ...m, isAGAdmin } : m)))
-    } catch (e) {
-      if (isNotFound(e)) {
-        setMembers((prev) => prev.filter((m) => m.id !== memberId))
-        setActionError('That member is no longer in the group.')
-      } else {
-        setActionError('Failed to update the member admin status.')
-      }
-    } finally {
-      setPendingAdminIds((prev) => {
-        const next = new Set(prev)
-        next.delete(memberId)
-        return next
-      })
-    }
+  if (members.isError && isNotFound(members.error)) {
+    return (
+      <>
+        <PageHeader
+          title={`Group ${shortId(groupId)}`}
+          crumb={shortId(groupId)}
+          parent={{ label: 'Groups', to: '/groups' }}
+        />
+        <Alert
+          severity="warning"
+          action={
+            <Button component={RouterLink} to="/groups" color="inherit" size="small">
+              All groups
+            </Button>
+          }
+        >
+          This group does not exist, it may have been deleted.
+        </Alert>
+      </>
+    )
   }
 
   return (
-    <Box>
-      <Stack
-        direction={{ xs: 'column', sm: 'row' }}
-        spacing={1}
-        sx={{
-          mb: 2,
-          alignItems: { xs: 'flex-start', sm: 'center' },
-          justifyContent: 'space-between',
-        }}
-      >
-        <Typography variant="h5" sx={{ wordBreak: 'break-all' }}>
-          Group <code>{anonymousGroupId}</code>
-        </Typography>
-        <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
-          <ConfirmButton
-            label="Delete group"
-            confirmLabel="Confirm delete"
-            onConfirm={handleDeleteGroup}
-          />
-          <Button component={RouterLink} to="/anonymous-groups" variant="outlined">
-            Back
+    <>
+      <PageHeader
+        title={
+          <>
+            Group <Id value={groupId} />
+          </>
+        }
+        crumb={shortId(groupId)}
+        parent={{ label: 'Groups', to: '/groups' }}
+        actions={
+          <Button
+            color="error"
+            variant="outlined"
+            startIcon={<DeleteOutlinedIcon />}
+            disabled={!members.data}
+            onClick={() => setDeletingGroup(true)}
+          >
+            Delete group
           </Button>
-        </Stack>
-      </Stack>
-
-      {loading && <CircularProgress />}
-      {error && <Alert severity="error">{error}</Alert>}
-      {actionError && (
-        <Alert severity="error" onClose={() => setActionError(null)} sx={{ mb: 2 }}>
-          {actionError}
-        </Alert>
-      )}
-
-      {!loading && !error && (
+        }
+      />
+      {members.isPending && <CircularProgress />}
+      {members.isError && <Alert severity="error">{members.error.message}</Alert>}
+      {members.data && (
         <Table
           columns={[
-            { header: 'Member ID', render: (m) => <code>{m.id}</code> },
-            { header: 'Joined', render: (m) => formatDate(m.createdAt) },
+            { header: 'Member', render: (m) => <Id value={m.id} /> },
+            { header: 'Joined', render: (m) => <Time value={m.createdAt} /> },
             {
               header: 'Admin',
               render: (m) => (
                 <Switch
                   size="small"
                   checked={m.isAGAdmin}
-                  disabled={pendingAdminIds.has(m.id)}
-                  onChange={(e) => handleToggleAdmin(m.id, e.target.checked)}
+                  disabled={setMemberAdmin.isPending}
+                  onChange={(e) => toggleAdmin(m, e.target.checked)}
                   slotProps={{ input: { 'aria-label': `Admin ${m.id}` } }}
                 />
               ),
             },
-            { header: 'Last location received', render: (m) => formatDate(m.lastLocationAt) },
+            { header: 'Last position saved', render: (m) => <Time value={m.lastLocationAt} /> },
             {
-              header: '',
               render: (m) => (
-                <ConfirmButton
-                  label="Remove"
-                  confirmLabel="Confirm remove"
-                  onConfirm={() => handleDeleteMember(m.id)}
+                <RowAction
+                  label="Remove member"
+                  icon={<PersonRemoveOutlinedIcon fontSize="small" />}
+                  onClick={() => setRemoving(m)}
                 />
               ),
             },
           ]}
-          rows={members}
+          rows={members.data}
           keyFor={(m) => m.id}
           emptyMessage="No members in this group."
+          loading={members.isFetching}
         />
       )}
-    </Box>
+      {deletingGroup && members.data && (
+        <DeleteGroupDialog
+          groupId={groupId}
+          memberCount={members.data.length}
+          onDeleted={() => navigate('/groups')}
+          onClose={() => setDeletingGroup(false)}
+        />
+      )}
+      {removing && (
+        <ConfirmDialog
+          title={`Remove member ${shortId(removing.id)}?`}
+          confirmLabel="Remove member"
+          onConfirm={async () => {
+            await removeMember.mutateAsync(removing.id)
+            notify(`Member ${shortId(removing.id)} removed.`)
+          }}
+          onClose={() => setRemoving(null)}
+        >
+          The member leaves the group and its app is told by push (when the server has a push
+          relay). It can come back only with a new invite.
+        </ConfirmDialog>
+      )}
+    </>
   )
 }

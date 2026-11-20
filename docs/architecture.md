@@ -44,7 +44,7 @@ flowchart LR
 |---|---|---|
 | Android app (`mobile_app/`) | Encrypts and decrypts everything, follows our position, computes circle crossings, shows the map and notifications. | The user's phone |
 | Backend (`backend/`) | Groups, members, circles, invites, relays ciphertext, decides who is sharing, sends pushes. | Anyone's server, with PostgreSQL and Valkey |
-| Admin UI (`admin_ui/`) | Lists and deletes groups and members, manages API keys. Sees only ciphertext. | Next to the backend |
+| Admin UI (`admin_ui/`) | Lists and deletes groups and members, manages API keys. Sees only ids, counts and times. | Next to the backend |
 | Push relay (`push_relay/`) | Forwards a backend's sealed pushes to FCM with our Firebase credentials. | Us, once for every server |
 | `jpake` / `jpake-native` | EC-JPAKE (RFC 8236) for invites, Mbed TLS behind a Kotlin Multiplatform API. | Inside the app |
 
@@ -118,7 +118,8 @@ sequenceDiagram
 | Page | Covers |
 |---|---|
 | [Encryption](architecture/encryption.md) | Group key, AES-GCM fields, AADs, fixed sizes, what the server learns, local storage |
-| [Groups and authentication](architecture/groups-and-auth.md) | Groups, members, admins, member tokens, client ids, API keys, admin UI, retention |
+| [Groups and authentication](architecture/groups-and-auth.md) | Groups, members, admins, member tokens, client ids, API keys, retention |
+| [Administration](architecture/admin.md) | The admin API, the admin UI, what the admin sees |
 | [Invites](architecture/invites.md) | Invite codes, the J-PAKE exchange, the server mailbox |
 | [Circles](architecture/circles.md) | Places of a group, geofencing on the phone, circle events |
 | [Sending positions](architecture/sending.md) | Moving and still modes, the REST endpoint, Doze, rate limits, keeping the circles current |
