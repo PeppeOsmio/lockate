@@ -3,7 +3,8 @@
 all: format format-check lint test
 
 test:
-	yarn tsc --noEmit
+	yarn tsc -b
+	yarn test
 
 format:
 	yarn prettier --write src
