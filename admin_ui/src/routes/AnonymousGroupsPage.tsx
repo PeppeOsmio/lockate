@@ -5,6 +5,7 @@ import Box from '@mui/material/Box'
 import CircularProgress from '@mui/material/CircularProgress'
 import Typography from '@mui/material/Typography'
 import { useAdminApiClient } from '../api/AdminAPIClientContext'
+import { isNotFound } from '../api/client'
 import type { AnonymousGroupSummary, Page } from '../api/types'
 import { ConfirmButton } from '../components/ConfirmButton'
 import { Table } from '../components/Table'
@@ -16,27 +17,39 @@ export function AnonymousGroupsPage() {
   const [page, setPage] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [reloads, setReloads] = useState(0)
   const navigate = useNavigate()
   const client = useAdminApiClient()
 
   useEffect(() => {
     setLoading(true)
+    setError(null)
     client
       .listAnonymousGroups(page)
       .then(setResult)
       .catch(() => setError('Failed to load anonymous groups.'))
       .finally(() => setLoading(false))
-  }, [client, page])
+  }, [client, page, reloads])
 
   async function handleDelete(groupId: string) {
-    await client.deleteAnonymousGroup(groupId)
+    setActionError(null)
+    try {
+      await client.deleteAnonymousGroup(groupId)
+    } catch (e) {
+      // a group already gone is what was asked
+      if (!isNotFound(e)) {
+        setActionError('Failed to delete the group.')
+        return
+      }
+    }
     const newTotal = (result?.totalElements ?? 1) - 1
     const maxPage = Math.max(0, Math.ceil(newTotal / (result?.size ?? 20)) - 1)
     const targetPage = Math.min(page, maxPage)
     if (targetPage !== page) {
       setPage(targetPage)
     } else {
-      client.listAnonymousGroups(page).then(setResult)
+      setReloads((n) => n + 1)
     }
   }
 
@@ -48,6 +61,11 @@ export function AnonymousGroupsPage() {
 
       {loading && <CircularProgress />}
       {error && <Alert severity="error">{error}</Alert>}
+      {actionError && (
+        <Alert severity="error" onClose={() => setActionError(null)} sx={{ mb: 2 }}>
+          {actionError}
+        </Alert>
+      )}
 
       {!loading && !error && result && (
         <>

@@ -8,6 +8,7 @@ import Stack from '@mui/material/Stack'
 import Switch from '@mui/material/Switch'
 import Typography from '@mui/material/Typography'
 import { useAdminApiClient } from '../api/AdminAPIClientContext'
+import { isNotFound } from '../api/client'
 import type { AGMember } from '../api/types'
 import { ConfirmButton } from '../components/ConfirmButton'
 import { Table } from '../components/Table'
@@ -28,19 +29,43 @@ export function GroupDetailPage() {
     client
       .listGroupMembers(anonymousGroupId)
       .then(setMembers)
-      .catch(() => setError('Failed to load members for this group.'))
+      .catch((e) =>
+        setError(
+          isNotFound(e)
+            ? 'This group does not exist, it may have been deleted.'
+            : 'Failed to load members for this group.',
+        ),
+      )
       .finally(() => setLoading(false))
   }, [client, anonymousGroupId])
 
   async function handleDeleteGroup() {
     if (!anonymousGroupId) return
-    await client.deleteAnonymousGroup(anonymousGroupId)
+    setActionError(null)
+    try {
+      await client.deleteAnonymousGroup(anonymousGroupId)
+    } catch (e) {
+      // a group already gone is what was asked
+      if (!isNotFound(e)) {
+        setActionError('Failed to delete the group.')
+        return
+      }
+    }
     navigate('/anonymous-groups')
   }
 
   async function handleDeleteMember(memberId: string) {
     if (!anonymousGroupId) return
-    await client.deleteGroupMember(anonymousGroupId, memberId)
+    setActionError(null)
+    try {
+      await client.deleteGroupMember(anonymousGroupId, memberId)
+    } catch (e) {
+      // a member already gone is what was asked
+      if (!isNotFound(e)) {
+        setActionError('Failed to remove the member.')
+        return
+      }
+    }
     setMembers((prev) => prev.filter((m) => m.id !== memberId))
   }
 
@@ -51,8 +76,13 @@ export function GroupDetailPage() {
     try {
       await client.setGroupMemberAdmin(anonymousGroupId, memberId, isAGAdmin)
       setMembers((prev) => prev.map((m) => (m.id === memberId ? { ...m, isAGAdmin } : m)))
-    } catch {
-      setActionError('Failed to update the member admin status.')
+    } catch (e) {
+      if (isNotFound(e)) {
+        setMembers((prev) => prev.filter((m) => m.id !== memberId))
+        setActionError('That member is no longer in the group.')
+      } else {
+        setActionError('Failed to update the member admin status.')
+      }
     } finally {
       setPendingAdminIds((prev) => {
         const next = new Set(prev)
