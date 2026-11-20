@@ -33,6 +33,7 @@ class LocationSaveJobTest {
   @Mock private AGLastLocationService lastLocationService;
   @Mock private AGMemberRepository agMemberRepository;
   @Mock private AGLocationRepository agLocationRepository;
+  @Mock private JobRunService jobRunService;
 
   private LocationSaveJob job;
 
@@ -42,7 +43,9 @@ class LocationSaveJobTest {
 
   @BeforeEach
   void setUp() {
-    job = new LocationSaveJob(lastLocationService, agMemberRepository, agLocationRepository);
+    job =
+        new LocationSaveJob(
+            lastLocationService, agMemberRepository, agLocationRepository, jobRunService);
     var group =
         new AnonymousGroupEntity(
             UUID.randomUUID(), new EncryptedString("name".getBytes(), "iv".getBytes()));
@@ -86,6 +89,7 @@ class LocationSaveJobTest {
     verify(agLocationRepository).save(captor.capture());
     assertThat(captor.getValue().getTimestamp()).isEqualTo(timestamp);
     assertThat(member.getLastLocation()).isSameAs(captor.getValue());
+    verify(jobRunService).recorded(JobRunService.Job.LOCATION_SAVE, 1);
   }
 
   @Test
@@ -109,5 +113,6 @@ class LocationSaveJobTest {
     job.saveLastLocations();
 
     verify(agLocationRepository, never()).save(any());
+    verify(jobRunService).recorded(JobRunService.Job.LOCATION_SAVE, 0);
   }
 }

@@ -184,4 +184,11 @@ class AGPresenceServiceTest {
     assertThat(service.online(List.of())).isEmpty();
     verify(redisService, never()).getValues(any());
   }
+
+  @Test
+  void onlineCount_countsTheOnlineKeys() {
+    when(redisService.countKeys("ag-online:*")).thenReturn(4L);
+
+    assertThat(service.onlineCount()).isEqualTo(4);
+  }
 }

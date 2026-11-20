@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatRelative, parseServerDate } from './format'
+import { formatDuration, formatRelative, parseServerDate } from './format'
 
 describe('parseServerDate', () => {
   it('reads a time without an offset as UTC', () => {
@@ -24,5 +24,15 @@ describe('formatRelative', () => {
     expect(formatRelative(new Date('2026-11-20T11:57:00Z'), now)).toBe('3 minutes ago')
     expect(formatRelative(new Date('2026-11-20T09:00:00Z'), now)).toBe('3 hours ago')
     expect(formatRelative(new Date('2026-11-19T12:00:00Z'), now)).toBe('yesterday')
+  })
+})
+
+describe('formatDuration', () => {
+  it('uses the largest unit that fits exactly', () => {
+    expect(formatDuration(7 * 24 * 3600)).toBe('7 days')
+    expect(formatDuration(120)).toBe('2 minutes')
+    expect(formatDuration(5400)).toBe('90 minutes')
+    expect(formatDuration(3600)).toBe('1 hour')
+    expect(formatDuration(45)).toBe('45 seconds')
   })
 })

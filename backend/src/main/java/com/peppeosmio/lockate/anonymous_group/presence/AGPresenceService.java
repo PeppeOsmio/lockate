@@ -132,4 +132,9 @@ public class AGPresenceService {
         AnonymousGroupService.getRedisAGEventsChannel(anonymousGroupId),
         objectMapper.writeValueAsString(frame));
   }
+
+  /** How many members are online in every group */
+  public long onlineCount() {
+    return redisService.countKeys("ag-online:*");
+  }
 }

@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { BrowserRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import DarkModeIcon from '@mui/icons-material/DarkMode'
+import DashboardOutlinedIcon from '@mui/icons-material/DashboardOutlined'
 import GroupsIcon from '@mui/icons-material/Groups'
 import KeyIcon from '@mui/icons-material/Key'
 import LightModeIcon from '@mui/icons-material/LightMode'
@@ -30,12 +31,14 @@ import { ApiKeysPage } from './routes/ApiKeysPage'
 import { GroupDetailPage } from './routes/GroupDetailPage'
 import { GroupsPage } from './routes/GroupsPage'
 import { NotFoundPage } from './routes/NotFoundPage'
+import { OverviewPage } from './routes/OverviewPage'
 import { ColorModeProvider } from './theme/ColorModeProvider'
 import { useColorMode } from './theme/colorMode'
 
 const DRAWER_WIDTH = 220
 
 const NAV_ITEMS = [
+  { label: 'Overview', path: '/', icon: <DashboardOutlinedIcon /> },
   { label: 'Groups', path: '/groups', icon: <GroupsIcon /> },
   { label: 'API keys', path: '/api-keys', icon: <KeyIcon /> },
 ]
@@ -56,7 +59,11 @@ function NavDrawerContent({ onNavigate }: { onNavigate?: () => void }) {
         {NAV_ITEMS.map((item) => (
           <ListItemButton
             key={item.path}
-            selected={location.pathname.startsWith(item.path)}
+            selected={
+              item.path === '/'
+                ? location.pathname === '/'
+                : location.pathname.startsWith(item.path)
+            }
             onClick={() => {
               navigate(item.path)
               onNavigate?.()
@@ -131,7 +138,7 @@ function AdminLayout() {
         {!isDesktop && <Toolbar />}
         <Box sx={{ maxWidth: 1200, mx: 'auto' }}>
           <Routes>
-            <Route path="/" element={<Navigate to="/groups" replace />} />
+            <Route path="/" element={<OverviewPage />} />
             <Route path="/groups" element={<GroupsPage />} />
             <Route path="/groups/:groupId" element={<GroupDetailPage />} />
             <Route path="/api-keys" element={<ApiKeysPage />} />

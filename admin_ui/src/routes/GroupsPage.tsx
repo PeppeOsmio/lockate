@@ -35,6 +35,7 @@ export function GroupsPage() {
     q: filters.q || undefined,
     sort: filters.sort,
     inactiveDays: filters.inactiveDays,
+    noAdmin: filters.noAdmin || undefined,
   }
   const groups = useGroups(query)
   const deleteGroups = useDeleteGroups()
@@ -52,7 +53,7 @@ export function GroupsPage() {
     return <Navigate to={{ search: fallback }} replace />
   }
 
-  const filtered = !!filters.q || !!filters.inactiveDays
+  const filtered = !!filters.q || !!filters.inactiveDays || filters.noAdmin
 
   return (
     <>
@@ -60,7 +61,12 @@ export function GroupsPage() {
         title="Groups"
         description="Groups on this server. Names, members' names and positions are encrypted on the phones, so only ids, counts and times are shown."
       />
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mb: 2 }}>
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={1.5}
+        useFlexGap
+        sx={{ mb: 2, flexWrap: 'wrap' }}
+      >
         <SearchField value={filters.q} onSearch={filters.setQ} />
         <TextField
           select
@@ -90,6 +96,17 @@ export function GroupsPage() {
               No position for {days} days
             </MenuItem>
           ))}
+        </TextField>
+        <TextField
+          select
+          size="small"
+          label="Admins"
+          value={filters.noAdmin ? 'none' : 'any'}
+          onChange={(e) => filters.setNoAdmin(e.target.value === 'none')}
+          sx={{ minWidth: 130 }}
+        >
+          <MenuItem value="any">Any</MenuItem>
+          <MenuItem value="none">No admin</MenuItem>
         </TextField>
       </Stack>
       {selected.size > 0 && (
@@ -247,7 +264,7 @@ function SearchField({ value, onSearch }: { value: string; onSearch: (q: string)
       onChange={(e) => setText(e.target.value)}
       error={!valid}
       helperText={valid ? undefined : 'Ids have only 0-9, a-f and dashes'}
-      sx={{ flex: 1, maxWidth: { sm: 360 } }}
+      sx={{ flex: 1, minWidth: { sm: 220 }, maxWidth: { sm: 360 } }}
       slotProps={{
         input: {
           startAdornment: (

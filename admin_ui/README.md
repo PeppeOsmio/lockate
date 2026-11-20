@@ -1,8 +1,9 @@
 # Lockate admin UI
 
-The web console for the administrator of a Lockate server: it lists groups and their members,
-removes members, changes who is a group admin, deletes groups and manages the API keys apps need
-when the server runs with `REQUIRE_API_KEY=true`. It talks only to the backend's admin API
+The web console for the administrator of a Lockate server: it shows whether the server is healthy
+and how it is set up, lists groups and their members, removes members, changes who is a group
+admin, deletes groups and manages the API keys apps need when the server runs with
+`REQUIRE_API_KEY=true`. It talks only to the backend's admin API
 (`/api/v1/admin/**`, `X-API-KEY` = the backend's `ADMIN_API_KEY`), and since everything personal is
 encrypted on the phones it sees only ids, counts and times. See
 [the admin page of the architecture](../docs/architecture/admin.md).
