@@ -1,5 +1,6 @@
 package com.peppeosmio.lockate.anonymous_group.presence;
 
+import com.peppeosmio.lockate.anonymous_group.classes.AGMemberRef;
 import com.peppeosmio.lockate.anonymous_group.dto.AGFrameDto;
 import com.peppeosmio.lockate.anonymous_group.push.AGPushService;
 import com.peppeosmio.lockate.anonymous_group.service.AnonymousGroupService;
@@ -7,7 +8,9 @@ import com.peppeosmio.lockate.redis.RedisService;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.ObjectMapper;
@@ -66,6 +69,23 @@ public class AGPresenceService {
     if (previous.isEmpty()) {
       announce(anonymousGroupId, memberId, AGFrameDto.memberPresence(memberId, true, null));
     }
+  }
+
+  /** The members announced online, that is that sent a location in the last 30 minutes */
+  public Set<AGMemberRef> online(List<AGMemberRef> members) {
+    if (members.isEmpty()) {
+      return Set.of();
+    }
+    var values =
+        redisService.getValues(
+            members.stream().map(m -> onlineKey(m.groupId(), m.memberId())).toList());
+    var online = new HashSet<AGMemberRef>();
+    for (int i = 0; i < members.size(); i++) {
+      if (values.get(i) != null) {
+        online.add(members.get(i));
+      }
+    }
+    return online;
   }
 
   /** The member turned sharing off: the others learn it now rather than after the timeout. */

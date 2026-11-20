@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import Box from '@mui/material/Box'
+import Checkbox from '@mui/material/Checkbox'
 import LinearProgress from '@mui/material/LinearProgress'
 import MuiTable from '@mui/material/Table'
 import Paper from '@mui/material/Paper'
@@ -28,6 +29,11 @@ export interface Pagination {
   onSizeChange: (size: number) => void
 }
 
+export interface Selection {
+  selected: ReadonlySet<string>
+  onChange: (selected: Set<string>) => void
+}
+
 interface TableProps<T> {
   columns: Column<T>[]
   rows: T[]
@@ -36,6 +42,7 @@ interface TableProps<T> {
   emptyMessage: string
   loading?: boolean
   pagination?: Pagination
+  selection?: Selection
 }
 
 export function Table<T>({
@@ -46,9 +53,20 @@ export function Table<T>({
   emptyMessage,
   loading,
   pagination,
+  selection,
 }: TableProps<T>) {
   const theme = useTheme()
   const narrow = useMediaQuery(theme.breakpoints.down('sm'))
+  const keys = rows.map(keyFor)
+  const selectedHere = selection ? keys.filter((k) => selection.selected.has(k)).length : 0
+
+  function toggleAll() {
+    if (!selection) return
+    const next = new Set(selection.selected)
+    if (selectedHere === keys.length) keys.forEach((k) => next.delete(k))
+    else keys.forEach((k) => next.add(k))
+    selection.onChange(next)
+  }
 
   return (
     <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
@@ -58,12 +76,29 @@ export function Table<T>({
           {emptyMessage}
         </Typography>
       ) : narrow ? (
-        <CardList columns={columns} rows={rows} keyFor={keyFor} onRowClick={onRowClick} />
+        <CardList
+          columns={columns}
+          rows={rows}
+          keyFor={keyFor}
+          onRowClick={onRowClick}
+          selection={selection}
+        />
       ) : (
         <TableContainer>
           <MuiTable size="small">
             <TableHead>
               <TableRow>
+                {selection && (
+                  <TableCell padding="checkbox">
+                    <Checkbox
+                      size="small"
+                      checked={selectedHere > 0 && selectedHere === keys.length}
+                      indeterminate={selectedHere > 0 && selectedHere < keys.length}
+                      onChange={toggleAll}
+                      slotProps={{ input: { 'aria-label': 'Select all on this page' } }}
+                    />
+                  </TableCell>
+                )}
                 {columns.map((column, i) => (
                   <TableCell key={i}>{column.header}</TableCell>
                 ))}
@@ -75,8 +110,14 @@ export function Table<T>({
                   key={keyFor(row)}
                   hover={!!onRowClick}
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
+                  selected={selection?.selected.has(keyFor(row))}
                   sx={onRowClick ? { cursor: 'pointer' } : undefined}
                 >
+                  {selection && (
+                    <TableCell padding="checkbox">
+                      <RowCheckbox id={keyFor(row)} selection={selection} />
+                    </TableCell>
+                  )}
                   {columns.map((column, i) => (
                     <TableCell
                       key={i}
@@ -108,12 +149,30 @@ export function Table<T>({
   )
 }
 
+function RowCheckbox({ id, selection }: { id: string; selection: Selection }) {
+  return (
+    <Checkbox
+      size="small"
+      checked={selection.selected.has(id)}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => {
+        const next = new Set(selection.selected)
+        if (e.target.checked) next.add(id)
+        else next.delete(id)
+        selection.onChange(next)
+      }}
+      slotProps={{ input: { 'aria-label': `Select ${id}` } }}
+    />
+  )
+}
+
 function CardList<T>({
   columns,
   rows,
   keyFor,
   onRowClick,
-}: Pick<TableProps<T>, 'columns' | 'rows' | 'keyFor' | 'onRowClick'>) {
+  selection,
+}: Pick<TableProps<T>, 'columns' | 'rows' | 'keyFor' | 'onRowClick' | 'selection'>) {
   const fields = columns.filter((column) => column.header)
   const actions = columns.filter((column) => !column.header)
   return (
@@ -141,8 +200,10 @@ function CardList<T>({
               </Typography>
             </Box>
           ))}
-          {actions.length > 0 && (
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
+          {(actions.length > 0 || selection) && (
+            <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
+              {selection && <RowCheckbox id={keyFor(row)} selection={selection} />}
+              <Box sx={{ flex: 1 }} />
               {actions.map((column, i) => (
                 <Box key={i}>{column.render(row)}</Box>
               ))}

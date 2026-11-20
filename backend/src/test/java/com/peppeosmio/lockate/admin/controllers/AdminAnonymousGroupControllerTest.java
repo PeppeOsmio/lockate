@@ -6,13 +6,14 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.peppeosmio.lockate.anonymous_group.dto.AGAdminMemberDto;
+import com.peppeosmio.lockate.admin.dto.AdminGroupDto;
+import com.peppeosmio.lockate.admin.dto.AdminGroupQueryDto;
+import com.peppeosmio.lockate.admin.dto.AdminMemberDto;
+import com.peppeosmio.lockate.admin.service.AdminGroupService;
 import com.peppeosmio.lockate.anonymous_group.dto.AGAdminMemberUpdateDto;
-import com.peppeosmio.lockate.anonymous_group.dto.AGAdminSummaryDto;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.service.AnonymousGroupService;
-import com.peppeosmio.lockate.common.dto.PageQueryDto;
 import com.peppeosmio.lockate.common.dto.PageResponseDto;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -28,45 +29,61 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class AdminAnonymousGroupControllerTest {
 
   @Mock private AnonymousGroupService anonymousGroupService;
+  @Mock private AdminGroupService adminGroupService;
 
   private AdminAnonymousGroupController controller;
 
   @BeforeEach
   void setUp() {
-    controller = new AdminAnonymousGroupController(anonymousGroupService);
+    controller = new AdminAnonymousGroupController(anonymousGroupService, adminGroupService);
   }
 
   @Test
-  void listGroups_delegatesToServiceAndReturnsPage() {
-    var dto = new AGAdminSummaryDto(UUID.randomUUID(), LocalDateTime.now(ZoneOffset.UTC), 2L, null);
+  void listGroups_delegatesToAdminGroupService() {
+    var dto =
+        new AdminGroupDto(
+            UUID.randomUUID(), LocalDateTime.now(ZoneOffset.UTC), 2, 1, 0, 1, 0, null);
     var page = new PageResponseDto<>(List.of(dto), 0, 20, 1L, 1);
-    var query = new PageQueryDto(0, 20);
-    when(anonymousGroupService.listGroupsForAdmin(query)).thenReturn(page);
+    var query = new AdminGroupQueryDto(0, 20, "449b", "members", 7);
+    when(adminGroupService.list(query)).thenReturn(page);
 
     var result = controller.listGroups(query);
 
-    verify(anonymousGroupService).listGroupsForAdmin(query);
-    assertThat(result.items()).hasSize(1);
+    assertThat(result.items()).containsExactly(dto);
   }
 
   @Test
-  void listMembers_delegatesToServiceAndReturnsList() throws Exception {
+  void getGroup_delegatesToAdminGroupService() throws Exception {
+    var groupId = UUID.randomUUID();
+    var dto = new AdminGroupDto(groupId, LocalDateTime.now(ZoneOffset.UTC), 2, 1, 0, 1, 0, null);
+    when(adminGroupService.get(groupId)).thenReturn(dto);
+
+    assertThat(controller.getGroup(groupId)).isEqualTo(dto);
+  }
+
+  @Test
+  void getGroup_missingGroup_propagatesAGNotFoundException() throws Exception {
+    var groupId = UUID.randomUUID();
+    when(adminGroupService.get(groupId)).thenThrow(new AGNotFoundException(groupId));
+
+    assertThatThrownBy(() -> controller.getGroup(groupId)).isInstanceOf(AGNotFoundException.class);
+  }
+
+  @Test
+  void listMembers_delegatesToAdminGroupService() throws Exception {
     var groupId = UUID.randomUUID();
     var dto =
-        new AGAdminMemberDto(UUID.randomUUID(), LocalDateTime.now(ZoneOffset.UTC), false, null);
-    when(anonymousGroupService.listMembersForAdmin(groupId)).thenReturn(List.of(dto));
+        new AdminMemberDto(
+            UUID.randomUUID(), LocalDateTime.now(ZoneOffset.UTC), false, true, true, null);
+    when(adminGroupService.members(groupId)).thenReturn(List.of(dto));
 
-    var result = controller.listMembers(groupId);
-
-    verify(anonymousGroupService).listMembersForAdmin(groupId);
-    assertThat(result).hasSize(1);
+    assertThat(controller.listMembers(groupId)).containsExactly(dto);
   }
 
   @Test
   void listMembers_missingGroup_propagatesAGNotFoundException() throws Exception {
     var groupId = UUID.randomUUID();
-    when(anonymousGroupService.listMembersForAdmin(groupId))
-        .thenThrow(new AGNotFoundException(groupId));
+    when(adminGroupService.members(groupId)).thenThrow(new AGNotFoundException(groupId));
 
     assertThatThrownBy(() -> controller.listMembers(groupId))
         .isInstanceOf(AGNotFoundException.class);

@@ -15,8 +15,9 @@ constant time. The backend refuses to start without one. CORS allows only `ADMIN
 
 | Endpoint | What it does |
 |---|---|
-| `GET /anonymous-groups?page&size` | Groups, newest first, with member count and last saved position. |
-| `GET /anonymous-groups/{id}/members` | A group's members: joined, admin flag, last saved position. |
+| `GET /anonymous-groups?page&size&q&sort&inactiveDays` | Groups with their counts (members, admins, online, push registered, circles) and last position. `q` is the start of a group's or one of its members' id; `sort` is `created` (default, newest first), `members` or `activity`; `inactiveDays` keeps the groups older than that with no position saved since. |
+| `GET /anonymous-groups/{id}` | One group, with the same counts. |
+| `GET /anonymous-groups/{id}/members` | A group's members: joined, admin flag, online, push registered, last position. |
 | `DELETE /anonymous-groups/{id}` | Deletes the group; every member gets `group.deleted` by push. |
 | `DELETE /anonymous-groups/{id}/members/{memberId}` | Removes a member, who gets `member.left` by push. |
 | `PATCH /anonymous-groups/{id}/members/{memberId}` | Sets the admin flag (`{isAGAdmin}`). |
@@ -25,8 +26,15 @@ constant time. The backend refuses to start without one. CORS allows only `ADMIN
 | `DELETE /api-keys/{id}` | Revokes a key. |
 
 Pages are 0-based and hold at most 100 items. Times are UTC without an offset (Java
-`LocalDateTime`). "Last saved position" is the database's, which `LocationSaveJob` writes every 2
-minutes ([Retention](groups-and-auth.md#retention)).
+`LocalDateTime`).
+
+`AdminGroupService` reads the counts and saved times from the database in one query
+(`AdminGroupRepository`, plain SQL: grouping, sorting and filtering are done there) and adds what
+only Redis knows: who is online (`ag-online`, a position in the last 30 minutes, see
+[Presence](sharing.md)) and the positions `LocationSaveJob` hasn't saved yet (`ag-location`, at most
+2 minutes newer, see [Retention](groups-and-auth.md#retention)). The last position shown is the
+newer of the two; sorting by activity and the inactivity filter use the saved one. All of it is
+metadata the server already has, none of it new.
 
 The admin API is on the same port as the app's, so the proxy in front of the backend is where to
 limit who reaches `/api/v1/admin/**`.
@@ -38,8 +46,15 @@ the `lockate-admin-ui` image; `config.json`, filled at container start from `VIT
 tells it where the backend is. The admin signs in with `ADMIN_API_KEY`, kept in `sessionStorage`,
 so it is gone with the tab; a 401 signs out and drops everything loaded.
 
-- **Groups**: paged list (page and size in the URL), each group's members on its page, removing
-  members and switching the admin flag.
+- **Groups**: paged list with search by group or member id, sorting and a filter for groups with
+  no position for 7, 30 or 90 days, all in the URL. Each row shows members (and how many are
+  online), admins (a warning when there is none), circles, members registered for notifications
+  and the last position. Rows can be selected to delete several groups at once, one request each,
+  after typing how many.
+- **A group's page**: the same counts, then its members with online or offline, whether their app
+  registered for notifications, the admin switch and the last position. Taking the admin flag from
+  the last admin, or removing the last admin, asks first: nobody in the group could then delete it
+  or promote anyone.
 - **API keys**: creating, shown once in a dialog, and revoking.
 - Ids are shown by their first 8 characters, with the full id on hover and a copy button; times
   relative ("3 minutes ago") with the full local time on hover.

@@ -1,8 +1,10 @@
 package com.peppeosmio.lockate.anonymous_group.location;
 
+import com.peppeosmio.lockate.anonymous_group.classes.AGMemberRef;
 import com.peppeosmio.lockate.anonymous_group.configuration_properties.AGLocationConfigurationProperties;
 import com.peppeosmio.lockate.anonymous_group.dto.LocationRecordDto;
 import com.peppeosmio.lockate.redis.RedisService;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -59,6 +61,24 @@ public class AGLastLocationService {
       }
     }
     return records;
+  }
+
+  /** When each of the members that has a last position sent it, across groups */
+  public Map<AGMemberRef, LocalDateTime> lastTimes(List<AGMemberRef> members) {
+    if (members.isEmpty()) {
+      return Map.of();
+    }
+    var values =
+        redisService.getValues(members.stream().map(m -> key(m.groupId(), m.memberId())).toList());
+    var times = new HashMap<AGMemberRef, LocalDateTime>();
+    for (int i = 0; i < members.size(); i++) {
+      if (values.get(i) != null) {
+        times.put(
+            members.get(i),
+            objectMapper.readValue(values.get(i), LocationRecordDto.class).timestamp());
+      }
+    }
+    return times;
   }
 
   /** The members that sent since the last call, on any instance, with their last position */

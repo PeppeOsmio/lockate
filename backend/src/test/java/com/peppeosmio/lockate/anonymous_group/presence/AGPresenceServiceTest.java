@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.peppeosmio.lockate.anonymous_group.classes.AGMemberRef;
 import com.peppeosmio.lockate.anonymous_group.dto.AGFrameDto;
 import com.peppeosmio.lockate.anonymous_group.push.AGPushService;
 import com.peppeosmio.lockate.redis.RedisService;
@@ -162,5 +163,25 @@ class AGPresenceServiceTest {
     verify(redisService).deleteValue(presenceKey);
     verify(redisService).deleteValue(onlineKey);
     verify(redisService, never()).publish(anyString(), anyString());
+  }
+
+  @Test
+  void online_returnsTheMembersWithAnOnlineKey() {
+    var groupId = UUID.randomUUID();
+    var online = new AGMemberRef(groupId, UUID.randomUUID());
+    var offline = new AGMemberRef(groupId, UUID.randomUUID());
+    when(redisService.getValues(
+            List.of(
+                "ag-online:" + groupId + ":" + online.memberId(),
+                "ag-online:" + groupId + ":" + offline.memberId())))
+        .thenReturn(java.util.Arrays.asList("2026-11-20T22:00", null));
+
+    assertThat(service.online(List.of(online, offline))).containsExactly(online);
+  }
+
+  @Test
+  void online_noMembers_asksRedisNothing() {
+    assertThat(service.online(List.of())).isEmpty();
+    verify(redisService, never()).getValues(any());
   }
 }
