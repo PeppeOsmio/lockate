@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.peppeosmio.lockate.anonymous_group.classes.AGMemberRef;
 import com.peppeosmio.lockate.anonymous_group.configuration_properties.AGLocationConfigurationProperties;
 import com.peppeosmio.lockate.anonymous_group.dto.LocationRecordDto;
 import com.peppeosmio.lockate.common.dto.EncryptedDataDto;
@@ -90,5 +91,26 @@ class AGLastLocationServiceTest {
     service.forget(groupId, memberId);
 
     verify(redisService).deleteValue(key(memberId));
+  }
+
+  @Test
+  void lastTimes_givesTheTimeOfEachMemberWithARecord() {
+    var otherGroup = UUID.randomUUID();
+    var withRecord = new AGMemberRef(groupId, memberId);
+    var without = new AGMemberRef(otherGroup, UUID.randomUUID());
+    when(redisService.getValues(
+            List.of(key(memberId), "ag-location:" + otherGroup + ":" + without.memberId())))
+        .thenReturn(Arrays.asList("{record}", null));
+    when(objectMapper.readValue("{record}", LocationRecordDto.class)).thenReturn(record);
+
+    var result = service.lastTimes(List.of(withRecord, without));
+
+    assertThat(result).containsExactly(java.util.Map.entry(withRecord, record.timestamp()));
+  }
+
+  @Test
+  void lastTimes_noMembers_asksRedisNothing() {
+    assertThat(service.lastTimes(List.of())).isEmpty();
+    org.mockito.Mockito.verifyNoInteractions(redisService);
   }
 }

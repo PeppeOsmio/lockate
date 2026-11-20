@@ -1,5 +1,5 @@
 import { clearToken, getToken } from '../auth/tokenStorage'
-import type { AGMember, AnonymousGroupSummary, ApiKey, ApiKeyCreated, Page } from './types'
+import type { AdminGroup, AGMember, ApiKey, ApiKeyCreated, GroupQuery, Page } from './types'
 
 export class ApiError extends Error {
   status: number
@@ -72,8 +72,19 @@ export class AdminAPIClient {
     return response.ok
   }
 
-  listAnonymousGroups(page = 0, size = 20): Promise<Page<AnonymousGroupSummary>> {
-    return this.apiFetch(`/api/v1/admin/anonymous-groups?page=${page}&size=${size}`)
+  listAnonymousGroups(query: GroupQuery): Promise<Page<AdminGroup>> {
+    const params = new URLSearchParams({
+      page: String(query.page),
+      size: String(query.size),
+      sort: query.sort,
+    })
+    if (query.q) params.set('q', query.q)
+    if (query.inactiveDays) params.set('inactiveDays', String(query.inactiveDays))
+    return this.apiFetch(`/api/v1/admin/anonymous-groups?${params}`)
+  }
+
+  getAnonymousGroup(anonymousGroupId: string): Promise<AdminGroup> {
+    return this.apiFetch(`/api/v1/admin/anonymous-groups/${anonymousGroupId}`)
   }
 
   listGroupMembers(anonymousGroupId: string): Promise<AGMember[]> {

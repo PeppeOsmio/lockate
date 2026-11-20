@@ -36,7 +36,6 @@ import com.peppeosmio.lockate.anonymous_group.repository.AnonymousGroupRepositor
 import com.peppeosmio.lockate.anonymous_group.security.AGMemberAuthentication;
 import com.peppeosmio.lockate.common.classes.EncryptedString;
 import com.peppeosmio.lockate.common.dto.EncryptedDataDto;
-import com.peppeosmio.lockate.common.dto.PageQueryDto;
 import com.peppeosmio.lockate.common.exceptions.InvalidEncryptedDataException;
 import com.peppeosmio.lockate.common.exceptions.UnauthorizedException;
 import com.peppeosmio.lockate.invite.InviteService;
@@ -56,9 +55,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.LoggerFactory;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import tools.jackson.databind.ObjectMapper;
 
 @ExtendWith(MockitoExtension.class)
@@ -864,100 +860,6 @@ class AnonymousGroupServiceTest {
     order.verify(pushService).targets(groupId, null);
     order.verify(anonymousGroupRepository).deleteAnonymousGroup(groupId);
     order.verify(pushService).notifyTargets(targets, AGFrameDto.groupDeleted());
-  }
-
-  // ---------- listGroupsForAdmin ----------
-
-  @Test
-  void listGroupsForAdmin_groupWithMembers_returnsSummary() {
-    var otherGroupId = UUID.randomUUID();
-    var otherGroup =
-        new AnonymousGroupEntity(
-            otherGroupId, new EncryptedString("other".getBytes(), "other-iv".getBytes()));
-    var pageable = PageRequest.of(0, 20, Sort.by("createdAt").descending());
-    var pageResult = new PageImpl<>(List.of(groupEntity, otherGroup), pageable, 2);
-    when(anonymousGroupRepository.findAll(pageable)).thenReturn(pageResult);
-    var lastLocationAt = LocalDateTime.now(ZoneOffset.UTC);
-    var summary =
-        org.mockito.Mockito.mock(
-            com.peppeosmio.lockate.anonymous_group.repository.AGGroupSummaryProjection.class);
-    when(summary.getGroupId()).thenReturn(groupId);
-    when(summary.getMemberCount()).thenReturn(3L);
-    when(summary.getLastLocationAt()).thenReturn(lastLocationAt);
-    when(agMemberRepository.summarizeByGroupIds(List.of(groupId, otherGroupId)))
-        .thenReturn(List.of(summary));
-
-    var result = service.listGroupsForAdmin(new PageQueryDto(0, 20));
-
-    assertThat(result.items()).hasSize(2);
-    assertThat(result.totalElements()).isEqualTo(2);
-    assertThat(result.totalPages()).isEqualTo(1);
-    var groupSummary =
-        result.items().stream().filter(g -> g.id().equals(groupId)).findFirst().orElseThrow();
-    assertThat(groupSummary.memberCount()).isEqualTo(3L);
-    assertThat(groupSummary.lastLocationAt()).isEqualTo(lastLocationAt);
-    var emptyGroupSummary =
-        result.items().stream().filter(g -> g.id().equals(otherGroupId)).findFirst().orElseThrow();
-    assertThat(emptyGroupSummary.memberCount()).isEqualTo(0L);
-    assertThat(emptyGroupSummary.lastLocationAt()).isNull();
-  }
-
-  @Test
-  void listGroupsForAdmin_noGroups_returnsEmptyPageWithoutQueryingSummaries() {
-    var pageable = PageRequest.of(0, 20, Sort.by("createdAt").descending());
-    when(anonymousGroupRepository.findAll(pageable))
-        .thenReturn(new PageImpl<>(List.of(), pageable, 0));
-
-    var result = service.listGroupsForAdmin(new PageQueryDto(0, 20));
-
-    assertThat(result.items()).isEmpty();
-    assertThat(result.totalElements()).isZero();
-    verify(agMemberRepository, never()).summarizeByGroupIds(any());
-  }
-
-  // ---------- listMembersForAdmin ----------
-
-  @Test
-  void listMembersForAdmin_existingGroup_returnsMembersWithNullableLastLocation() throws Exception {
-    var memberWithLocation = newMember(UUID.randomUUID(), "token1".getBytes(), true, groupEntity);
-    var location =
-        new com.peppeosmio.lockate.anonymous_group.entity.AGMemberLocationEntity(
-            new EncryptedString("coord".getBytes(), "iv".getBytes()),
-            new EncryptedString("activity".getBytes(), "iv".getBytes()),
-            memberWithLocation,
-            LocalDateTime.now(ZoneOffset.UTC));
-    memberWithLocation.setLastLocation(location);
-    var memberWithoutLocation =
-        newMember(UUID.randomUUID(), "token2".getBytes(), false, groupEntity);
-    when(anonymousGroupRepository.existsById(groupId)).thenReturn(true);
-    when(agMemberRepository.findMembersWithLastLocation(groupId))
-        .thenReturn(List.of(memberWithLocation, memberWithoutLocation));
-
-    var result = service.listMembersForAdmin(groupId);
-
-    assertThat(result).hasSize(2);
-    var withLocation =
-        result.stream()
-            .filter(m -> m.id().equals(memberWithLocation.getId()))
-            .findFirst()
-            .orElseThrow();
-    assertThat(withLocation.lastLocationAt()).isEqualTo(location.getTimestamp());
-    assertThat(withLocation.isAGAdmin()).isTrue();
-    var withoutLocation =
-        result.stream()
-            .filter(m -> m.id().equals(memberWithoutLocation.getId()))
-            .findFirst()
-            .orElseThrow();
-    assertThat(withoutLocation.lastLocationAt()).isNull();
-  }
-
-  @Test
-  void listMembersForAdmin_missingGroup_throwsAGNotFoundException() {
-    when(anonymousGroupRepository.existsById(groupId)).thenReturn(false);
-
-    assertThatThrownBy(() -> service.listMembersForAdmin(groupId))
-        .isInstanceOf(AGNotFoundException.class);
-    verify(agMemberRepository, never()).findMembersWithLastLocation(any());
   }
 
   // ---------- deleteAnonymousGroup ----------
