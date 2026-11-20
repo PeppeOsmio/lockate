@@ -1,14 +1,13 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import DarkModeIcon from '@mui/icons-material/DarkMode'
+import GroupsIcon from '@mui/icons-material/Groups'
 import KeyIcon from '@mui/icons-material/Key'
 import LightModeIcon from '@mui/icons-material/LightMode'
 import LogoutIcon from '@mui/icons-material/Logout'
 import MenuIcon from '@mui/icons-material/Menu'
-import PeopleIcon from '@mui/icons-material/People'
 import AppBar from '@mui/material/AppBar'
 import Box from '@mui/material/Box'
-import CssBaseline from '@mui/material/CssBaseline'
 import Divider from '@mui/material/Divider'
 import Drawer from '@mui/material/Drawer'
 import IconButton from '@mui/material/IconButton'
@@ -18,73 +17,66 @@ import ListItemIcon from '@mui/material/ListItemIcon'
 import ListItemText from '@mui/material/ListItemText'
 import Toolbar from '@mui/material/Toolbar'
 import Tooltip from '@mui/material/Tooltip'
-import Typography from '@mui/material/Typography'
-import { ThemeProvider, useMediaQuery } from '@mui/material'
-import { AdminAPIClientProvider } from './api/AdminAPIClientContext'
+import { useMediaQuery, useTheme } from '@mui/material'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { AdminAPIClientProvider } from './api/AdminAPIClientProvider'
+import { ApiError } from './api/client'
 import { TokenGate } from './auth/TokenGate'
-import { TokenProvider, useToken } from './auth/TokenContext'
+import { useToken } from './auth/token'
+import { TokenProvider } from './auth/TokenProvider'
+import { Logo } from './components/Logo'
+import { NotifyProvider } from './feedback/NotifyProvider'
 import { ApiKeysPage } from './routes/ApiKeysPage'
-import { AnonymousGroupsPage } from './routes/AnonymousGroupsPage'
 import { GroupDetailPage } from './routes/GroupDetailPage'
-import { buildTheme } from './theme'
+import { GroupsPage } from './routes/GroupsPage'
+import { NotFoundPage } from './routes/NotFoundPage'
+import { ColorModeProvider } from './theme/ColorModeProvider'
+import { useColorMode } from './theme/colorMode'
 
-const STORAGE_KEY = 'lockate-color-mode'
 const DRAWER_WIDTH = 220
 
 const NAV_ITEMS = [
-  { label: 'API Keys', path: '/api-keys', icon: <KeyIcon /> },
-  { label: 'Anonymous Groups', path: '/anonymous-groups', icon: <PeopleIcon /> },
+  { label: 'Groups', path: '/groups', icon: <GroupsIcon /> },
+  { label: 'API keys', path: '/api-keys', icon: <KeyIcon /> },
 ]
 
-function NavDrawerContent({
-  mode,
-  onToggleMode,
-  onNavigate,
-}: {
-  mode: 'light' | 'dark'
-  onToggleMode: () => void
-  onNavigate?: () => void
-}) {
+function NavDrawerContent({ onNavigate }: { onNavigate?: () => void }) {
   const location = useLocation()
   const navigate = useNavigate()
   const { clearToken } = useToken()
+  const { mode, toggle } = useColorMode()
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <Toolbar>
-        <Typography variant="h6" sx={{ fontWeight: 700, fontSize: 16 }}>
-          Lockate Admin
-        </Typography>
+        <Logo />
       </Toolbar>
       <Divider />
       <List sx={{ flex: 1, pt: 1 }}>
-        {NAV_ITEMS.map((item) => {
-          const active = location.pathname.startsWith(item.path)
-          return (
-            <ListItemButton
-              key={item.path}
-              selected={active}
-              onClick={() => {
-                navigate(item.path)
-                onNavigate?.()
-              }}
-              sx={{ borderRadius: 2, mx: 1, mb: 0.5 }}
-            >
-              <ListItemIcon sx={{ minWidth: 36 }}>{item.icon}</ListItemIcon>
-              <ListItemText primary={item.label} />
-            </ListItemButton>
-          )
-        })}
+        {NAV_ITEMS.map((item) => (
+          <ListItemButton
+            key={item.path}
+            selected={location.pathname.startsWith(item.path)}
+            onClick={() => {
+              navigate(item.path)
+              onNavigate?.()
+            }}
+            sx={{ borderRadius: 2, mx: 1, mb: 0.5 }}
+          >
+            <ListItemIcon sx={{ minWidth: 36 }}>{item.icon}</ListItemIcon>
+            <ListItemText primary={item.label} />
+          </ListItemButton>
+        ))}
       </List>
       <Divider />
       <Box sx={{ display: 'flex', justifyContent: 'space-around', p: 1 }}>
-        <Tooltip title="Toggle theme">
-          <IconButton onClick={onToggleMode} size="small">
+        <Tooltip title={mode === 'dark' ? 'Light theme' : 'Dark theme'}>
+          <IconButton onClick={toggle} size="small" aria-label="Toggle theme">
             {mode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
           </IconButton>
         </Tooltip>
-        <Tooltip title="Logout">
-          <IconButton onClick={clearToken} size="small">
+        <Tooltip title="Sign out">
+          <IconButton onClick={clearToken} size="small" aria-label="Sign out">
             <LogoutIcon />
           </IconButton>
         </Tooltip>
@@ -94,99 +86,89 @@ function NavDrawerContent({
 }
 
 function AdminLayout() {
-  const prefersDark = useMediaQuery('(prefers-color-scheme: dark)')
-  const [mode, setMode] = useState<'light' | 'dark'>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY)
-    if (saved === 'light' || saved === 'dark') return saved
-    return prefersDark ? 'dark' : 'light'
-  })
-  const theme = useMemo(() => buildTheme(mode), [mode])
-
-  function toggleMode() {
-    setMode((prev) => {
-      const next = prev === 'light' ? 'dark' : 'light'
-      localStorage.setItem(STORAGE_KEY, next)
-      return next
-    })
-  }
+  const theme = useTheme()
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'))
   const [mobileOpen, setMobileOpen] = useState(false)
 
   return (
-    <ThemeProvider theme={theme}>
-      <Box sx={{ display: 'flex', minHeight: '100svh' }}>
-        <CssBaseline />
-
-        {/* Mobile top bar */}
-        {!isDesktop && (
-          <AppBar position="fixed" sx={{ zIndex: (t) => t.zIndex.drawer + 1 }}>
-            <Toolbar>
-              <IconButton
-                color="inherit"
-                edge="start"
-                sx={{ mr: 1 }}
-                onClick={() => setMobileOpen(true)}
-              >
-                <MenuIcon />
-              </IconButton>
-              <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                Lockate Admin
-              </Typography>
-            </Toolbar>
-          </AppBar>
-        )}
-
-        {/* Left Drawer — permanent on desktop, temporary on mobile */}
-        <Drawer
-          anchor="left"
-          variant={isDesktop ? 'permanent' : 'temporary'}
-          open={isDesktop || mobileOpen}
-          onClose={() => setMobileOpen(false)}
-          sx={{
-            width: DRAWER_WIDTH,
-            flexShrink: 0,
-            '& .MuiDrawer-paper': { width: DRAWER_WIDTH, boxSizing: 'border-box' },
-          }}
+    <Box sx={{ display: 'flex', minHeight: '100svh' }}>
+      {!isDesktop && (
+        <AppBar
+          position="fixed"
+          color="default"
+          elevation={0}
+          sx={{ borderBottom: 1, borderColor: 'divider' }}
         >
-          <NavDrawerContent
-            mode={mode}
-            onToggleMode={toggleMode}
-            onNavigate={isDesktop ? undefined : () => setMobileOpen(false)}
-          />
-        </Drawer>
+          <Toolbar>
+            <IconButton
+              edge="start"
+              sx={{ mr: 1 }}
+              aria-label="Open menu"
+              onClick={() => setMobileOpen(true)}
+            >
+              <MenuIcon />
+            </IconButton>
+            <Logo />
+          </Toolbar>
+        </AppBar>
+      )}
 
-        {/* Main content */}
-        <Box
-          component="main"
-          sx={{
-            flex: 1,
-            minWidth: 0,
-            p: 3,
-            mt: isDesktop ? 0 : '64px',
-          }}
-        >
+      <Drawer
+        anchor="left"
+        variant={isDesktop ? 'permanent' : 'temporary'}
+        open={isDesktop || mobileOpen}
+        onClose={() => setMobileOpen(false)}
+        sx={{
+          width: DRAWER_WIDTH,
+          flexShrink: 0,
+          '& .MuiDrawer-paper': { width: DRAWER_WIDTH, boxSizing: 'border-box' },
+        }}
+      >
+        <NavDrawerContent onNavigate={isDesktop ? undefined : () => setMobileOpen(false)} />
+      </Drawer>
+
+      <Box component="main" sx={{ flex: 1, minWidth: 0, p: { xs: 2, sm: 3 } }}>
+        {!isDesktop && <Toolbar />}
+        <Box sx={{ maxWidth: 1200, mx: 'auto' }}>
           <Routes>
-            <Route path="/" element={<Navigate to="/api-keys" replace />} />
+            <Route path="/" element={<Navigate to="/groups" replace />} />
+            <Route path="/groups" element={<GroupsPage />} />
+            <Route path="/groups/:groupId" element={<GroupDetailPage />} />
             <Route path="/api-keys" element={<ApiKeysPage />} />
-            <Route path="/anonymous-groups" element={<AnonymousGroupsPage />} />
-            <Route path="/anonymous-groups/:anonymousGroupId" element={<GroupDetailPage />} />
+            <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </Box>
       </Box>
-    </ThemeProvider>
+    </Box>
   )
 }
 
+// Client errors (a missing group, a refused key) won't change on a second try
+function shouldRetry(failureCount: number, error: Error): boolean {
+  const clientError = error instanceof ApiError && error.status >= 400 && error.status < 500
+  return !clientError && failureCount < 2
+}
+
 function App() {
+  const [queryClient] = useState(
+    () => new QueryClient({ defaultOptions: { queries: { retry: shouldRetry } } }),
+  )
+
   return (
     <AdminAPIClientProvider>
-      <TokenProvider>
-        <BrowserRouter>
-          <TokenGate>
-            <AdminLayout />
-          </TokenGate>
-        </BrowserRouter>
-      </TokenProvider>
+      <QueryClientProvider client={queryClient}>
+        <ColorModeProvider>
+          <NotifyProvider>
+            <TokenProvider>
+              <BrowserRouter>
+                <TokenGate>
+                  <AdminLayout />
+                </TokenGate>
+              </BrowserRouter>
+            </TokenProvider>
+          </NotifyProvider>
+        </ColorModeProvider>
+      </QueryClientProvider>
     </AdminAPIClientProvider>
   )
 }

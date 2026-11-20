@@ -1,14 +1,7 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
+import { TokenContext, type TokenContextValue } from './token'
 import * as tokenStorage from './tokenStorage'
-
-interface TokenContextValue {
-  token: string | null
-  setToken: (value: string) => void
-  clearToken: () => void
-}
-
-const TokenContext = createContext<TokenContextValue | null>(null)
 
 export function TokenProvider({ children }: { children: ReactNode }) {
   const [token, setTokenState] = useState<string | null>(() => tokenStorage.getToken())
@@ -22,12 +15,4 @@ export function TokenProvider({ children }: { children: ReactNode }) {
   }
 
   return <TokenContext.Provider value={value}>{children}</TokenContext.Provider>
-}
-
-export function useToken(): TokenContextValue {
-  const context = useContext(TokenContext)
-  if (!context) {
-    throw new Error('useToken must be used within a TokenProvider')
-  }
-  return context
 }

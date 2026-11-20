@@ -61,10 +61,8 @@ registration is keyed by the authenticated member.
 - **API keys** (`X-API-KEY`): with `REQUIRE_API_KEY=true` the server accepts only clients that
   present a key (`ApiKeyAuthFilter`), so a self-hoster can keep strangers off their server. The app
   asks for it with the server URL.
-- **Admin** (`X-API-KEY` = `ADMIN_API_KEY`, `@SecuredAdmin`): `/api/v1/admin/api-keys` creates and
-  revokes keys; `/api/v1/admin/anonymous-groups` lists groups and members, deletes them and sets the
-  admin flag. The key is compared in constant time. The admin UI (`admin_ui/`, Vite) is a front end
-  for these and sees only ciphertext.
+- **Admin** (`X-API-KEY` = `ADMIN_API_KEY`, `@SecuredAdmin`): the admin API and the admin UI on top
+  of it manage groups, members and API keys. → [Administration](admin.md)
 
 ## Retention
 

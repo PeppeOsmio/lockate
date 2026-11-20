@@ -32,25 +32,29 @@ export class AdminAPIClient {
   private async apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     const baseUrl = await this.getBaseUrl()
     const token = getToken()
-    const response = await fetch(`${baseUrl}${path}`, {
-      ...init,
-      headers: {
-        ...(token ? { 'X-API-KEY': token } : {}),
-        ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
-        ...init?.headers,
-      },
-    })
+    let response: Response
+    try {
+      response = await fetch(`${baseUrl}${path}`, {
+        ...init,
+        headers: {
+          ...(token ? { 'X-API-KEY': token } : {}),
+          ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+          ...init?.headers,
+        },
+      })
+    } catch {
+      throw new ApiError(0, 'Could not reach the server.')
+    }
 
     if (response.status === 401) {
       clearToken()
-      throw new ApiError(401, 'Unauthorized')
+      throw new ApiError(401, 'The admin key is no longer accepted.')
     }
 
     if (!response.ok) {
-      throw new ApiError(
-        response.status,
-        `Request to ${path} failed with status ${response.status}`,
-      )
+      const body = await response.json().catch(() => null)
+      const code = typeof body?.error === 'string' ? ` (${body.error})` : ''
+      throw new ApiError(response.status, `The server answered ${response.status}${code}.`)
     }
 
     if (response.status === 204) {
