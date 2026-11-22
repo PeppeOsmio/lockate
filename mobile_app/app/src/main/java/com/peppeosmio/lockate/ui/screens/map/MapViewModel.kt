@@ -13,6 +13,7 @@ import com.peppeosmio.lockate.service.PermissionsService
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupEvent
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
 import com.peppeosmio.lockate.ui.routes.ConnectionSettingsRoute
+import com.peppeosmio.lockate.ui.routes.ServerScreenMode
 import com.peppeosmio.lockate.utils.ErrorInfo
 import com.peppeosmio.lockate.utils.SnackbarErrorMessage
 import kotlinx.coroutines.CancellationException
@@ -41,8 +42,7 @@ class MapViewModel(
     val navigateToConnectionSettingsEvents = _navigateToConnectionSettingsEvents.receiveAsFlow()
     private var loadGroupsJob: Job? = null
     private var verifyJob: Job? = null
-    private val noConnectionsRoute =
-        ConnectionSettingsRoute(initialConnectionSettingsId = null, showBackButton = false)
+    private val noConnectionsRoute = ConnectionSettingsRoute(ServerScreenMode.FirstLaunch)
 
     init {
         viewModelScope.launch { loadConnections() }
@@ -90,11 +90,7 @@ class MapViewModel(
                     }
                     val newConnections = connections - event.connectionId
                     _state.update {
-                        it.copy(
-                            connections = newConnections,
-                            unreachableConnectionIds =
-                                it.unreachableConnectionIds - event.connectionId,
-                        )
+                        it.copy(connections = newConnections)
                     }
                     if (newConnections.isEmpty()) {
                         _navigateToConnectionSettingsEvents.send(noConnectionsRoute)
@@ -283,22 +279,16 @@ class MapViewModel(
         }
     }
 
-    fun refreshServersReachability() {
-        val connections = state.value.connections ?: return
-        _state.update { it.copy(unreachableConnectionIds = emptySet()) }
-        connections.values.forEach { connection ->
-            viewModelScope.launch {
-                try {
-                    connectionService.isApiAvailable(connection.url)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    _state.update {
-                        it.copy(
-                            unreachableConnectionIds = it.unreachableConnectionIds + connection.id!!
-                        )
-                    }
-                }
+    /** Reloads the servers, which may have been edited, and their group counts */
+    fun refreshServers() {
+        viewModelScope.launch {
+            val connections = connectionService.listConnectionSettings()
+            val groupCounts = connectionService.countGroupsByServer()
+            _state.update {
+                it.copy(
+                    connections = connections.associateBy { connection -> connection.id!! },
+                    groupCounts = groupCounts,
+                )
             }
         }
     }

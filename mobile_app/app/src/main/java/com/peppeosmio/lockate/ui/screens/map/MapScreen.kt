@@ -64,6 +64,7 @@ import com.peppeosmio.lockate.ui.composables.PeekHeaderBottomSheetScaffold
 import com.peppeosmio.lockate.ui.composables.PermissionsRequester
 import com.peppeosmio.lockate.ui.composables.ServerUnreachableBanner
 import com.peppeosmio.lockate.ui.routes.ConnectionSettingsRoute
+import com.peppeosmio.lockate.ui.routes.ServerScreenMode
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.AGDetailsViewModel
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.LastSeenFreshness
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.LocationStreamState
@@ -101,7 +102,6 @@ fun MapScreen(
     navigateToJoinAG: (connectionSettingsId: Long) -> Unit,
     navigateToInvite: (anonymousGroupInternalId: Long) -> Unit,
     navigateToCircles: (anonymousGroupInternalId: Long) -> Unit,
-    navigateToManageConnections: () -> Unit,
     navigateToSettings: () -> Unit,
     startLocationService: () -> Unit,
     viewModel: MapViewModel = koinViewModel(),
@@ -149,7 +149,7 @@ fun MapScreen(
 
     LaunchedEffect(drawerState.currentValue) {
         if (drawerState.currentValue == DrawerValue.Open) {
-            viewModel.refreshServersReachability()
+            viewModel.refreshServers()
         }
     }
 
@@ -418,25 +418,22 @@ fun MapScreen(
         gesturesEnabled = drawerState.isOpen,
         drawerContent = {
             ServerDrawer(
-                connections = state.connections?.values?.toList() ?: emptyList(),
+                connections = state.connections?.values?.sortedBy { it.name.lowercase() }.orEmpty(),
                 selectedConnectionId = connectionId,
-                unreachableConnectionIds = state.unreachableConnectionIds,
+                groupCounts = state.groupCounts,
                 onSelectConnection = {
                     viewModel.selectConnection(it)
                     coroutineScope.launch { drawerState.close() }
                 },
-                onAddServer = {
+                onEditServer = { id ->
                     coroutineScope.launch { drawerState.close() }
                     navigateToConnectionSettings(
-                        ConnectionSettingsRoute(
-                            initialConnectionSettingsId = null,
-                            showBackButton = true,
-                        )
+                        ConnectionSettingsRoute(ServerScreenMode.Edit, connectionId = id)
                     )
                 },
-                onManageServers = {
+                onAddServer = {
                     coroutineScope.launch { drawerState.close() }
-                    navigateToManageConnections()
+                    navigateToConnectionSettings(ConnectionSettingsRoute(ServerScreenMode.Add))
                 },
                 onSettings = {
                     coroutineScope.launch { drawerState.close() }

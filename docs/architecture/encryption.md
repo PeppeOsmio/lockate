@@ -54,5 +54,7 @@ size, or not stored.
 ## Local storage
 
 Room stores decrypted data (group name, member names, positions, circles) for the UI, never
-ciphertext or IVs. The group keys and the push keys are the only secrets in Room, and both are
-encrypted with the Keystore.
+ciphertext or IVs. The secrets in Room are the group keys, the push keys and the servers' API keys,
+all encrypted with the Keystore. The Keystore key never leaves the phone, so neither the database
+nor the preferences that point into it are backed up or moved to a new phone
+(`data_extraction_rules.xml`, `backup_rules.xml`): on another phone they couldn't be decrypted.

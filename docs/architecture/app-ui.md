@@ -99,3 +99,26 @@ ones, drawn areas would cover the map and the members, and a 30 m circle seen fr
 vanish. Only the circle tapped (on its pin or its row in the sheet) or being edited shows its
 edge. The pins are the scheme's `outline` and the circle picked is `tertiary`, so neither looks
 like this phone's position, which is the primary.
+
+## Servers
+
+A server is a context: the drawer lists the servers, each with its address and how many groups
+this phone has there, and switching shows only that server's groups. Nothing else in the app
+names the server. The pencil on a row opens the server screen, which has three modes
+(`ConnectionSettingsRoute.mode`):
+
+| Mode | When | What |
+|---|---|---|
+| `FirstLaunch` | No server yet | Address and API key; the name is the host |
+| `Add` | Add server, from the drawer | Address, a name that follows the host until edited, API key |
+| `Edit` | The pencil | Name, address, API key, the groups on it, its version, and Remove from this phone |
+
+- **One server per address.** `ServerUrl.normalize` is the one form an address is saved in
+  (scheme and host in lower case, no default port, no trailing slash), and Room keeps it unique.
+  Adding an address already saved opens that server with "Already added". The database
+  migration to version 8 merged the servers saved twice into the oldest, with their groups and
+  the newest API key.
+- **Removing a server** leaves its groups (or drops them, if the server can't be reached) after
+  a dialog that names them.
+- There is no "unreachable" mark in the drawer: the "Can't connect" pill on the map says it for
+  the server in use.

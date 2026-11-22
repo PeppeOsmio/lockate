@@ -6,6 +6,8 @@ import androidx.room.Query
 import androidx.room.Update
 import com.peppeosmio.lockate.data.anonymous_group.database.ConnectionEntity
 
+data class ServerGroupCount(val connectionId: Long, val groupCount: Int)
+
 @Dao
 interface ConnectionDao {
     @Query("SELECT * FROM connection WHERE id = :connectionId")
@@ -16,6 +18,12 @@ interface ConnectionDao {
 
     @Query("SELECT * FROM connection ORDER BY name COLLATE NOCASE")
     suspend fun listConnections(): List<ConnectionEntity>
+
+    @Query("SELECT * FROM connection WHERE url = :url")
+    suspend fun getConnectionByUrl(url: String): ConnectionEntity?
+
+    @Query("SELECT connectionId, COUNT(*) AS groupCount FROM anonymous_group GROUP BY connectionId")
+    suspend fun countGroups(): List<ServerGroupCount>
 
     @Insert suspend fun insertConnection(connectionEntity: ConnectionEntity): Long
 

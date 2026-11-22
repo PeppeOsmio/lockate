@@ -6,15 +6,19 @@ import kotlinx.serialization.Serializable
 
 @Serializable data object LoadingRoute : Route
 
+/** The server screen: connecting the first one, adding one, or editing [connectionId] */
 @Serializable
-data class ConnectionSettingsRoute(
-    val initialConnectionSettingsId: Long?,
-    val showBackButton: Boolean,
-) : Route
+enum class ServerScreenMode {
+    FirstLaunch,
+    Add,
+    Edit,
+}
+
+@Serializable
+data class ConnectionSettingsRoute(val mode: ServerScreenMode, val connectionId: Long? = null) :
+    Route
 
 @Serializable data object HomeRoute : Route
-
-@Serializable data object ManageConnectionsRoute : Route
 
 @Serializable data object SettingsRoute : Route
 

@@ -16,9 +16,12 @@ import com.peppeosmio.lockate.data.anonymous_group.database.AnonymousGroupEntity
 import com.peppeosmio.lockate.data.anonymous_group.database.ConnectionEntity
 import com.peppeosmio.lockate.data.anonymous_group.database.MutedTargetEntity
 import com.peppeosmio.lockate.data.anonymous_group.database.PushRegistrationEntity
+import com.peppeosmio.lockate.data.anonymous_group.database.StoredServer
+import com.peppeosmio.lockate.data.anonymous_group.database.mergeServers
+import com.peppeosmio.lockate.platform_service.KeyStoreService
 
 @Database(
-    version = 7,
+    version = 8,
     entities =
         [
             ConnectionEntity::class,
@@ -57,5 +60,72 @@ abstract class AppDatabase : RoomDatabase() {
                     connection.execSQL("DELETE FROM anonymous_group")
                 }
             }
+    }
+
+    /**
+     * One server per address, with its API key encrypted: servers saved twice with the same address
+     * are merged into the oldest, which takes their groups. The table is rebuilt, which is safe
+     * because Room never turns foreign keys on, so dropping it cascades to nothing.
+     */
+    class Migration7To8(private val keyStoreService: KeyStoreService) : Migration(7, 8) {
+        override fun migrate(connection: SQLiteConnection) {
+            val stored =
+                connection.prepare("SELECT id, name, url, apiKey FROM connection").use { stmt ->
+                    buildList {
+                        while (stmt.step()) {
+                            add(
+                                StoredServer(
+                                    id = stmt.getLong(0),
+                                    name = stmt.getText(1),
+                                    url = stmt.getText(2),
+                                    apiKey = if (stmt.isNull(3)) null else stmt.getText(3),
+                                )
+                            )
+                        }
+                    }
+                }
+            val merge = mergeServers(stored)
+            merge.movedTo.forEach { (from, to) ->
+                connection
+                    .prepare("UPDATE anonymous_group SET connectionId = ? WHERE connectionId = ?")
+                    .use {
+                        it.bindLong(1, to)
+                        it.bindLong(2, from)
+                        it.step()
+                    }
+            }
+            connection.execSQL(
+                "CREATE TABLE IF NOT EXISTS `_new_connection` (`id` INTEGER PRIMARY KEY " +
+                    "AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL DEFAULT '', `url` TEXT NOT " +
+                    "NULL, `apiKeyCipher` BLOB, `apiKeyIv` BLOB)"
+            )
+            merge.kept.forEach { server ->
+                val apiKey =
+                    server.apiKey?.let { keyStoreService.encryptBlocking(it.toByteArray()) }
+                connection
+                    .prepare(
+                        "INSERT INTO `_new_connection` (id, name, url, apiKeyCipher, apiKeyIv) " +
+                            "VALUES (?, ?, ?, ?, ?)"
+                    )
+                    .use {
+                        it.bindLong(1, server.id)
+                        it.bindText(2, server.name)
+                        it.bindText(3, server.url)
+                        if (apiKey == null) {
+                            it.bindNull(4)
+                            it.bindNull(5)
+                        } else {
+                            it.bindBlob(4, apiKey.cipherText)
+                            it.bindBlob(5, apiKey.iv)
+                        }
+                        it.step()
+                    }
+            }
+            connection.execSQL("DROP TABLE `connection`")
+            connection.execSQL("ALTER TABLE `_new_connection` RENAME TO `connection`")
+            connection.execSQL(
+                "CREATE UNIQUE INDEX IF NOT EXISTS `idx_connection_url` ON `connection` (`url`)"
+            )
+        }
     }
 }

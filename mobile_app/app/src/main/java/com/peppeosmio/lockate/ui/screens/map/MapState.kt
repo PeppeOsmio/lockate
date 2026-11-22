@@ -8,7 +8,8 @@ import com.peppeosmio.lockate.utils.SnackbarErrorMessage
 data class MapState(
     val connections: Map<Long, Connection>? = null,
     val selectedConnectionId: Long? = null,
-    val unreachableConnectionIds: Set<Long> = emptySet(),
+    // how many groups this phone has on each server, for the drawer
+    val groupCounts: Map<Long, Int> = emptyMap(),
     val groups: List<AnonymousGroup>? = null,
     val selectedGroupInternalId: Long? = null,
     val isServerUnreachable: Boolean = false,

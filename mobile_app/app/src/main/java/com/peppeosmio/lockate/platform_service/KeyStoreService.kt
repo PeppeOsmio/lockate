@@ -42,16 +42,15 @@ class KeyStoreService() {
     }
 
     suspend fun encrypt(data: ByteArray): EncryptedData =
-        withContext(Dispatchers.Default) {
-            val secretKey = getOrCreateKey()
-            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-            cipher.init(Cipher.ENCRYPT_MODE, secretKey)
+        withContext(Dispatchers.Default) { encryptBlocking(data) }
 
-            val iv = cipher.iv
-            val cipherText = cipher.doFinal(data)
-
-            EncryptedData(cipherText = cipherText, iv = iv)
-        }
+    /** For the database migrations, which run outside coroutines */
+    fun encryptBlocking(data: ByteArray): EncryptedData {
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
+        val iv = cipher.iv
+        return EncryptedData(cipherText = cipher.doFinal(data), iv = iv)
+    }
 
     suspend fun decrypt(encryptedData: EncryptedData): ByteArray =
         withContext(Dispatchers.Default) {
