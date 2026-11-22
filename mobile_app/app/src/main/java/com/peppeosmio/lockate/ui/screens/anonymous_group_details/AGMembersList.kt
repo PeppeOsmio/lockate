@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.domain.anonymous_group.Circle
 import com.peppeosmio.lockate.domain.anonymous_group.nearestContaining
+import com.peppeosmio.lockate.ui.composables.memberInitials
 
 @Composable
 fun AGMembersList(
@@ -152,12 +153,3 @@ private fun MemberAvatar(member: AGMember, isMe: Boolean) {
         )
     }
 }
-
-internal fun memberInitials(name: String): String =
-    name
-        .trim()
-        .split(Regex("\\s+"))
-        .filter { it.isNotEmpty() }
-        .take(2)
-        .joinToString("") { it.first().uppercase() }
-        .ifEmpty { "?" }

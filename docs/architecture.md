@@ -129,3 +129,4 @@ sequenceDiagram
 | [Push relay](architecture/push-relay.md) | Why it exists, what it sees, how it runs and is deployed |
 | [Health check](architecture/health-check.md) | The hourly check of servers, membership and push registrations |
 | [Environments](architecture/environments.md) | Prod and staging app flavors, Firebase and relay per environment |
+| [App UI](architecture/app-ui.md) | The Material 3 theme, colours with a meaning, shared components |

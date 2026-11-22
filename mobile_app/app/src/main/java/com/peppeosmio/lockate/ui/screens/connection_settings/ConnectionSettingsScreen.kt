@@ -35,7 +35,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.peppeosmio.lockate.ui.composables.ErrorDialog
-import com.peppeosmio.lockate.ui.composables.PasswordTextField
+import com.peppeosmio.lockate.ui.composables.FormField
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -144,11 +144,11 @@ fun ConnectionSettingsScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
             if (state.requireApiKey) {
-                PasswordTextField(
+                FormField(
                     value = state.apiKey,
                     onValueChange = { text -> viewModel.onApiKeyChanged(text) },
                     label = "API Key",
-                    modifier = Modifier.fillMaxWidth(),
+                    password = true,
                 )
             }
             FilledTonalButton(
