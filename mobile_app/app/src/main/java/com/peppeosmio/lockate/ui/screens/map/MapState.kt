@@ -20,6 +20,8 @@ data class MapState(
     val showLoadingOverlay: Boolean = false,
     val dialogError: SnackbarErrorMessage? = null,
     val mapStyleUrls: MapStyleUrls = MapStyleUrls(),
+    // both location permissions are on, so sharing can send and the map can show this phone
+    val canShare: Boolean = true,
 ) {
     val selectedGroup: AnonymousGroup?
         get() = groups?.firstOrNull { it.internalId == selectedGroupInternalId }

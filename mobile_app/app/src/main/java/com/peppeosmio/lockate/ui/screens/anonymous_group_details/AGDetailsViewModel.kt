@@ -76,8 +76,10 @@ class AGDetailsViewModel(
         startMyLocation()
     }
 
+    private var startMyLocationJob: Job? = null
+
     fun startMyLocation() {
-        viewModelScope.launch {
+        startMyLocationJob = viewModelScope.launch {
             runCatching { getAndMoveToMyLocation(moveCamera = true) }
         }
     }
@@ -93,7 +95,15 @@ class AGDetailsViewModel(
     }
 
     fun resumeMyLocation() {
-        if (!isMyLocationPaused) return
+        // never started, e.g. the location permission came on in the Permissions screen
+        if (!isMyLocationPaused) {
+            if (
+                startMyLocationJob?.isActive != true && listenForUserLocationJob?.isActive != true
+            ) {
+                startMyLocation()
+            }
+            return
+        }
         isMyLocationPaused = false
         listenForUserLocation()
     }
@@ -171,6 +181,15 @@ class AGDetailsViewModel(
                                 it.members!! +
                                     (myId to me.copy(lastLocationRecord = event.locationRecord))
                         )
+                    }
+                }
+
+                // sharing can be turned on elsewhere, e.g. by the Permissions screen
+                is AnonymousGroupEvent.SendEnabledEvent -> {
+                    _state.update {
+                        val group = it.anonymousGroup
+                        if (group?.internalId != event.anonymousGroupInternalId) it
+                        else it.copy(anonymousGroup = group.copy(sendLocation = true))
                     }
                 }
 

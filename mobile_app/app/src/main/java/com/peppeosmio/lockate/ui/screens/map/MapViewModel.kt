@@ -309,8 +309,24 @@ class MapViewModel(
         _state.update { it.copy(groupQuery = query) }
     }
 
-    fun checkPermissionGranted(permission: String): Boolean =
-        permissionsService.isPermissionGranted(permission)
+    private var hasPromptedPermissions = false
+
+    fun refreshPermissions() {
+        _state.update { it.copy(canShare = permissionsService.canShare()) }
+    }
+
+    /**
+     * Whether to open the Permissions screen by itself: once per launch, when the group shares but
+     * the location permissions are missing (e.g. a group just created on a new phone)
+     */
+    fun shouldPromptPermissions(): Boolean {
+        val group = state.value.selectedGroup ?: return false
+        if (hasPromptedPermissions || !group.sendLocation || permissionsService.canShare()) {
+            return false
+        }
+        hasPromptedPermissions = true
+        return true
+    }
 
     fun showSnackbar(message: SnackbarErrorMessage) {
         _snackbarEvents.trySend(message)

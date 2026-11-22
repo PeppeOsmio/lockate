@@ -3,80 +3,78 @@ package com.peppeosmio.lockate.ui.screens.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.peppeosmio.lockate.service.MapStyleService
+import com.peppeosmio.lockate.service.PermissionsService
 import com.peppeosmio.lockate.service.PlaceSearchService
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class SettingsViewModel(
     private val mapStyleService: MapStyleService,
     private val placeSearchService: PlaceSearchService,
+    private val permissionsService: PermissionsService,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsState())
     val state: StateFlow<SettingsState> = _state.asStateFlow()
-    private val _navigateBackEvents = Channel<Unit>(Channel.BUFFERED)
-    val navigateBackEvents = _navigateBackEvents.receiveAsFlow()
 
     init {
         viewModelScope.launch {
-            val urls = mapStyleService.mapStyleUrls.first()
-            val geocoderUrl = placeSearchService.geocoderUrl.first()
-            _state.update {
-                it.copy(
-                    lightStyleUrl = urls.light ?: "",
-                    darkStyleUrl = urls.dark ?: "",
-                    geocoderUrl = geocoderUrl ?: "",
-                )
-            }
+            combine(mapStyleService.mapStyleUrls, placeSearchService.geocoderUrl) { styles, geocoder
+                    ->
+                    mapOf(
+                        SettingsUrl.LightStyle to styles.light,
+                        SettingsUrl.DarkStyle to styles.dark,
+                        SettingsUrl.PlaceSearch to geocoder,
+                    )
+                }
+                .collect { urls -> _state.update { it.copy(urls = urls) } }
         }
     }
 
-    fun onLightStyleUrlChanged(url: String) {
-        _state.update { it.copy(lightStyleUrl = url, lightStyleError = false) }
+    /** The permissions can change in the system settings while the screen is in the background */
+    fun refreshPermissions() {
+        _state.update { it.copy(permissions = permissionsService.granted()) }
     }
 
-    fun onDarkStyleUrlChanged(url: String) {
-        _state.update { it.copy(darkStyleUrl = url, darkStyleError = false) }
+    fun onEdit(url: SettingsUrl) {
+        _state.update { it.copy(draft = UrlDraft(url, it.urls[url] ?: "")) }
     }
 
-    fun onGeocoderUrlChanged(url: String) {
-        _state.update { it.copy(geocoderUrl = url, geocoderError = false) }
+    fun onDraftChanged(text: String) {
+        _state.update { it.copy(draft = it.draft?.copy(text = text, isError = false)) }
     }
 
-    fun onSaveClicked() {
-        val current = state.value
+    fun onDismissDraft() {
+        _state.update { it.copy(draft = null) }
+    }
+
+    /** Checks the URL answers like the service it replaces before saving it; empty means default */
+    fun onSaveDraft() {
+        val draft = state.value.draft ?: return
         viewModelScope.launch {
-            _state.update { it.copy(isSaving = true) }
-            val lightValid =
-                current.lightStyleUrl.isBlank() ||
-                    mapStyleService.isValidStyleUrl(current.lightStyleUrl)
-            val darkValid =
-                current.darkStyleUrl.isBlank() ||
-                    mapStyleService.isValidStyleUrl(current.darkStyleUrl)
-            val geocoderValid =
-                current.geocoderUrl.isBlank() ||
-                    placeSearchService.isValidGeocoderUrl(current.geocoderUrl)
-            if (lightValid && darkValid && geocoderValid) {
-                mapStyleService.save(current.lightStyleUrl, current.darkStyleUrl)
-                placeSearchService.save(current.geocoderUrl)
-                _state.update { it.copy(isSaving = false) }
-                _navigateBackEvents.send(Unit)
-            } else {
-                _state.update {
-                    it.copy(
-                        isSaving = false,
-                        lightStyleError = !lightValid,
-                        darkStyleError = !darkValid,
-                        geocoderError = !geocoderValid,
-                    )
-                }
+            _state.update { it.copy(draft = draft.copy(isChecking = true)) }
+            val text = draft.text.trim()
+            val valid =
+                text.isEmpty() ||
+                    when (draft.url) {
+                        SettingsUrl.PlaceSearch -> placeSearchService.isValidGeocoderUrl(text)
+                        else -> mapStyleService.isValidStyleUrl(text)
+                    }
+            if (!valid) {
+                _state.update { it.copy(draft = draft.copy(isChecking = false, isError = true)) }
+                return@launch
             }
+            val urls = state.value.urls
+            when (draft.url) {
+                SettingsUrl.LightStyle -> mapStyleService.save(text, urls[SettingsUrl.DarkStyle])
+                SettingsUrl.DarkStyle -> mapStyleService.save(urls[SettingsUrl.LightStyle], text)
+                SettingsUrl.PlaceSearch -> placeSearchService.save(text)
+            }
+            _state.update { it.copy(draft = null) }
         }
     }
 
@@ -84,7 +82,6 @@ class SettingsViewModel(
         viewModelScope.launch {
             mapStyleService.save(null, null)
             placeSearchService.save(null)
-            _navigateBackEvents.send(Unit)
         }
     }
 }

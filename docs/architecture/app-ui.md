@@ -136,3 +136,40 @@ names the server. The pencil on a row opens the server screen, which has three m
 - **Invite**: the code in two lines (the number large, the words under it), Copy and Share, the
   QR code (`QrCode`, always black on white, which scanners read best), a bar running down the
   10 minutes, and the reminder that the first one who enters it gets in.
+
+## Permissions
+
+- **One screen, not a queue of dialogs**: a card for each permission Lockate asks for, in order
+  (`LockatePermission`): precise location, location all the time, notifications (only from
+  Android 13, which is when it needs asking) and physical activity. Each says what it is used
+  for; the next one still off is outlined and has the filled button.
+- **Sharing needs the two location permissions**; notifications and physical activity are up to
+  the user. Without physical activity the GPS stays on while still and members show no activity
+  ([Sending](sending.md)).
+- **Location all the time can't be asked with a dialog** since Android 11: its button opens the
+  system page where the user picks "Allow all the time". It appears only once precise location
+  is on, because Android grants it only after that. Android also stops showing a permission's
+  dialog after two refusals, so a second tap on a refused permission opens the app's page in
+  the system settings.
+- **When it opens**: turning sharing on while a location permission is missing, and once per
+  launch when the group on the map shares but the permissions are missing (a group just created
+  or joined on a new phone), and from "Center on me" while they are missing (the map's own
+  position uses the same check as sending, so it needs both too). It reads the permissions again every time it comes back to the
+  front; as soon as both location permissions are on it turns sharing on for that group and goes
+  back to the map. "Not now" goes back without changing anything. From Settings → Permissions it
+  only shows and asks.
+- While the group shares and a location permission is missing, the sharing row on the map says
+  "Waiting for location permission".
+- **The sending service starts only with the location permission**: Android kills an app whose
+  foreground service doesn't go to the foreground in time, and a location service can't without
+  it. The map starts it again when the permissions come on.
+
+## Settings
+
+- **Map**: light style, dark style and place search, one row each with the service in use
+  ("OpenFreeMap Liberty · default", or the address without `https://`). A row opens a dialog
+  with the URL; Save first checks it answers like the service it replaces ("Checking…"), and an
+  empty field goes back to the default. A card reminds that tiles and searches go straight from
+  the phone to these services, which can tell which area the user looks at.
+- **This phone**: Permissions, with a summary ("Location all the time · notifications on").
+- **Reset map and search to defaults** at the bottom forgets the three URLs.

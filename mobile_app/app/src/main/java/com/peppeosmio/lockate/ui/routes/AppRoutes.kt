@@ -31,6 +31,9 @@ data class ConnectionSettingsRoute(
 
 @Serializable data object SettingsRoute : Route
 
+/** [groupInternalId]: the group to share with once both location permissions are on */
+@Serializable data class PermissionsRoute(val groupInternalId: Long? = null) : Route
+
 @Serializable data class CreateAnonymousGroupRoute(val connectionSettingsId: Long) : Route
 
 /** [code] is filled in when the join comes from an invite's QR code */
