@@ -8,8 +8,10 @@ import com.peppeosmio.lockate.data.anonymous_group.mappers.ConnectionMapper
 import com.peppeosmio.lockate.data.anonymous_group.remote.ApiKeyRequiredResDto
 import com.peppeosmio.lockate.data.version.ServerVersionDto
 import com.peppeosmio.lockate.domain.Connection
+import com.peppeosmio.lockate.domain.ServerUrl
 import com.peppeosmio.lockate.exceptions.ConnectionSettingsNotFoundException
 import com.peppeosmio.lockate.exceptions.InvalidApiKeyException
+import com.peppeosmio.lockate.exceptions.ServerAlreadyAddedException
 import com.peppeosmio.lockate.exceptions.UnauthorizedException
 import com.peppeosmio.lockate.platform_service.KeyStoreService
 import com.peppeosmio.lockate.utils.ErrorHandler
@@ -40,11 +42,6 @@ class ConnectionService(
     private val _events =
         MutableSharedFlow<ConnectionEvent>(extraBufferCapacity = Channel.UNLIMITED)
     val events = _events.asSharedFlow()
-
-    @Throws
-    suspend fun isApiAvailable(url: String) {
-        checkRequireApiKey(url)
-    }
 
     @Throws
     suspend fun checkRequireApiKey(url: String): Boolean =
@@ -120,14 +117,14 @@ class ConnectionService(
             if (connectionEntity == null) {
                 throw ConnectionSettingsNotFoundException()
             }
-            ConnectionMapper.toDomain(connectionEntity)
+            ConnectionMapper.toDomain(connectionEntity, keyStoreService)
         }
 
     @Throws(ConnectionSettingsNotFoundException::class)
     suspend fun getConnectionSettingsById(connectionSettingsId: Long): Connection =
         withContext(Dispatchers.IO) {
             connectionDao.getConnectionSettingsById(connectionSettingsId)?.let {
-                ConnectionMapper.toDomain(it)
+                ConnectionMapper.toDomain(it, keyStoreService)
             } ?: throw ConnectionSettingsNotFoundException()
         }
 
@@ -150,28 +147,47 @@ class ConnectionService(
             }
         }
 
+    /**
+     * Saves a new server under its normalized address.
+     *
+     * @throws ServerAlreadyAddedException when that address is already saved
+     */
     suspend fun saveConnectionSettings(connection: Connection): Connection =
         withContext(Dispatchers.IO) {
-            if (connection.id != null) {
-                throw IllegalArgumentException("id must be null")
+            require(connection.id == null) { "id must be null" }
+            val url = ServerUrl.normalize(connection.url)
+            connectionDao.getConnectionByUrl(url)?.let {
+                throw ServerAlreadyAddedException(it.id)
             }
-            val id = connectionDao.insertConnection(ConnectionMapper.toEntity(connection))
-            val connectionSettingsEntity =
-                connectionDao.getConnectionSettingsById(id)
-                    ?: throw ConnectionSettingsNotFoundException()
-            ConnectionMapper.toDomain(connectionSettingsEntity)
+            val id =
+                connectionDao.insertConnection(
+                    ConnectionMapper.toEntity(connection.copy(url = url), keyStoreService)
+                )
+            getConnectionSettingsById(id)
         }
 
+    /** @throws ServerAlreadyAddedException when the new address is another saved server's */
     suspend fun updateConnection(connection: Connection): Connection =
         withContext(Dispatchers.IO) {
-            connectionDao.updateConnection(ConnectionMapper.toEntity(connection))
-            connection
+            val url = ServerUrl.normalize(connection.url)
+            connectionDao.getConnectionByUrl(url)?.let {
+                if (it.id != connection.id) throw ServerAlreadyAddedException(it.id)
+            }
+            val normalized = connection.copy(url = url)
+            connectionDao.updateConnection(ConnectionMapper.toEntity(normalized, keyStoreService))
+            normalized
+        }
+
+    /** How many groups this phone has on each server, by server id */
+    suspend fun countGroupsByServer(): Map<Long, Int> =
+        withContext(Dispatchers.IO) {
+            connectionDao.countGroups().associate { it.connectionId to it.groupCount }
         }
 
     suspend fun listConnectionSettings(): List<Connection> =
         withContext(Dispatchers.IO) {
             connectionDao.listConnections().map {
-                ConnectionMapper.toDomain(it)
+                ConnectionMapper.toDomain(it, keyStoreService)
             }
         }
 

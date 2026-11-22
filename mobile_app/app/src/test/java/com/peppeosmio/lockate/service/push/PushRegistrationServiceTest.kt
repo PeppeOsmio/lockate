@@ -87,7 +87,7 @@ class PushRegistrationServiceTest {
 
     init {
         coEvery { connectionService.getConnectionSettingsById(1) } returns
-            Connection(1, "c", "https://server", null, null, null)
+            Connection(1, "c", "https://server", null)
         coEvery { keyStore.decrypt(any()) } answers { firstArg<EncryptedData>().cipherText }
         coEvery { keyStore.encrypt(any()) } answers { EncryptedData(firstArg(), byteArrayOf(9)) }
         coEvery { dao.getPushRegistration(any()) } returns null
@@ -169,7 +169,7 @@ class PushRegistrationServiceTest {
         coEvery { dao.listMemberAGs() } returns listOf(group(1, "g1"), group(2, "g2"))
         coEvery { connectionService.getConnectionSettingsById(1) } throws
             IllegalStateException("gone") andThen
-            Connection(1, "c", "https://server", null, null, null)
+            Connection(1, "c", "https://server", null)
 
         service().registerAll()
 

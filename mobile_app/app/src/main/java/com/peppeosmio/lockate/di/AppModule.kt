@@ -64,7 +64,7 @@ val appModule = module {
                 AppDatabase::class.java,
                 "lockate.db",
             )
-            .addMigrations(AppDatabase.MIGRATION_2_3)
+            .addMigrations(AppDatabase.MIGRATION_2_3, AppDatabase.Migration7To8(get()))
             .build()
     }
 

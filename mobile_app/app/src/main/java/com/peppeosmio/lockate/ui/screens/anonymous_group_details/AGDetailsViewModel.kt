@@ -13,6 +13,7 @@ import com.peppeosmio.lockate.domain.anonymous_group.AnonymousGroup
 import com.peppeosmio.lockate.domain.anonymous_group.ChannelState
 import com.peppeosmio.lockate.domain.anonymous_group.Circle
 import com.peppeosmio.lockate.exceptions.AGMemberNotAdminException
+import com.peppeosmio.lockate.exceptions.ConnectionSettingsNotFoundException
 import com.peppeosmio.lockate.exceptions.LocationDisabledException
 import com.peppeosmio.lockate.exceptions.NoPermissionException
 import com.peppeosmio.lockate.platform_service.ConnectivityService
@@ -181,34 +182,44 @@ class AGDetailsViewModel(
     private fun holdLocationStream(anonymousGroup: AnonymousGroup) {
         locationStreamJob?.cancel()
         locationStreamJob = viewModelScope.launch {
-            anonymousGroupService.holdGroupStream(
-                anonymousGroup,
-                onState = { streamState ->
-                    _state.update {
-                        it.copy(
-                            remoteDataLoadingState =
-                                when (streamState) {
-                                    ChannelState.Connecting -> it.remoteDataLoadingState
-                                    ChannelState.Connected -> LoadingState.Success
-                                    ChannelState.Reconnecting ->
-                                        if (it.remoteDataLoadingState == LoadingState.IsLoading)
-                                            LoadingState.Failed
-                                        else it.remoteDataLoadingState
-                                    ChannelState.Stopped -> LoadingState.Failed
-                                },
-                            locationStreamState =
-                                when (streamState) {
-                                    ChannelState.Connecting -> LocationStreamState.Connecting
-                                    ChannelState.Connected -> LocationStreamState.Connected
-                                    ChannelState.Reconnecting -> LocationStreamState.Reconnecting
-                                    ChannelState.Stopped -> LocationStreamState.Stopped
-                                },
-                        )
-                    }
-                },
-                onLocations = { applyLocations(it) },
-            )
+            // the group's server can be removed while the map is in the background: its stream
+            // then just stops, as the map moves to another server or to the first launch
+            try {
+                holdGroupStream(anonymousGroup)
+            } catch (e: ConnectionSettingsNotFoundException) {
+                _state.update { it.copy(locationStreamState = LocationStreamState.Stopped) }
+            }
         }
+    }
+
+    private suspend fun holdGroupStream(anonymousGroup: AnonymousGroup) {
+        anonymousGroupService.holdGroupStream(
+            anonymousGroup,
+            onState = { streamState ->
+                _state.update {
+                    it.copy(
+                        remoteDataLoadingState =
+                            when (streamState) {
+                                ChannelState.Connecting -> it.remoteDataLoadingState
+                                ChannelState.Connected -> LoadingState.Success
+                                ChannelState.Reconnecting ->
+                                    if (it.remoteDataLoadingState == LoadingState.IsLoading)
+                                        LoadingState.Failed
+                                    else it.remoteDataLoadingState
+                                ChannelState.Stopped -> LoadingState.Failed
+                            },
+                        locationStreamState =
+                            when (streamState) {
+                                ChannelState.Connecting -> LocationStreamState.Connecting
+                                ChannelState.Connected -> LocationStreamState.Connected
+                                ChannelState.Reconnecting -> LocationStreamState.Reconnecting
+                                ChannelState.Stopped -> LocationStreamState.Stopped
+                            },
+                    )
+                }
+            },
+            onLocations = { applyLocations(it) },
+        )
     }
 
     fun remoteOperations() {
