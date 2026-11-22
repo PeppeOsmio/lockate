@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -131,6 +132,8 @@ fun ConnectionSettingsScreen(
             modifier =
                 Modifier.fillMaxSize()
                     .padding(padding)
+                    // the scaffold already pads for the navigation bar, which the keyboard covers
+                    .consumeWindowInsets(padding)
                     .imePadding()
                     .then(
                         if (mode == ServerScreenMode.FirstLaunch) Modifier.statusBarsPadding()
