@@ -22,6 +22,7 @@ The design lives in `docs/`, and it is the only place it is written down: `docs/
 | `push_relay/` | `docs/architecture/push-relay.md` |
 | The hourly health check | `docs/architecture/health-check.md` |
 | App flavors, Firebase projects, staging | `docs/architecture/environments.md` |
+| The app's theme, colours and shared components | `docs/architecture/app-ui.md` |
 | Versions and releases | `docs/versioning.md` |
 
 ## Security invariants - never violate these
