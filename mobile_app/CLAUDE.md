@@ -1,6 +1,6 @@
 # CLAUDE.md (mobile_app)
 
-Build/test rules specific to this module. See the repo-root `CLAUDE.md` for architecture and coding standards.
+Build/test rules specific to this module. See the repo-root `CLAUDE.md` for the security invariants, the coding standards and which `docs/` page to read for each area.
 
 ## Commands
 
@@ -36,3 +36,7 @@ git submodule update --init --recursive
 Android builds need the NDK and CMake 3.22.1 (Gradle installs them when the SDK licenses are accepted). `:jpake:jvmTest` and the app unit tests build the same C code for the host (`:jpake:buildJpakeHost`) with the system `cmake` and a C compiler.
 
 Always run these from `mobile_app/` (the Gradle wrapper lives here).
+
+Two flavors, `prod` (`com.peppeosmio.lockate`) and `staging` (`.staging`, named "Lockate Staging"), install side by side with separate data, Keystore keys and FCM tokens. Releases build `prod` only. Without the `lockate.firebase.*` properties (`lockate.firebase.staging.*` for staging) the app has no FCM token and gets no pushes; see `docs/architecture/environments.md`.
+
+Emulators can't show Activity Recognition (it never reports there) or the CPU sleeping, so still mode and wake-lock bugs need a real phone. The send loop writes `send-loop.log` in the app's external files directory (`Android/data/<package>/files/`): activity transitions and the mode of each send loop.

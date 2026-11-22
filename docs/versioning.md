@@ -61,7 +61,9 @@ only older majors, needs an update; one serving only newer majors needs a newer 
 ## Releasing
 
 Every tag is released from `main`. Each release is published to Docker Hub under `X.Y.Z`, `X.Y`,
-`X` and `latest` (backend, admin UI, relay) or as a GitHub release with the APKs (app). The relay is
+`X` and `latest` (backend, admin UI, relay) or as a GitHub release with the APKs (app).
+`prod-docker-compose.yml` pins the backend and the admin UI to one version with `LOCKATE_VERSION`.
+The backend reports its version and the API majors it serves at `GET /api/version`. The relay is
 then deployed by hand (see [Push relay](architecture/push-relay.md#releasing-and-deploying)).
 
 ## Android version codes

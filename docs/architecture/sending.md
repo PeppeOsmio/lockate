@@ -42,7 +42,8 @@ Fused delivers location updates in Doze to a location foreground service, so the
 itself wakes the phone. Fused keeps the CPU on only while it calls us, so the callback takes a
 10 s wake lock (`LocationService`) until the send loops pick the fix up. Each send then holds its
 own wake lock until it is done (`WakeLockService`, at most 1 minute), and every post has a 15 s
-timeout. The timeouts don't count the time the CPU sleeps: a post stuck on a connection that died
+timeout, set per request with Ktor's `HttpTimeout` (OkHttp's `callTimeout` would also cut the SSE
+streams). The timeouts don't count the time the CPU sleeps: a post stuck on a connection that died
 silently (the NAT dropped it) used to wait out OkHttp's 30 s over many 10-minute wakes, and the
 group saw nothing from us for half an hour. Now it fails while the phone is awake and is sent once
 more at once on a new connection (only when the network is there; the server may have got the
