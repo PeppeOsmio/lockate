@@ -2,6 +2,7 @@ package com.peppeosmio.lockate.ui.screens.create_anonymous_group
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -69,7 +70,13 @@ fun CreateAnonymousGroupScreen(
             )
         },
     ) { innerPadding ->
-        Column(Modifier.fillMaxSize().padding(innerPadding).imePadding()) {
+        // the scaffold already pads for the navigation bar, which the keyboard covers
+        Column(
+            Modifier.fillMaxSize()
+                .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
+                .imePadding()
+        ) {
             Column(
                 modifier =
                     Modifier.weight(1f)
