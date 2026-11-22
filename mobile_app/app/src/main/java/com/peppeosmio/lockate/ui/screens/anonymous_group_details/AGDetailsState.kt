@@ -36,4 +36,6 @@ data class AGDetailsState(
     val selectedMemberId: String? = null,
     val isFollowingSelectedMember: Boolean = false,
     val makeAdminDialogMemberId: String? = null,
+    // members whose circle notifications are off on this phone
+    val mutedMemberIds: Set<String> = emptySet(),
 )

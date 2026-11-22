@@ -7,7 +7,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -59,6 +61,7 @@ import com.peppeosmio.lockate.domain.anonymous_group.AnonymousGroup
 fun FloatingGroupBar(
     modifier: Modifier = Modifier,
     selectedGroup: AnonymousGroup?,
+    subtitle: String?,
     groups: List<AnonymousGroup>,
     isPickerOpen: Boolean,
     query: String,
@@ -78,8 +81,8 @@ fun FloatingGroupBar(
                 .padding(horizontal = 12.dp, vertical = 8.dp)
                 .fillMaxWidth(),
         shape = RoundedCornerShape(28.dp),
-        tonalElevation = 3.dp,
-        shadowElevation = 6.dp,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shadowElevation = 3.dp,
     ) {
         Column(modifier = Modifier.animateContentSize()) {
             if (isPickerOpen) {
@@ -123,6 +126,7 @@ fun FloatingGroupBar(
             } else {
                 CollapsedBar(
                     selectedGroup = selectedGroup,
+                    subtitle = subtitle,
                     onOpenDrawer = onOpenDrawer,
                     onOpenPicker = onOpenPicker,
                     groupMenu = groupMenu,
@@ -135,44 +139,64 @@ fun FloatingGroupBar(
 @Composable
 private fun CollapsedBar(
     selectedGroup: AnonymousGroup?,
+    subtitle: String?,
     onOpenDrawer: () -> Unit,
     onOpenPicker: () -> Unit,
     groupMenu: @Composable (onDismiss: () -> Unit) -> Unit,
 ) {
     var isMenuOpen by remember { mutableStateOf(false) }
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = onOpenDrawer) {
-            Icon(Icons.Default.Menu, contentDescription = "Open menu")
+            Icon(Icons.Default.Menu, contentDescription = "Servers and settings")
         }
         Row(
             modifier =
-                Modifier.weight(1f).clickable(onClick = onOpenPicker).padding(vertical = 12.dp),
-            horizontalArrangement = Arrangement.Center,
+                Modifier.weight(1f)
+                    .fillMaxHeight()
+                    .then(
+                        if (selectedGroup != null) Modifier.clickable(onClick = onOpenPicker)
+                        else Modifier
+                    )
+                    .padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                modifier = Modifier.weight(1f, fill = false),
-                text = selectedGroup?.name ?: "No groups",
-                style = MaterialTheme.typography.titleMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Choose group")
+            Column(modifier = Modifier.weight(1f, fill = false)) {
+                Text(
+                    text = selectedGroup?.name ?: "No groups yet",
+                    style =
+                        if (subtitle != null) MaterialTheme.typography.titleMedium
+                        else MaterialTheme.typography.bodyLarge,
+                    color =
+                        if (selectedGroup != null) MaterialTheme.colorScheme.onSurface
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (subtitle != null) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
+            }
+            if (selectedGroup != null) {
+                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Choose group")
+            }
         }
         if (selectedGroup != null) {
             Box {
                 IconButton(onClick = { isMenuOpen = true }) {
-                    Icon(Icons.Default.MoreVert, contentDescription = "Group options")
+                    Icon(Icons.Default.MoreVert, contentDescription = "Group menu")
                 }
                 DropdownMenu(expanded = isMenuOpen, onDismissRequest = { isMenuOpen = false }) {
                     groupMenu { isMenuOpen = false }
                 }
             }
-        } else {
-            Spacer(Modifier.size(48.dp))
         }
     }
 }

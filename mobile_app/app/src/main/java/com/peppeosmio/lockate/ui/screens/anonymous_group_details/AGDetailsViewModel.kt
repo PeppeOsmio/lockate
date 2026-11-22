@@ -131,6 +131,7 @@ class AGDetailsViewModel(
                 selectedMemberId = null,
                 isFollowingSelectedMember = false,
                 makeAdminDialogMemberId = null,
+                mutedMemberIds = emptySet(),
                 remoteDataLoadingState = LoadingState.IsLoading,
                 locationStreamState = LocationStreamState.Connecting,
             )
@@ -143,6 +144,12 @@ class AGDetailsViewModel(
                 getLocalAG(anonymousGroupInternalId)
                 getLocalMembers()
                 getLocalCircles()
+                _state.update {
+                    it.copy(
+                        mutedMemberIds =
+                            anonymousGroupService.listMutedTargets(anonymousGroupInternalId)
+                    )
+                }
                 remoteOperations()
             } catch (e: CancellationException) {
                 throw e
@@ -711,11 +718,25 @@ class AGDetailsViewModel(
             moveToMyLocation()
             return
         }
-        val coordinates = member.lastLocationRecord?.coordinates
-        _state.update {
-            it.copy(selectedMemberId = agMemberId, isFollowingSelectedMember = coordinates != null)
+        _state.update { it.copy(selectedMemberId = agMemberId, isFollowingSelectedMember = false) }
+        member.lastLocationRecord?.let {
+            _cameraPositionEvents.trySend(CameraTarget(it.coordinates))
         }
-        coordinates?.let { _cameraPositionEvents.trySend(CameraTarget(it)) }
+    }
+
+    /** Turns the circle notifications about a member off or on, on this phone only */
+    fun setMemberMuted(agMemberId: String, muted: Boolean) {
+        val internalId = state.value.anonymousGroup?.internalId ?: return
+        viewModelScope.launch {
+            anonymousGroupService.setTargetMuted(internalId, agMemberId, muted)
+            _state.update {
+                it.copy(
+                    mutedMemberIds =
+                        if (muted) it.mutedMemberIds + agMemberId
+                        else it.mutedMemberIds - agMemberId
+                )
+            }
+        }
     }
 
     fun setFollowSelectedMember(follow: Boolean) {
