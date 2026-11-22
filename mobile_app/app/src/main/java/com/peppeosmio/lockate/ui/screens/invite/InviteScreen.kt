@@ -9,20 +9,25 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -41,17 +46,25 @@ import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.peppeosmio.lockate.R
 import com.peppeosmio.lockate.service.invite.InviteCode
+import com.peppeosmio.lockate.service.invite.InviteLink
 import com.peppeosmio.lockate.service.invite.InviteState
+import com.peppeosmio.lockate.ui.composables.InfoCard
+import com.peppeosmio.lockate.ui.composables.LabeledDivider
+import com.peppeosmio.lockate.ui.composables.QrCode
 import com.peppeosmio.lockate.ui.composables.SmallCircularProgressIndicator
 import com.peppeosmio.lockate.utils.ErrorInfo
 import kotlin.time.Clock
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 import kotlinx.coroutines.delay
@@ -112,7 +125,11 @@ fun InviteScreen(
         },
     ) { innerPadding ->
         Column(
-            modifier = Modifier.padding(innerPadding).padding(horizontal = 24.dp).fillMaxSize(),
+            modifier =
+                Modifier.padding(innerPadding)
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
         ) {
@@ -121,7 +138,7 @@ fun InviteScreen(
 
                 is InviteState.WaitingForInvitee ->
                     WaitingForInvitee(
-                        code = inviteState.code,
+                        link = inviteState.link,
                         expiresAt = inviteState.expiresAt,
                         onCopy = { copyCode(inviteState.code) },
                         onShare = { shareCode(inviteState.code) },
@@ -182,7 +199,7 @@ private fun Progress(text: String) {
 
 @Composable
 private fun WaitingForInvitee(
-    code: InviteCode,
+    link: InviteLink,
     expiresAt: Instant,
     onCopy: () -> Unit,
     onShare: () -> Unit,
@@ -195,20 +212,39 @@ private fun WaitingForInvitee(
             }
         }
     Text(
-        text = "On the other phone, tap Join and enter this code",
+        text =
+            buildAnnotatedString {
+                append("On the other phone, tap ")
+                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("Join") }
+                append(" and enter this code")
+            },
         style = MaterialTheme.typography.bodyLarge,
         textAlign = TextAlign.Center,
     )
-    Text(
-        // Zero-width spaces after the dashes so a long code wraps between parts, never inside a
-        // word
-        text = code.toString().replace("-", "-\u200B"),
-        style = MaterialTheme.typography.headlineLarge,
-        fontFamily = FontFamily.Monospace,
-        fontWeight = FontWeight.SemiBold,
-        textAlign = TextAlign.Center,
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-    )
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    ) {
+        Column(
+            modifier = Modifier.padding(vertical = 16.dp, horizontal = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = link.code.nameplate.toString(),
+                style = MaterialTheme.typography.displaySmall,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = link.code.words.joinToString("-"),
+                style = MaterialTheme.typography.headlineSmall,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         FilledTonalButton(onClick = onCopy) {
             Icon(
@@ -223,11 +259,17 @@ private fun WaitingForInvitee(
             Text("Share", modifier = Modifier.padding(start = 8.dp))
         }
     }
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    LabeledDivider("or let them scan it")
+    QrCode(text = link.toUri(), description = "QR code of the invite")
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        SmallCircularProgressIndicator()
+        LinearProgressIndicator(
+            progress = { (remaining / INVITE_LIFETIME).toFloat().coerceIn(0f, 1f) },
+            modifier = Modifier.fillMaxWidth(),
+        )
         val seconds = remaining.inWholeSeconds
         Text(
             text = "Waiting for them · expires in ${seconds / 60}:${"%02d".format(seconds % 60)}",
@@ -235,14 +277,15 @@ private fun WaitingForInvitee(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
-    Text(
+    InfoCard(
+        icon = Icons.Outlined.Lock,
         text =
             "Only share it with the person you're inviting: the first one who enters it gets in.",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        textAlign = TextAlign.Center,
     )
 }
+
+// how long the server keeps an invite, the length of the countdown bar
+private val INVITE_LIFETIME = 10.minutes
 
 @Composable
 private fun Outcome(

@@ -178,6 +178,14 @@ class ConnectionService(
             normalized
         }
 
+    /** The saved server with this address, whatever way it is written, or null */
+    suspend fun findByUrl(url: String): Connection? =
+        withContext(Dispatchers.IO) {
+            connectionDao.getConnectionByUrl(ServerUrl.normalize(url))?.let {
+                ConnectionMapper.toDomain(it, keyStoreService)
+            }
+        }
+
     /** How many groups this phone has on each server, by server id */
     suspend fun countGroupsByServer(): Map<Long, Int> =
         withContext(Dispatchers.IO) {

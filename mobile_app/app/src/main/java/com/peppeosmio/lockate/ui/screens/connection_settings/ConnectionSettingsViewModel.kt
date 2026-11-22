@@ -12,6 +12,7 @@ import com.peppeosmio.lockate.service.version.apiCompatibility
 import com.peppeosmio.lockate.service.version.incompatibilityMessage
 import com.peppeosmio.lockate.service.version.serverVersionLabel
 import com.peppeosmio.lockate.ui.routes.ServerScreenMode
+import com.peppeosmio.lockate.ui.screens.join_anonymous_group.NewServerInvite
 import com.peppeosmio.lockate.utils.ErrorHandler
 import com.peppeosmio.lockate.utils.ErrorInfo
 import com.peppeosmio.lockate.utils.SnackbarErrorMessage
@@ -38,6 +39,10 @@ class ConnectionSettingsViewModel(
     private val _navigateHomeEvents = Channel<String?>(Channel.BUFFERED)
     val navigateHomeEvents = _navigateHomeEvents.receiveAsFlow()
 
+    // after adding the server of an invite's QR code: the join goes on, on that server
+    private val _navigateToJoinEvents = Channel<Pair<Long, String>>(Channel.BUFFERED)
+    val navigateToJoinEvents = _navigateToJoinEvents.receiveAsFlow()
+
     // after saving or removing the server being edited
     private val _navigateBackEvents = Channel<Unit>(Channel.BUFFERED)
     val navigateBackEvents = _navigateBackEvents.receiveAsFlow()
@@ -45,11 +50,21 @@ class ConnectionSettingsViewModel(
     private var connectionId: Long? = null
     private var loaded = false
 
-    fun load(mode: ServerScreenMode, connectionId: Long?) {
+    fun load(mode: ServerScreenMode, connectionId: Long?, invite: NewServerInvite? = null) {
         if (loaded) return
         loaded = true
         this.connectionId = connectionId
         _state.update { it.copy(mode = mode) }
+        invite?.let { from ->
+            _state.update {
+                it.copy(
+                    url = from.server,
+                    name = ServerUrl.host(from.server).orEmpty(),
+                    apiKey = from.apiKey.orEmpty(),
+                    inviteCode = from.code,
+                )
+            }
+        }
         if (mode != ServerScreenMode.Edit || connectionId == null) {
             _state.update { it.copy(isLoading = false) }
             return
@@ -137,7 +152,8 @@ class ConnectionSettingsViewModel(
                 } else {
                     val saved = connectionService.saveConnectionSettings(connection)
                     connectionService.saveSelectedConnectionSettingsId(saved.id!!)
-                    _navigateHomeEvents.trySend(null)
+                    current.inviteCode?.let { _navigateToJoinEvents.trySend(saved.id to it) }
+                        ?: _navigateHomeEvents.trySend(null)
                 }
             } catch (e: ServerAlreadyAddedException) {
                 if (current.mode == ServerScreenMode.Edit) {
@@ -146,7 +162,8 @@ class ConnectionSettingsViewModel(
                     )
                 } else {
                     connectionService.saveSelectedConnectionSettingsId(e.connectionId)
-                    _navigateHomeEvents.trySend("Already added")
+                    current.inviteCode?.let { _navigateToJoinEvents.trySend(e.connectionId to it) }
+                        ?: _navigateHomeEvents.trySend("Already added")
                 }
             } catch (e: CancellationException) {
                 throw e

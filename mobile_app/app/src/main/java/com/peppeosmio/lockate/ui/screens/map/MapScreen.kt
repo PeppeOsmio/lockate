@@ -507,6 +507,7 @@ fun MapScreen(
                                 ?.let { if (it.size == 1) "Only you" else "${it.size} members" },
                         groups =
                             filterGroups(sortGroups(state.groups ?: emptyList()), state.groupQuery),
+                        memberCounts = state.memberCounts,
                         isPickerOpen = state.isGroupPickerOpen,
                         query = state.groupQuery,
                         onQueryChange = viewModel::setGroupQuery,

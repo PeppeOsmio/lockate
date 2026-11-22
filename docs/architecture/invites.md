@@ -9,7 +9,25 @@ learn it, protected only by a short code read out loud.
 
 `nameplate-w1-w2-w3`, for example `42-fog-dimly-old`. The nameplate (1–9999) picks the mailbox on
 the server; the three words from the EFF short list are the password. Any member can invite.
-`InviteCode` parses and builds it.
+`InviteCode` parses and builds it, in any case and with dashes, spaces or dots between the parts.
+
+## The QR code
+
+The invite screen also shows a QR code holding `InviteLink`:
+`lockate://invite?server=<address>&code=<code>&key=<API key>`. Scanning it (Google's code scanner
+from Play services, so the app asks for no camera permission) fills in the code and picks the
+server, so the invitee doesn't need to know which server the group is on:
+
+- **a server already saved** (matched by its normalized address) becomes the one in use, with its
+  own API key; the key in the QR is ignored;
+- **a server not saved yet** opens Add server with the address and the key filled in, and the join
+  goes on once it is added.
+
+The key is there only when the inviter's server asks for one, and it is the inviter's own: the
+invitee then uses the same key, which stays valid after the invite. Revoking it locks out both,
+and either can put a new one in Edit server. Copy and Share give only the code, never the key:
+the key travels only in the QR, shown in person. The QR is no secret beyond that: the words in it
+are the code read out loud, under the same one-guess, 10-minute rule.
 
 ## The exchange
 
@@ -54,7 +72,9 @@ Each side polls the mailbox for the other's next message (`GET …/{inviteId}` f
   `lockate-invite-payload`); the password label is `lockate-invite-v2` and the session id is the
   HKDF context.
 - Invites expire after 10 minutes. Whoever enters the code first gets in, so it must be read out
-  only to the person invited.
+  (or the QR shown) only to the person invited.
+- While joining, the invitee's screen shows two steps: checking the code with the inviter's
+  phone (J-PAKE, until the inviter's tag checks out), then receiving the group's key.
 
 ## Server side
 

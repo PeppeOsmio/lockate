@@ -18,5 +18,7 @@ data class ConnectionSettingsState(
     val groups: List<AnonymousGroup> = emptyList(),
     val versionLabel: String? = null,
     val showRemoveDialog: Boolean = false,
+    // the invite code of a QR code on a server this phone doesn't have yet: joining follows
+    val inviteCode: String? = null,
     val dialogError: SnackbarErrorMessage? = null,
 )

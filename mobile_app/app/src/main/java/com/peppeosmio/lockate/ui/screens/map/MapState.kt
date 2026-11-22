@@ -10,6 +10,8 @@ data class MapState(
     val selectedConnectionId: Long? = null,
     // how many groups this phone has on each server, for the drawer
     val groupCounts: Map<Long, Int> = emptyMap(),
+    // how many members each group has, for the group picker
+    val memberCounts: Map<Long, Int> = emptyMap(),
     val groups: List<AnonymousGroup>? = null,
     val selectedGroupInternalId: Long? = null,
     val isServerUnreachable: Boolean = false,
