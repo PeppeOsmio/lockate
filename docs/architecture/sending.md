@@ -48,6 +48,14 @@ group saw nothing from us for half an hour. Now it fails while the phone is awak
 more at once on a new connection (only when the network is there; the server may have got the
 first one, so a circle event can reach the others twice), instead of waiting for the next fix.
 
+An Activity Recognition transition wakes the phone the same way, and the system keeps the CPU on
+only while `onReceive` runs, so `ActivityService` takes the same 10 s wake lock there. Without it
+the CPU could sleep before the send loops reached their post: the switch to still, which posts the
+last good fix without waiting for a new one and turns the 2 s GPS off, then waited for the next
+still fix, 10 minutes later, and the switch to moving waited for any wake-up if the CPU slept
+before the 2 s request was made. Neither lock is released by hand: nothing knows when every
+group's send loop has taken its own, so they time out.
+
 | Considered | Dropped because |
 |---|---|
 | Exact `AlarmManager` alarm every minute | Needs "Alarms & reminders", denied by default on Android 14+; an inexact alarm is only guaranteed within an hour. |
