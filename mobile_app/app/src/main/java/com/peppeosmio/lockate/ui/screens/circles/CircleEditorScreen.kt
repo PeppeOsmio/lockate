@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -31,10 +32,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -48,6 +53,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.rememberBottomSheetScaffoldState
@@ -81,6 +87,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
@@ -89,6 +96,7 @@ import com.peppeosmio.lockate.R
 import com.peppeosmio.lockate.domain.Coordinates
 import com.peppeosmio.lockate.domain.anonymous_group.Circle
 import com.peppeosmio.lockate.service.Place
+import com.peppeosmio.lockate.ui.composables.FormField
 import com.peppeosmio.lockate.ui.composables.PeekHeaderBottomSheetScaffold
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.CircleOverlay
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.CircleStyle
@@ -97,7 +105,6 @@ import com.peppeosmio.lockate.ui.screens.anonymous_group_details.MyMarker
 import com.peppeosmio.lockate.ui.screens.map.circleWidthFraction
 import com.peppeosmio.lockate.ui.screens.map.resolveMapStyleUrl
 import com.peppeosmio.lockate.ui.screens.map.zoomToFitCircle
-import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
@@ -312,12 +319,14 @@ private fun EditorContent(
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        if (state.isEditing) "Edit circle" else "Add circle",
+                        if (state.isEditing) state.name.ifBlank { "Edit circle" } else "New circle",
                         style = MaterialTheme.typography.titleLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                     val center = state.center
                     if (center == null) {
@@ -351,8 +360,9 @@ private fun EditorContent(
                         }
                     }
                 }
+                TextButton(onClick = navigateBack) { Text("Cancel") }
                 Button(onClick = viewModel::save, enabled = state.canSave) {
-                    Text(if (state.isSaving) "Saving…" else "OK")
+                    Text(if (state.isSaving) "Saving…" else "Save")
                 }
             }
         },
@@ -542,6 +552,7 @@ private fun SearchResult(headline: String, supporting: String?, onClick: () -> U
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun EditorFields(
     state: CircleEditorState,
@@ -557,12 +568,14 @@ private fun EditorFields(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         if (state.center == null) return@Column
-        OutlinedTextField(
-            modifier = Modifier.fillMaxWidth(),
+        FormField(
             value = state.name,
             onValueChange = viewModel::setName,
-            label = { Text("Name") },
-            singleLine = true,
+            label = "Name",
+            supportingText =
+                state.groupName
+                    .takeIf { it.isNotEmpty() }
+                    ?.let { "Everyone in $it sees this name" },
             enabled = !state.isSaving,
         )
         var hadFocus by remember { mutableStateOf(false) }
@@ -579,32 +592,93 @@ private fun EditorFields(
             label = { Text("Radius") },
             suffix = { Text("m") },
             isError = !isRadiusValid,
-            supportingText = {
+            supportingText =
                 if (!isRadiusValid) {
-                    Text(
-                        "Between ${CircleEditorViewModel.MIN_RADIUS_METERS.roundToInt()} and " +
-                            "${CircleEditorViewModel.MAX_RADIUS_METERS.roundToInt()} m"
-                    )
-                }
-            },
+                    {
+                        Text(
+                            "Between ${formatRadius(CircleEditorViewModel.MIN_RADIUS_METERS)} " +
+                                "and ${formatRadius(CircleEditorViewModel.MAX_RADIUS_METERS)}"
+                        )
+                    }
+                } else null,
             keyboardOptions =
-                KeyboardOptions(
-                    keyboardType = KeyboardType.Number,
-                    imeAction = ImeAction.Done,
-                ),
+                KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
             singleLine = true,
             enabled = !state.isSaving,
         )
-        Slider(
-            value = state.radiusMeters.toFloat(),
-            onValueChange = { viewModel.setRadius(it.roundToInt().toDouble()) },
-            onValueChangeFinished = onRadiusChangeFinished,
-            valueRange =
-                CircleEditorViewModel.MIN_RADIUS_METERS.toFloat()..CircleEditorViewModel
-                        .MAX_RADIUS_METERS
-                        .toFloat(),
-            enabled = !state.isSaving,
+        Column {
+            Slider(
+                value = radiusToSlider(state.radiusMeters),
+                onValueChange = { viewModel.setRadius(sliderToRadius(it)) },
+                onValueChangeFinished = onRadiusChangeFinished,
+                enabled = !state.isSaving,
+            )
+            Row {
+                Text(
+                    formatRadius(CircleEditorViewModel.MIN_RADIUS_METERS),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    formatRadius(CircleEditorViewModel.MAX_RADIUS_METERS),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            for (preset in CircleEditorViewModel.RADIUS_PRESETS) {
+                FilterChip(
+                    modifier = Modifier.weight(1f),
+                    selected = state.radiusMeters == preset,
+                    onClick = {
+                        viewModel.setRadius(preset)
+                        onRadiusChangeFinished()
+                    },
+                    label = {
+                        Text(
+                            formatRadius(preset),
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                        )
+                    },
+                    enabled = !state.isSaving,
+                )
+            }
+        }
+        if (state.isEditing) {
+            TextButton(
+                onClick = viewModel::askToDelete,
+                enabled = !state.isSaving && !state.isDeleting,
+                colors =
+                    ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+            ) {
+                Icon(Icons.Default.Delete, contentDescription = null, Modifier.size(18.dp))
+                Spacer(Modifier.size(8.dp))
+                Text("Delete circle")
+            }
+        }
+    }
+    if (state.showDeleteDialog) {
+        AlertDialog(
+            title = { Text("Delete ${state.name}?") },
+            text = { Text("The circle disappears for everyone in ${state.groupName}.") },
+            dismissButton = { TextButton(onClick = viewModel::cancelDelete) { Text("Cancel") } },
+            confirmButton = {
+                TextButton(
+                    onClick = viewModel::confirmDelete,
+                    colors =
+                        ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        ),
+                ) {
+                    Text("Delete")
+                }
+            },
+            onDismissRequest = viewModel::cancelDelete,
         )
     }
 }
@@ -661,10 +735,8 @@ private fun EditorMap(
                 }
             projection?.let {
                 MemberMarker(
-                    center = it,
+                    tip = it,
                     member = member,
-                    isMe = false,
-                    isOld = member.isOld,
                     // a tap puts the circle where the member is
                     onClick = { currentSetCenter(member.coordinates) },
                 )

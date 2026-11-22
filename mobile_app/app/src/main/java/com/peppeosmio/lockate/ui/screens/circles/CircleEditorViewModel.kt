@@ -21,6 +21,8 @@ import com.peppeosmio.lockate.ui.screens.anonymous_group_details.lastSeenFreshne
 import com.peppeosmio.lockate.utils.ErrorInfo
 import com.peppeosmio.lockate.utils.SnackbarErrorMessage
 import java.util.UUID
+import kotlin.math.exp
+import kotlin.math.ln
 import kotlin.math.roundToInt
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
@@ -44,6 +46,10 @@ data class CircleEditorState(
     val radiusMeters: Double = CircleEditorViewModel.DEFAULT_RADIUS_METERS,
     // what is written in the radius field, which may be half typed or out of range
     val radiusText: String = CircleEditorViewModel.DEFAULT_RADIUS_METERS.roundToInt().toString(),
+    // everyone in this group sees the circle's name
+    val groupName: String = "",
+    val isDeleting: Boolean = false,
+    val showDeleteDialog: Boolean = false,
     // null until the point is put on the map
     val center: Coordinates? = null,
     val initialCamera: Coordinates = Coordinates.NAPOLI,
@@ -67,6 +73,7 @@ data class CircleEditorState(
                 name.isNotBlank() &&
                 center != null &&
                 !isSaving &&
+                !isDeleting &&
                 parseRadiusMeters(radiusText) != null
 }
 
@@ -84,6 +91,7 @@ internal fun memberPoints(
         coordinates = record.coordinates,
         isOld = lastSeenFreshness(record.timestamp, now) != LastSeenFreshness.Live,
         isSelected = false,
+        activity = record.activity,
     )
 }
 
@@ -100,6 +108,38 @@ internal fun parseCoordinates(text: String): Coordinates? {
 internal fun parseRadiusMeters(text: String): Double? =
     text.toIntOrNull()?.toDouble()?.takeIf {
         it in CircleEditorViewModel.MIN_RADIUS_METERS..CircleEditorViewModel.MAX_RADIUS_METERS
+    }
+
+private val RADIUS_RANGE_LOG =
+    ln(CircleEditorViewModel.MAX_RADIUS_METERS / CircleEditorViewModel.MIN_RADIUS_METERS)
+
+/**
+ * Where [radiusMeters] sits on the slider, from 0 to 1. The scale is logarithmic, so the small
+ * radii a house or a school needs take as much room as the large ones.
+ */
+internal fun radiusToSlider(radiusMeters: Double): Float =
+    (ln(radiusMeters / CircleEditorViewModel.MIN_RADIUS_METERS) / RADIUS_RANGE_LOG)
+        .coerceIn(0.0, 1.0)
+        .toFloat()
+
+/** The radius at [position] on the slider, rounded to 10 m below 1 km and to 50 m above */
+internal fun sliderToRadius(position: Float): Double {
+    val meters =
+        CircleEditorViewModel.MIN_RADIUS_METERS * exp(position.coerceIn(0f, 1f) * RADIUS_RANGE_LOG)
+    val step = if (meters < 1000) 10.0 else 50.0
+    return ((meters / step).roundToInt() * step).coerceIn(
+        CircleEditorViewModel.MIN_RADIUS_METERS,
+        CircleEditorViewModel.MAX_RADIUS_METERS,
+    )
+}
+
+/** "250 m", "1 km", "1.5 km" */
+internal fun formatRadius(radiusMeters: Double): String =
+    if (radiusMeters < 1000) "${radiusMeters.roundToInt()} m"
+    else {
+        val km = radiusMeters / 1000
+        if (km == km.roundToInt().toDouble()) "${km.roundToInt()} km"
+        else "${"%.1f".format(java.util.Locale.ENGLISH, km)} km"
     }
 
 class CircleEditorViewModel(
@@ -156,6 +196,7 @@ class CircleEditorViewModel(
                         radiusMeters = circle?.radiusMeters ?: DEFAULT_RADIUS_METERS,
                         radiusText =
                             (circle?.radiusMeters ?: DEFAULT_RADIUS_METERS).roundToInt().toString(),
+                        groupName = group.name,
                         center = circle?.center,
                         initialCamera = circle?.center ?: startLocation ?: Coordinates.NAPOLI,
                         myLocation = startLocation,
@@ -344,11 +385,40 @@ class CircleEditorViewModel(
         }
     }
 
+    fun askToDelete() {
+        _state.update { it.copy(showDeleteDialog = true) }
+    }
+
+    fun cancelDelete() {
+        _state.update { it.copy(showDeleteDialog = false) }
+    }
+
+    fun confirmDelete() {
+        val anonymousGroup = group ?: return
+        val id = circleId ?: return
+        viewModelScope.launch {
+            _state.update { it.copy(isDeleting = true, showDeleteDialog = false) }
+            try {
+                anonymousGroupService.deleteCircle(anonymousGroup.connectionId, anonymousGroup, id)
+                _navigateBackEvents.trySend(Unit)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(isDeleting = false) }
+                _snackbarEvents.trySend(
+                    SnackbarErrorMessage("Can't delete the circle", ErrorInfo.fromException(e))
+                )
+            }
+        }
+    }
+
     companion object {
-        const val DEFAULT_RADIUS_METERS = 150.0
+        const val DEFAULT_RADIUS_METERS = 250.0
         const val MIN_RADIUS_METERS = 30.0
-        const val MAX_RADIUS_METERS = 2000.0
+        const val MAX_RADIUS_METERS = 5000.0
         private const val MAX_RADIUS_DIGITS = 4
+        // the radii most places need, one tap away
+        val RADIUS_PRESETS = listOf(100.0, 250.0, 500.0, 1000.0)
         private const val MIN_SEARCH_CHARS = 3
         private val SEARCH_DEBOUNCE = 400.milliseconds
     }

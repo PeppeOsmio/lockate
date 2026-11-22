@@ -12,6 +12,10 @@ name are three encrypted fields of fixed size ([Encryption](encryption.md)), so 
 the same to the server. Changes reach the group as `circle.upserted` / `circle.deleted`
 ([Real-time](realtime.md)).
 
+A radius goes from 30 m to 5 km, a limit of the app only: the server can't read it. The editor
+takes it typed, or from a logarithmic slider, so the small radii of a house or a school are as
+easy to pick as the large ones, with 100 m, 250 m, 500 m and 1 km one tap away.
+
 ## Geofencing on the sender's phone
 
 Crossings are computed by the member who crosses, never by the server (it can't read positions)
@@ -61,4 +65,5 @@ Notifications come only from live `circle.event` and sharing frames, never from 
 by push ([Push notifications](push.md)); a server without a push relay notifies nothing.
 `CircleNotifier` shows them: one notification per member, replaced by each new event, under one
 summary per group (`CircleNotificationBook`); they expire after 1 hour. Muted circles and members
-are kept only in Room.
+are kept only in Room: a circle is muted with its bell in the Circles list (or all of them from
+its menu), a member from their details on the map.

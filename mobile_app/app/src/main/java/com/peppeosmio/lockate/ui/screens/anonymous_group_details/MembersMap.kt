@@ -7,7 +7,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,7 +15,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -32,15 +33,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import com.peppeosmio.lockate.domain.anonymous_group.Circle
+import com.peppeosmio.lockate.ui.composables.MemberAvatar
+import com.peppeosmio.lockate.ui.theme.LockateTheme
+import kotlin.math.atan2
 import kotlin.math.sqrt
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
@@ -133,68 +139,84 @@ fun ClusterBubble(center: DpOffset, count: Int, onClick: () -> Unit) {
     }
 }
 
+private val BALLOON_PADDING = 4.dp
+private val BALLOON_TAIL = 10.dp
+private val AVATAR_SIZE = 40.dp
+
+/**
+ * A member as a white balloon holding their avatar, like Life360: the tip of the balloon is the
+ * exact position. The selected member gets a halo in their colour; the name, with
+ * [MapPoint.caption] when there is one, sits under the tip.
+ */
 @Composable
-fun MemberMarker(
-    center: DpOffset,
-    member: MapPoint,
-    isMe: Boolean,
-    isOld: Boolean,
-    onClick: () -> Unit,
-) {
-    var backgroundColor =
-        if (isMe) {
-            MaterialTheme.colorScheme.primary
-        } else {
-            MaterialTheme.colorScheme.secondary
-        }
-    if (member.isOld) {
-        backgroundColor = backgroundColor.copy(alpha = 0.5f)
-    }
-    val textColor =
-        if (isMe) {
-            MaterialTheme.colorScheme.primary
-        } else {
-            MaterialTheme.colorScheme.secondary
-        }
-    // Circle is exactly on the coordinate
-    val circleSize = if (member.isSelected) 22.dp else 16.dp
-    val touchTargetSize = 48.dp
+fun MemberMarker(tip: DpOffset, member: MapPoint, onClick: () -> Unit) {
+    val diameter = AVATAR_SIZE + BALLOON_PADDING * 2
+    val height = diameter + BALLOON_TAIL
+    val halo = LockateTheme.colors.member(member.id).color.copy(alpha = 0.25f)
     Box(
         modifier =
-            Modifier.offset(x = center.x - touchTargetSize / 2, y = center.y - touchTargetSize / 2)
-                .size(touchTargetSize)
-                .clickable(interactionSource = null, indication = null, onClick = onClick),
-        contentAlignment = Alignment.Center,
+            Modifier.offset(x = tip.x - diameter / 2, y = tip.y - height)
+                .size(width = diameter, height = height)
+                .clickable(interactionSource = null, indication = null, onClick = onClick)
     ) {
-        Box(
-            modifier =
-                Modifier.size(circleSize)
-                    .then(
-                        if (member.isSelected) {
-                            Modifier.border(3.dp, MaterialTheme.colorScheme.surface, CircleShape)
-                        } else {
-                            Modifier
-                        }
-                    )
-                    .background(
-                        if (isOld) backgroundColor.copy(alpha = 0.5f) else backgroundColor,
-                        CircleShape,
-                    )
+        Canvas(Modifier.matchParentSize()) {
+            val radius = size.width / 2
+            if (member.isSelected) {
+                drawCircle(halo, radius = radius + 6.dp.toPx(), center = Offset(radius, radius))
+            }
+            val balloon = balloonPath(radius, size.height, (BALLOON_TAIL / 2).toPx())
+            // a soft shadow under the balloon, so it stands out on light maps
+            translate(top = 1.dp.toPx()) { drawPath(balloon, Color.Black.copy(alpha = 0.25f)) }
+            drawPath(balloon, Color.White)
+        }
+        MemberAvatar(
+            modifier = Modifier.offset(BALLOON_PADDING, BALLOON_PADDING),
+            name = member.name,
+            memberId = member.id,
+            activity = member.activity,
+            paused = member.isOld,
+            size = AVATAR_SIZE,
         )
     }
-
-    val labelWidth = 120.dp
-    Text(
-        text = member.name,
+    val labelWidth = 140.dp
+    Box(
         modifier =
-            Modifier.offset(x = center.x - labelWidth / 2, y = center.y + circleSize / 2)
+            Modifier.offset(x = tip.x - labelWidth / 2, y = tip.y + 2.dp)
                 .width(labelWidth)
                 .clickable(interactionSource = null, indication = null, onClick = onClick),
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        textAlign = TextAlign.Center,
-        color = textColor,
-    )
+        contentAlignment = Alignment.TopCenter,
+    ) {
+        Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.9f),
+        ) {
+            Text(
+                text = listOfNotNull(member.name, member.caption).joinToString(" · "),
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            )
+        }
+    }
+}
+
+/** A circle of [radius] with a tail down to the tip at [height], [halfTail] wide on each side */
+private fun balloonPath(radius: Float, height: Float, halfTail: Float): Path {
+    val joinY = radius + sqrt(radius * radius - halfTail * halfTail)
+    return Path().apply {
+        moveTo(radius, height)
+        lineTo(radius - halfTail, joinY)
+        arcTo(
+            rect = Rect(0f, 0f, radius * 2, radius * 2),
+            startAngleDegrees =
+                Math.toDegrees(atan2(joinY - radius, -halfTail).toDouble()).toFloat(),
+            sweepAngleDegrees =
+                360f - 2 * Math.toDegrees(atan2(halfTail, joinY - radius).toDouble()).toFloat(),
+            forceMoveTo = false,
+        )
+        close()
+    }
 }
 
 /**
@@ -370,19 +392,21 @@ fun MembersMap(
             }
         }
 
+        // from the bottom: circle pins, this phone's dot, the members, so a member's balloon is
+        // never hidden by a pin
+        myPointProjection?.let {
+            MyMarker(
+                center = DpOffset(x = it.x, y = it.y),
+                orientation = myDeviceOrientation,
+                isOld = myPoint!!.isOld,
+            )
+        }
         pointsClusters.forEach { cluster ->
-            val containsMe =
-                cluster.members.any {
-                    it.id == myPoint?.id
-                }
-
             if (cluster.members.size == 1) {
                 val member = cluster.members.first()
                 MemberMarker(
-                    center = cluster.center,
-                    isMe = containsMe,
+                    tip = cluster.center,
                     member = member,
-                    isOld = member.isOld,
                     onClick = { onTapMember(member.id) },
                 )
             } else {
@@ -423,13 +447,6 @@ fun MembersMap(
             //                  .background(
             //                      Color.Yellow, CircleShape
             //                  ))
-        }
-        myPointProjection?.let {
-            MyMarker(
-                center = DpOffset(x = it.x, y = it.y),
-                orientation = myDeviceOrientation,
-                isOld = myPoint!!.isOld,
-            )
         }
     }
 }

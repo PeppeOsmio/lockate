@@ -3,6 +3,7 @@ package com.peppeosmio.lockate.ui.screens.circles
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.peppeosmio.lockate.domain.anonymous_group.AGChannelFrame
+import com.peppeosmio.lockate.domain.anonymous_group.AGLocationUpdate
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.domain.anonymous_group.AnonymousGroup
 import com.peppeosmio.lockate.domain.anonymous_group.Circle
@@ -23,12 +24,20 @@ import kotlinx.coroutines.launch
 data class CirclesScreenState(
     val isLoading: Boolean = true,
     val groupName: String = "",
+    val myMemberId: String = "",
     val circles: List<Circle> = emptyList(),
+    // everyone, with their last position, to tell who is inside each circle
     val members: List<AGMember> = emptyList(),
     val mutedTargets: Set<String> = emptySet(),
-    val circleToDelete: Circle? = null,
-    val isDeleting: Boolean = false,
-)
+    val query: String = "",
+) {
+    /** The circles whose name matches the search, by name */
+    val shownCircles: List<Circle>
+        get() =
+            circles
+                .filter { query.isBlank() || it.name.contains(query.trim(), ignoreCase = true) }
+                .sortedBy { it.name.lowercase() }
+}
 
 class CirclesViewModel(private val anonymousGroupService: AnonymousGroupService) : ViewModel() {
     private val _state = MutableStateFlow(CirclesScreenState())
@@ -59,8 +68,9 @@ class CirclesViewModel(private val anonymousGroupService: AnonymousGroupService)
                 it.copy(
                     isLoading = false,
                     groupName = anonymousGroup.name,
+                    myMemberId = anonymousGroup.memberId,
                     circles = anonymousGroupService.listCircles(anonymousGroupInternalId),
-                    members = others(anonymousGroupService.getLocalAGMembers(anonymousGroup)),
+                    members = anonymousGroupService.getLocalAGMembers(anonymousGroup),
                     mutedTargets = anonymousGroupService.listMutedTargets(anonymousGroupInternalId),
                 )
             }
@@ -71,18 +81,35 @@ class CirclesViewModel(private val anonymousGroupService: AnonymousGroupService)
                     .filter { it.anonymousGroupInternalId == anonymousGroupInternalId }
                     .collect { applyFrame(it.frame) }
             }
-            anonymousGroupService.holdGroupStream(anonymousGroup, onState = {}, onLocations = {})
+            anonymousGroupService.holdGroupStream(
+                anonymousGroup,
+                onState = {},
+                onLocations = ::applyLocations,
+            )
         }
     }
 
-    // our own arrivals and departures never notify us
-    private fun others(members: List<AGMember>) = members.filter { it.id != group?.memberId }
+    private fun applyLocations(updates: List<AGLocationUpdate>) {
+        val latest = updates.associateBy { it.agMemberId }
+        _state.update {
+            it.copy(
+                members =
+                    it.members.map { member ->
+                        val update = latest[member.id] ?: return@map member
+                        val known = member.lastLocationRecord
+                        if (known != null && known.timestamp >= update.locationRecord.timestamp)
+                            member
+                        else member.copy(lastLocationRecord = update.locationRecord)
+                    }
+            )
+        }
+    }
 
     private fun applyFrame(frame: AGChannelFrame) {
         when (frame) {
             is AGChannelFrame.Snapshot ->
                 _state.update {
-                    it.copy(circles = frame.circles, members = others(frame.members))
+                    it.copy(circles = frame.circles, members = frame.members)
                 }
 
             is AGChannelFrame.CircleUpserted ->
@@ -104,7 +131,7 @@ class CirclesViewModel(private val anonymousGroupService: AnonymousGroupService)
 
             is AGChannelFrame.MemberJoined ->
                 _state.update {
-                    it.copy(members = others(it.members + frame.member))
+                    it.copy(members = it.members + frame.member)
                 }
             is AGChannelFrame.MemberLeft ->
                 _state.update {
@@ -130,37 +157,25 @@ class CirclesViewModel(private val anonymousGroupService: AnonymousGroupService)
         }
     }
 
-    fun showOnMap(circle: Circle) {
-        group?.let { anonymousGroupService.showCircleOnMap(it, circle) }
-    }
-
-    fun askToDelete(circle: Circle) {
-        _state.update { it.copy(circleToDelete = circle) }
-    }
-
-    fun cancelDelete() {
-        _state.update { it.copy(circleToDelete = null) }
-    }
-
-    fun confirmDelete() {
-        val anonymousGroup = group ?: return
-        val circle = state.value.circleToDelete ?: return
+    /** Notifies about every circle, or about none: one bell for all of them */
+    fun setAllCirclesMuted(muted: Boolean) {
+        val internalId = group?.internalId ?: return
+        val circleIds = state.value.circles.map { it.id }
         viewModelScope.launch {
-            _state.update { it.copy(isDeleting = true) }
-            try {
-                anonymousGroupService.deleteCircle(
-                    anonymousGroup.connectionId,
-                    anonymousGroup,
-                    circle.id,
-                )
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _snackbarEvents.trySend(
-                    SnackbarErrorMessage("Can't delete the circle", ErrorInfo.fromException(e))
+            for (circleId in circleIds) {
+                anonymousGroupService.setTargetMuted(internalId, circleId, muted)
+            }
+            _state.update {
+                it.copy(
+                    mutedTargets =
+                        if (muted) it.mutedTargets + circleIds
+                        else it.mutedTargets - circleIds.toSet()
                 )
             }
-            _state.update { it.copy(isDeleting = false, circleToDelete = null) }
         }
+    }
+
+    fun setQuery(query: String) {
+        _state.update { it.copy(query = query) }
     }
 }

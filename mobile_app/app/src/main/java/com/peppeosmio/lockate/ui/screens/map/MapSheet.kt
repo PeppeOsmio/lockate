@@ -32,10 +32,10 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.peppeosmio.lockate.R
-import com.peppeosmio.lockate.domain.Coordinates
 import com.peppeosmio.lockate.domain.UserActivity
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.domain.anonymous_group.AnonymousGroup
+import com.peppeosmio.lockate.domain.anonymous_group.Circle
 import com.peppeosmio.lockate.ui.composables.CircleRow
 import com.peppeosmio.lockate.ui.composables.MemberRow
 import com.peppeosmio.lockate.ui.composables.SharingRow
@@ -53,6 +53,7 @@ class MapSheetActions(
     val onRemoveGroup: () -> Unit,
     val onInvite: () -> Unit,
     val onOpenCircles: () -> Unit,
+    val onShowCircle: (Circle) -> Unit,
     val onSelectMember: (memberId: String) -> Unit,
     val onBackToGroup: () -> Unit,
     val onFollow: () -> Unit,
@@ -76,7 +77,6 @@ fun MapSheetHeader(
     content: SheetContent,
     selectedGroup: AnonymousGroup?,
     details: AGDetailsState,
-    myCoordinates: Coordinates?,
     now: Instant,
     sharingSupporting: String?,
     actions: MapSheetActions,
@@ -108,7 +108,7 @@ fun MapSheetHeader(
             MemberHeader(
                 member = member,
                 isMe = member.id == group!!.memberId,
-                status = statusOf(member, details, myCoordinates, now),
+                status = statusOf(member, details, now),
                 freshness = memberFreshness(member, now),
                 actions = actions,
             )
@@ -117,7 +117,7 @@ fun MapSheetHeader(
             val member = details.members!![content.memberId]!!
             FollowingHeader(
                 member = member,
-                status = statusOf(member, details, myCoordinates, now),
+                status = statusOf(member, details, now),
                 freshness = memberFreshness(member, now),
                 onBack = actions.onBackToGroup,
             )
@@ -131,7 +131,6 @@ fun MapSheetHeader(
 fun MapSheetBody(
     content: SheetContent,
     details: AGDetailsState,
-    myCoordinates: Coordinates?,
     now: Instant,
     actions: MapSheetActions,
 ) {
@@ -142,7 +141,7 @@ fun MapSheetBody(
         SheetContent.Group ->
             Column(scroll.padding(bottom = SHEET_BODY_BOTTOM_PADDING)) {
                 HorizontalDivider(Modifier.padding(horizontal = 16.dp))
-                MembersSection(group, details, myCoordinates, now, actions)
+                MembersSection(group, details, now, actions)
                 HorizontalDivider(Modifier.padding(horizontal = 16.dp))
                 CirclesSection(details, members.values, group.memberId, actions)
             }
@@ -167,13 +166,10 @@ fun MapSheetBody(
 private fun statusOf(
     member: AGMember,
     details: AGDetailsState,
-    myCoordinates: Coordinates?,
     now: Instant,
 ): String =
     memberStatus(
         member = member,
-        isMe = member.id == details.anonymousGroup?.memberId,
-        myCoordinates = myCoordinates,
         circles = details.circles,
         now = now,
     )
@@ -199,7 +195,6 @@ private fun SectionHeader(title: String, action: @Composable () -> Unit) {
 private fun MembersSection(
     group: AnonymousGroup,
     details: AGDetailsState,
-    myCoordinates: Coordinates?,
     now: Instant,
     actions: MapSheetActions,
 ) {
@@ -228,7 +223,7 @@ private fun MembersSection(
             name = member.name,
             nameSuffix = if (isMe) "You" else null,
             memberId = member.id,
-            supporting = statusOf(member, details, myCoordinates, now),
+            supporting = statusOf(member, details, now),
             isMe = isMe,
             activity = member.lastLocationRecord?.activity ?: UserActivity.Unknown,
             paused = freshness == LastSeenFreshness.Stale,
@@ -281,7 +276,11 @@ private fun CirclesSection(
     }
     val occupied = occupiedCircles(circles, members)
     for ((circle, inside) in occupied.entries.sortedBy { it.key.name.lowercase() }) {
-        CircleRow(name = circle.name, supporting = whoIsHere(inside, myMemberId))
+        CircleRow(
+            name = circle.name,
+            supporting = whoIsHere(inside, myMemberId),
+            onClick = { actions.onShowCircle(circle) },
+        )
     }
     val others = circles.size - occupied.size
     if (others > 0) {
