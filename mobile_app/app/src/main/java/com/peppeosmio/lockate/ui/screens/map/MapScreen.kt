@@ -11,21 +11,19 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -34,7 +32,6 @@ import androidx.compose.material3.SheetValue
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberBottomSheetScaffoldState
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.rememberStandardBottomSheetState
@@ -49,7 +46,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
@@ -63,7 +59,6 @@ import androidx.lifecycle.compose.LifecycleStartEffect
 import com.peppeosmio.lockate.R
 import com.peppeosmio.lockate.domain.Coordinates
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
-import com.peppeosmio.lockate.domain.anonymous_group.AnonymousGroup
 import com.peppeosmio.lockate.ui.composables.ErrorDialog
 import com.peppeosmio.lockate.ui.composables.PeekHeaderBottomSheetScaffold
 import com.peppeosmio.lockate.ui.composables.PermissionsRequester
@@ -345,63 +340,61 @@ fun MapScreen(
     details.dialogError?.let { ErrorDialog(it, onDismiss = detailsViewModel::hideErrorDialog) }
 
     val groupName = details.anonymousGroup?.name ?: selectedGroup?.name ?: ""
-
     if (details.showDeleteAGDialog) {
-        AlertDialog(
-            title = { Text("Delete $groupName") },
-            text = {
-                Text(
-                    "Are you sure you want to delete this anonymous group? This action is permanent!"
-                )
-            },
-            dismissButton = {
-                TextButton(onClick = detailsViewModel::hideDeleteAGDialog) {
-                    Text("No, don't delete")
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = detailsViewModel::deleteAnonymousGroup) { Text("Yes, delete") }
-            },
-            onDismissRequest = detailsViewModel::hideDeleteAGDialog,
+        DeleteGroupDialog(
+            groupName = groupName,
+            membersCount = details.members?.size ?: 1,
+            onConfirm = detailsViewModel::deleteAnonymousGroup,
+            onDismiss = detailsViewModel::hideDeleteAGDialog,
         )
     }
-
     if (details.showLeaveAGDialog) {
-        AlertDialog(
-            title = { Text("Leave $groupName") },
-            text = { Text("Are you sure you want to leave this anonymous group?") },
-            dismissButton = {
-                TextButton(onClick = detailsViewModel::hideLeaveAGDialog) { Text("No, stay") }
-            },
-            confirmButton = {
-                TextButton(onClick = detailsViewModel::leaveAnonymousGroup) { Text("Yes, leave") }
-            },
-            onDismissRequest = detailsViewModel::hideLeaveAGDialog,
+        LeaveGroupDialog(
+            groupName = groupName,
+            onConfirm = detailsViewModel::leaveAnonymousGroup,
+            onDismiss = detailsViewModel::hideLeaveAGDialog,
         )
     }
-
     details.makeAdminDialogMemberId?.let { memberId ->
-        val memberName = details.members?.get(memberId)?.name ?: "this member"
-        AlertDialog(
-            title = { Text("Make $memberName an admin?") },
-            text = {
-                Text(
-                    "They will be able to delete the group and make other members admins. This can't be undone from the app."
-                )
-            },
-            dismissButton = {
-                TextButton(onClick = detailsViewModel::hideMakeAdminDialog) { Text("Cancel") }
-            },
-            confirmButton = {
-                TextButton(onClick = detailsViewModel::makeMemberAdmin) { Text("Make admin") }
-            },
-            onDismissRequest = detailsViewModel::hideMakeAdminDialog,
+        MakeAdminDialog(
+            memberName = details.members?.get(memberId)?.name ?: "this member",
+            onConfirm = detailsViewModel::makeMemberAdmin,
+            onDismiss = detailsViewModel::hideMakeAdminDialog,
         )
     }
 
     val connectionId = state.selectedConnectionId
     val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    val sheetKind = sheetContentKind(state, details)
+    val content = sheetContent(state, details)
+    val isOffline =
+        state.isServerUnreachable ||
+            details.remoteDataLoadingState == LoadingState.Failed ||
+            details.locationStreamState == LocationStreamState.Reconnecting
+    val myCoordinates = details.myLocationRecordFromGPS?.coordinates
+    val sheetActions =
+        MapSheetActions(
+            onSharingChange = { detailsViewModel.toggleAGShareLocation() },
+            onCreateGroup = { connectionId?.let(navigateToCreateAG) },
+            onJoinGroup = { connectionId?.let(navigateToJoinAG) },
+            onRemoveGroup = viewModel::removeLocalGroup,
+            onInvite = { selectedGroup?.let { navigateToInvite(it.internalId) } },
+            onOpenCircles = { selectedGroup?.let { navigateToCircles(it.internalId) } },
+            onSelectMember = ::selectMember,
+            onBackToGroup = detailsViewModel::clearSelectedMember,
+            onFollow = {
+                coroutineScope.launch {
+                    sheetState.partialExpand()
+                    detailsViewModel.setFollowSelectedMember(true)
+                }
+            },
+            onOpenInMaps = ::openInMaps,
+            onCopyCoordinates = ::copyCoordinates,
+            onCopyMemberId = { member ->
+                copyToClipboard("memberId", member.id, "Member ID copied to clipboard")
+            },
+            onMakeAdmin = detailsViewModel::showMakeAdminDialog,
+            onMuteMember = detailsViewModel::setMemberMuted,
+        )
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -437,37 +430,28 @@ fun MapScreen(
     ) {
         PeekHeaderBottomSheetScaffold(
             scaffoldState = scaffoldState,
-            sheetMaxHeight = LocalConfiguration.current.screenHeightDp.dp * 0.55f,
+            sheetMaxHeight = LocalConfiguration.current.screenHeightDp.dp * 0.6f,
             snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
             sheetHeader = {
-                MembersSheetHeader(
-                    kind = sheetKind,
-                    mapState = state,
+                MapSheetHeader(
+                    content = content,
+                    selectedGroup = selectedGroup,
                     details = details,
-                    onCreateGroup = { connectionId?.let(navigateToCreateAG) },
-                    onJoinGroup = { connectionId?.let(navigateToJoinAG) },
-                    onRemoveGroup = viewModel::removeLocalGroup,
-                    onBackToMembers = detailsViewModel::clearSelectedMember,
-                    onToggleFollow = detailsViewModel::setFollowSelectedMember,
+                    myCoordinates = myCoordinates,
+                    now = now,
+                    sharingSupporting = if (isOffline) "Sends again once connected" else null,
+                    actions = sheetActions,
                 )
             },
             sheetBody =
-                if (sheetKind.hasBody) {
+                if (content.hasBody) {
                     {
-                        MembersSheetBody(
-                            kind = sheetKind,
+                        MapSheetBody(
+                            content = content,
                             details = details,
-                            onSelectMember = ::selectMember,
-                            onCopyCoordinates = ::copyCoordinates,
-                            onOpenInMaps = ::openInMaps,
-                            onCopyMemberId = { member ->
-                                copyToClipboard(
-                                    "memberId",
-                                    member.id,
-                                    "Member id copied to clipboard",
-                                )
-                            },
-                            onMakeAdmin = detailsViewModel::showMakeAdminDialog,
+                            myCoordinates = myCoordinates,
+                            now = now,
+                            actions = sheetActions,
                         )
                     }
                 } else null,
@@ -499,9 +483,16 @@ fun MapScreen(
                     )
                 }
 
-                Column(modifier = Modifier.align(Alignment.TopCenter)) {
+                Column(
+                    modifier = Modifier.align(Alignment.TopCenter),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
                     FloatingGroupBar(
                         selectedGroup = selectedGroup,
+                        subtitle =
+                            details.members
+                                ?.takeIf { details.anonymousGroup != null }
+                                ?.let { if (it.size == 1) "Only you" else "${it.size} members" },
                         groups =
                             filterGroups(sortGroups(state.groups ?: emptyList()), state.groupQuery),
                         isPickerOpen = state.isGroupPickerOpen,
@@ -520,48 +511,44 @@ fun MapScreen(
                             connectionId?.let(navigateToJoinAG)
                         },
                         groupMenu = { dismiss ->
-                            GroupMenuItems(
-                                group = selectedGroup,
-                                isSharingLocation = details.anonymousGroup?.sendLocation == true,
-                                canToggleSharing = details.anonymousGroup != null,
-                                isAdmin = details.anonymousGroup?.memberIsAGAdmin == true,
-                                onToggleSharing = {
-                                    dismiss()
-                                    detailsViewModel.toggleAGShareLocation()
-                                },
-                                onCircles = {
-                                    dismiss()
-                                    selectedGroup?.let { navigateToCircles(it.internalId) }
-                                },
-                                onInvite = {
-                                    dismiss()
-                                    selectedGroup?.let { navigateToInvite(it.internalId) }
-                                },
-                                onLeave = {
-                                    dismiss()
-                                    detailsViewModel.showLeaveAGDialog()
-                                },
-                                onRemove = {
-                                    dismiss()
-                                    viewModel.removeLocalGroup()
-                                },
-                                onDelete = {
-                                    dismiss()
-                                    detailsViewModel.showDeleteAGDialog()
-                                },
-                            )
+                            selectedGroup?.let { group ->
+                                GroupMenuItems(
+                                    group = group,
+                                    isAdmin = details.anonymousGroup?.memberIsAGAdmin == true,
+                                    onInvite = {
+                                        dismiss()
+                                        navigateToInvite(group.internalId)
+                                    },
+                                    onCircles = {
+                                        dismiss()
+                                        navigateToCircles(group.internalId)
+                                    },
+                                    onLeave = {
+                                        dismiss()
+                                        detailsViewModel.showLeaveAGDialog()
+                                    },
+                                    onDelete = {
+                                        dismiss()
+                                        detailsViewModel.showDeleteAGDialog()
+                                    },
+                                    onRemove = {
+                                        dismiss()
+                                        viewModel.removeLocalGroup()
+                                    },
+                                )
+                            }
                         },
                     )
-                    if (
-                        !state.isGroupPickerOpen &&
-                            (state.isServerUnreachable ||
-                                details.remoteDataLoadingState == LoadingState.Failed ||
-                                details.locationStreamState == LocationStreamState.Reconnecting)
-                    ) {
+                    if (!state.isGroupPickerOpen && content is SheetContent.Following) {
+                        details.members?.get(content.memberId)?.let { member ->
+                            FollowingPill(
+                                name = member.name,
+                                onStop = { detailsViewModel.setFollowSelectedMember(false) },
+                            )
+                        }
+                    } else if (!state.isGroupPickerOpen && isOffline) {
                         ServerUnreachableBanner(
-                            modifier =
-                                Modifier.padding(horizontal = 12.dp)
-                                    .clip(RoundedCornerShape(16.dp)),
+                            modifier = Modifier.padding(horizontal = 12.dp),
                             onRetry = {
                                 viewModel.retryServer()
                                 detailsViewModel.remoteOperations()
@@ -570,7 +557,12 @@ fun MapScreen(
                     }
                 }
 
-                if (scaffoldState.bottomSheetState.targetValue != SheetValue.Expanded) {
+                // Without a body the sheet settles as expanded at its collapsed height, so only an
+                // expanded body hides the button
+                if (
+                    !content.hasBody ||
+                        scaffoldState.bottomSheetState.targetValue != SheetValue.Expanded
+                ) {
                     FloatingActionButton(
                         modifier =
                             Modifier.align(Alignment.BottomEnd)
@@ -580,7 +572,7 @@ fun MapScreen(
                     ) {
                         Icon(
                             painter = painterResource(R.drawable.outline_location_searching_24),
-                            contentDescription = "My location",
+                            contentDescription = "Center on me",
                         )
                     }
                 }
@@ -589,59 +581,18 @@ fun MapScreen(
     }
 }
 
+/** Under the top bar while the camera follows a member; ✕ stops following */
 @Composable
-private fun GroupMenuItems(
-    group: AnonymousGroup?,
-    isSharingLocation: Boolean,
-    canToggleSharing: Boolean,
-    isAdmin: Boolean,
-    onToggleSharing: () -> Unit,
-    onCircles: () -> Unit,
-    onInvite: () -> Unit,
-    onLeave: () -> Unit,
-    onRemove: () -> Unit,
-    onDelete: () -> Unit,
-) {
-    group ?: return
-    val isActive = group.isMember && group.existsRemote
-    if (isActive) {
-        DropdownMenuItem(
-            leadingIcon = { Checkbox(checked = isSharingLocation, onCheckedChange = null) },
-            text = { Text("Share location") },
-            enabled = canToggleSharing,
-            onClick = onToggleSharing,
+private fun FollowingPill(name: String, onStop: () -> Unit) {
+    Button(onClick = onStop, contentPadding = PaddingValues(start = 16.dp, end = 12.dp)) {
+        Icon(
+            painterResource(R.drawable.outline_navigation_24),
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
         )
-    }
-    if (isActive) {
-        DropdownMenuItem(
-            leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) },
-            text = { Text("Circles") },
-            onClick = onCircles,
-        )
-        DropdownMenuItem(
-            leadingIcon = { Icon(Icons.Default.Add, contentDescription = null) },
-            text = { Text("Invite") },
-            onClick = onInvite,
-        )
-        DropdownMenuItem(
-            leadingIcon = {
-                Icon(painterResource(R.drawable.outline_logout_24), contentDescription = null)
-            },
-            text = { Text("Leave") },
-            onClick = onLeave,
-        )
-        if (isAdmin) {
-            DropdownMenuItem(
-                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
-                text = { Text("Delete") },
-                onClick = onDelete,
-            )
-        }
-    } else {
-        DropdownMenuItem(
-            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
-            text = { Text("Remove from device") },
-            onClick = onRemove,
-        )
+        Spacer(Modifier.size(8.dp))
+        Text("Following $name")
+        Spacer(Modifier.size(8.dp))
+        Icon(Icons.Default.Close, contentDescription = "Stop following", Modifier.size(18.dp))
     }
 }

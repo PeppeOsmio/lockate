@@ -7,7 +7,7 @@ import kotlinx.datetime.LocalDateTime
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-class SheetContentKindTest {
+class SheetContentTest {
 
     private val date = LocalDateTime(2026, 1, 1, 0, 0, 0)
 
@@ -42,78 +42,101 @@ class SheetContentKindTest {
     private fun mapState(groups: List<AnonymousGroup>?, selected: Long? = 1) =
         MapState(groups = groups, selectedGroupInternalId = selected)
 
+    private val twoMembers = mapOf("me" to member("me"), "marco" to member("marco"))
+
     private fun details(
         selectedMemberId: String? = null,
-        members: Map<String, AGMember>? = mapOf("me" to member("me")),
+        members: Map<String, AGMember>? = twoMembers,
+        following: Boolean = false,
     ) =
         AGDetailsState(
             anonymousGroup = group(),
             members = members,
             selectedMemberId = selectedMemberId,
+            isFollowingSelectedMember = following,
         )
 
     @Test
     fun `groups still loading`() {
-        assertEquals(SheetContentKind.Loading, sheetContentKind(mapState(null), AGDetailsState()))
+        assertEquals(SheetContent.Loading, sheetContent(mapState(null), AGDetailsState()))
     }
 
     @Test
     fun `groups exist but none is selected yet`() {
         assertEquals(
-            SheetContentKind.Loading,
-            sheetContentKind(mapState(listOf(group()), selected = null), AGDetailsState()),
+            SheetContent.Loading,
+            sheetContent(mapState(listOf(group()), selected = null), AGDetailsState()),
         )
     }
 
     @Test
     fun `no groups`() {
         assertEquals(
-            SheetContentKind.NoGroups,
-            sheetContentKind(mapState(emptyList()), AGDetailsState()),
+            SheetContent.NoGroups,
+            sheetContent(mapState(emptyList()), AGDetailsState()),
         )
     }
 
     @Test
     fun `group that no longer exists or that you were removed from`() {
         assertEquals(
-            SheetContentKind.BrokenGroup,
-            sheetContentKind(mapState(listOf(group(existsRemote = false))), AGDetailsState()),
+            SheetContent.GroupGone,
+            sheetContent(mapState(listOf(group(existsRemote = false))), AGDetailsState()),
         )
         assertEquals(
-            SheetContentKind.BrokenGroup,
-            sheetContentKind(mapState(listOf(group(isMember = false))), AGDetailsState()),
+            SheetContent.GroupGone,
+            sheetContent(mapState(listOf(group(isMember = false))), AGDetailsState()),
         )
     }
 
     @Test
     fun `members not loaded yet`() {
         assertEquals(
-            SheetContentKind.Loading,
-            sheetContentKind(mapState(listOf(group())), details(members = null)),
+            SheetContent.Loading,
+            sheetContent(mapState(listOf(group())), details(members = null)),
         )
     }
 
     @Test
-    fun `members list when no member is selected`() {
+    fun `group when no member is selected`() {
         assertEquals(
-            SheetContentKind.Members,
-            sheetContentKind(mapState(listOf(group())), details()),
+            SheetContent.Group,
+            sheetContent(mapState(listOf(group())), details()),
         )
     }
 
     @Test
     fun `member details when a known member is selected`() {
         assertEquals(
-            SheetContentKind.MemberDetails,
-            sheetContentKind(mapState(listOf(group())), details(selectedMemberId = "me")),
+            SheetContent.Member("marco"),
+            sheetContent(mapState(listOf(group())), details(selectedMemberId = "marco")),
         )
     }
 
     @Test
-    fun `selected member that is not in the group falls back to the list`() {
+    fun `following when the selected member is followed`() {
         assertEquals(
-            SheetContentKind.Members,
-            sheetContentKind(mapState(listOf(group())), details(selectedMemberId = "ghost")),
+            SheetContent.Following("marco"),
+            sheetContent(
+                mapState(listOf(group())),
+                details(selectedMemberId = "marco", following = true),
+            ),
+        )
+    }
+
+    @Test
+    fun `alone when this phone's member is the only one`() {
+        assertEquals(
+            SheetContent.Alone,
+            sheetContent(mapState(listOf(group())), details(members = mapOf("me" to member("me")))),
+        )
+    }
+
+    @Test
+    fun `selected member that is not in the group falls back to the group`() {
+        assertEquals(
+            SheetContent.Group,
+            sheetContent(mapState(listOf(group())), details(selectedMemberId = "ghost")),
         )
     }
 }
