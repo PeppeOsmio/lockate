@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.os.PowerManager
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.ActivityRecognition
 import com.google.android.gms.location.ActivityTransition
@@ -35,6 +36,8 @@ internal fun userActivityOf(detectedActivityType: Int): UserActivity =
         else -> UserActivity.Unknown
     }
 
+private const val TRANSITION_WAKE_LOCK_MILLIS = 10_000L
+
 /**
  * The user's activity from the Activity Recognition transitions. Stays [UserActivity.Unknown]
  * without the activity recognition permission, so callers behave as if the user were moving.
@@ -48,6 +51,15 @@ class ActivityService(
 
     @OptIn(ExperimentalAtomicApi::class) private val activeCollectors = AtomicInt(0)
     private var receiver: BroadcastReceiver? = null
+
+    // The CPU may sleep as soon as onReceive returns, before the send loops take the new activity
+    // and their own lock for the post: the switch to still would then wait for the still fix 10
+    // minutes later. Nothing knows when they did, so it times out.
+    private val transitionWakeLock =
+        context
+            .getSystemService(PowerManager::class.java)
+            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "lockate:activity-transition")
+            .apply { setReferenceCounted(false) }
 
     private val pendingIntent by lazy {
         // FLAG_MUTABLE: Play Services adds the transition result to the intent
@@ -101,6 +113,7 @@ class ActivityService(
                 override fun onReceive(context: Context?, intent: Intent?) {
                     val result =
                         intent?.let { ActivityTransitionResult.extractResult(it) } ?: return
+                    transitionWakeLock.acquire(TRANSITION_WAKE_LOCK_MILLIS)
                     result.transitionEvents.forEach { event ->
                         val eventActivity = userActivityOf(event.activityType)
                         sendLoopLog.log(
