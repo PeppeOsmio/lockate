@@ -77,7 +77,13 @@ class InviteService(
             val created = createInvite(connection, anonymousGroup, inviter.hello)
             invite = created
             val expiresAt = created.expiresAt.toInstant(TimeZone.UTC)
-            emit(InviteState.WaitingForInvitee(InviteCode(created.nameplate, words), expiresAt))
+            val code = InviteCode(created.nameplate, words)
+            emit(
+                InviteState.WaitingForInvitee(
+                    InviteLink(server = connection.url, code = code, apiKey = connection.apiKey),
+                    expiresAt,
+                )
+            )
 
             val progress =
                 pollUntil(expiresAt) {
@@ -154,10 +160,15 @@ class InviteService(
         InviteExpiredException::class,
         TooManyRequestsException::class,
     )
+    /**
+     * Joins with [code]; [onCodeConfirmed] is called once the inviter's phone has proved it knows
+     * the same code, when only the group's key is left to receive.
+     */
     suspend fun joinWithCode(
         connectionId: Long,
         code: InviteCode,
         memberName: String,
+        onCodeConfirmed: () -> Unit = {},
     ): AnonymousGroup {
         val connection = connectionService.getConnectionSettingsById(connectionId)
         val hello = getInviterHello(connection, code.nameplate)
@@ -191,6 +202,7 @@ class InviteService(
             // Posted even when the inviter's tag was wrong, so the inviter finds out at once
             postInviteeConfirmation(connection, code.nameplate, claimToken, confirmation.tb)
             if (!confirmation.inviterTagValid) throw InviteRejectedException()
+            onCodeConfirmed()
 
             val encryptedPayload =
                 pollUntil(deadline) {

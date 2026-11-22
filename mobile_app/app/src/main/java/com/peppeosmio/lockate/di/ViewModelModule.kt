@@ -48,7 +48,10 @@ val viewModelModule = module {
     }
 
     viewModel<JoinAnonymousGroupViewModel> {
-        JoinAnonymousGroupViewModel(inviteService = get<InviteService>())
+        JoinAnonymousGroupViewModel(
+            inviteService = get<InviteService>(),
+            connectionService = get<ConnectionService>(),
+        )
     }
 
     viewModel<InviteViewModel> {

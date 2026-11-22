@@ -122,3 +122,17 @@ names the server. The pencil on a row opens the server screen, which has three m
   a dialog that names them.
 - There is no "unreachable" mark in the drawer: the "Can't connect" pill on the map says it for
   the server in use.
+
+## Groups
+
+- **The group picker** opens from the top bar: search, New group and Join, and one row per group
+  of the server in use, with whether this phone shares and how many members it has ("Sharing · 3
+  members", "Not sharing · only you"), or why it can't be used anymore.
+- **New group** asks for the group's name and this member's name; the map then opens on the
+  group, alone in it.
+- **Join a group**: Scan QR code, or the code typed in a monospace field ([Invites](invites.md)).
+  Joining is a full screen with its two steps and Cancel, not a dialog. Once in, the map opens
+  on the group, on whichever server it is.
+- **Invite**: the code in two lines (the number large, the words under it), Copy and Share, the
+  QR code (`QrCode`, always black on white, which scanners read best), a bar running down the
+  10 minutes, and the reminder that the first one who enters it gets in.

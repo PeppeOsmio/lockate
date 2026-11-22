@@ -13,8 +13,16 @@ import com.peppeosmio.lockate.data.anonymous_group.database.PushRegistrationEnti
 import com.peppeosmio.lockate.data.anonymous_group.mappers.CircleMapper
 import com.peppeosmio.lockate.domain.anonymous_group.Circle
 
+data class GroupMemberCount(val anonymousGroupInternalId: Long, val memberCount: Int)
+
 @Dao
 interface AnonymousGroupDao {
+    @Query(
+        "SELECT anonymousGroupInternalId, COUNT(*) AS memberCount FROM ag_member " +
+            "GROUP BY anonymousGroupInternalId"
+    )
+    suspend fun countMembers(): List<GroupMemberCount>
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertAnonymousGroup(agEntity: AnonymousGroupEntity): Long
 

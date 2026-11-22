@@ -14,9 +14,18 @@ enum class ServerScreenMode {
     Edit,
 }
 
+/**
+ * The server screen. [inviteServer], [inviteApiKey] and [inviteCode] come from an invite's QR code
+ * on a server this phone doesn't have yet: adding it then goes on to join.
+ */
 @Serializable
-data class ConnectionSettingsRoute(val mode: ServerScreenMode, val connectionId: Long? = null) :
-    Route
+data class ConnectionSettingsRoute(
+    val mode: ServerScreenMode,
+    val connectionId: Long? = null,
+    val inviteServer: String? = null,
+    val inviteApiKey: String? = null,
+    val inviteCode: String? = null,
+) : Route
 
 @Serializable data object HomeRoute : Route
 
@@ -24,7 +33,9 @@ data class ConnectionSettingsRoute(val mode: ServerScreenMode, val connectionId:
 
 @Serializable data class CreateAnonymousGroupRoute(val connectionSettingsId: Long) : Route
 
-@Serializable data class JoinAnonymousGroupRoute(val connectionSettingsId: Long) : Route
+/** [code] is filled in when the join comes from an invite's QR code */
+@Serializable
+data class JoinAnonymousGroupRoute(val connectionSettingsId: Long, val code: String? = null) : Route
 
 @Serializable data class InviteRoute(val anonymousGroupInternalId: Long) : Route
 

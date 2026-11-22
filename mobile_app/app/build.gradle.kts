@@ -161,6 +161,10 @@ dependencies {
     implementation(libs.cryptography.core)
     implementation(libs.cryptography.provider.optimal)
 
+    // Reading an invite's QR code: Google's scanner UI, so the app needs no camera permission
+    implementation(libs.play.services.code.scanner)
+    // Drawing an invite's QR code, in plain Java
+    implementation(libs.zxing.core)
     implementation(libs.play.services.location)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)

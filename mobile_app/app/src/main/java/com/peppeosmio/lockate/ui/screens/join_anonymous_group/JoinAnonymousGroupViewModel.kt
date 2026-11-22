@@ -8,8 +8,10 @@ import com.peppeosmio.lockate.exceptions.InviteNotFoundException
 import com.peppeosmio.lockate.exceptions.InviteRejectedException
 import com.peppeosmio.lockate.exceptions.LocalAGExistsException
 import com.peppeosmio.lockate.exceptions.TooManyRequestsException
+import com.peppeosmio.lockate.service.ConnectionService
 import com.peppeosmio.lockate.service.anonymous_group.PayloadCodec
 import com.peppeosmio.lockate.service.invite.InviteCode
+import com.peppeosmio.lockate.service.invite.InviteLink
 import com.peppeosmio.lockate.service.invite.InviteService
 import com.peppeosmio.lockate.utils.ErrorInfo
 import com.peppeosmio.lockate.utils.SnackbarErrorMessage
@@ -22,14 +24,60 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class JoinAnonymousGroupViewModel(private val inviteService: InviteService) : ViewModel() {
+/** A server this phone doesn't have yet, from an invite's QR code: it is added before joining */
+data class NewServerInvite(val server: String, val apiKey: String?, val code: String)
+
+class JoinAnonymousGroupViewModel(
+    private val inviteService: InviteService,
+    private val connectionService: ConnectionService,
+) : ViewModel() {
     private val _state = MutableStateFlow(JoinAnonymousGroupState())
     val state = _state.asStateFlow()
     private val _snackbarEvents = Channel<SnackbarErrorMessage>(Channel.BUFFERED)
     val snackbarEvents = _snackbarEvents.receiveAsFlow()
-    private val _navigateBackEvents = Channel<Unit>(Channel.BUFFERED)
-    val navigateBackEvents = _navigateBackEvents.receiveAsFlow()
+
+    // after joining, the map opens on the group, on whichever server it is
+    private val _navigateHomeEvents = Channel<Unit>(Channel.BUFFERED)
+    val navigateHomeEvents = _navigateHomeEvents.receiveAsFlow()
+    private val _addServerEvents = Channel<NewServerInvite>(Channel.BUFFERED)
+    val addServerEvents = _addServerEvents.receiveAsFlow()
     private var joinJob: Job? = null
+
+    // the server to join on: the one in use, or the one of a scanned QR code
+    private var connectionId: Long? = null
+
+    fun load(connectionId: Long, code: String?) {
+        if (this.connectionId != null) return
+        this.connectionId = connectionId
+        code?.let { setCodeText(it) }
+    }
+
+    /**
+     * Reads a scanned QR code: on a saved server, the code is filled in and the join will happen
+     * there (that server's own API key is kept); on a new server, that server is added first.
+     */
+    fun onScanned(text: String) {
+        val link = InviteLink.parse(text)
+        if (link == null) {
+            _snackbarEvents.trySend(SnackbarErrorMessage("This QR code isn't a Lockate invite"))
+            return
+        }
+        viewModelScope.launch {
+            val saved = connectionService.findByUrl(link.server)
+            if (saved == null) {
+                _addServerEvents.trySend(
+                    NewServerInvite(link.server, link.apiKey, link.code.toString())
+                )
+                return@launch
+            }
+            connectionId = saved.id
+            setCodeText(link.code.toString())
+        }
+    }
+
+    fun onScanFailed() {
+        _snackbarEvents.trySend(SnackbarErrorMessage("Can't open the QR code scanner"))
+    }
 
     fun setCodeText(text: String) {
         _state.update { it.copy(codeText = text, codeError = null) }
@@ -41,8 +89,9 @@ class JoinAnonymousGroupViewModel(private val inviteService: InviteService) : Vi
         }
     }
 
-    fun joinAnonymousGroup(connectionSettingsId: Long) {
+    fun joinAnonymousGroup() {
         if (joinJob?.isActive == true) return
+        val connectionSettingsId = connectionId ?: return
         val code = InviteCode.parse(state.value.codeText)
         val memberName = state.value.memberNameText.trim()
         _state.update {
@@ -54,14 +103,20 @@ class JoinAnonymousGroupViewModel(private val inviteService: InviteService) : Vi
         }
         if (code == null || memberName.isEmpty()) return
         joinJob = viewModelScope.launch {
-            _state.update { it.copy(isJoining = true) }
+            _state.update { it.copy(step = JoinStep.CheckingCode) }
             try {
-                inviteService.joinWithCode(
-                    connectionId = connectionSettingsId,
-                    code = code,
-                    memberName = memberName,
-                )
-                _navigateBackEvents.trySend(Unit)
+                val group =
+                    inviteService.joinWithCode(
+                        connectionId = connectionSettingsId,
+                        code = code,
+                        memberName = memberName,
+                        onCodeConfirmed = {
+                            _state.update { it.copy(step = JoinStep.ReceivingKey) }
+                        },
+                    )
+                connectionService.saveSelectedConnectionSettingsId(connectionSettingsId)
+                connectionService.saveLastAGInternalId(connectionSettingsId, group.internalId)
+                _navigateHomeEvents.trySend(Unit)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -99,7 +154,7 @@ class JoinAnonymousGroupViewModel(private val inviteService: InviteService) : Vi
                     }
                 )
             } finally {
-                _state.update { it.copy(isJoining = false) }
+                _state.update { it.copy(step = null) }
             }
         }
     }

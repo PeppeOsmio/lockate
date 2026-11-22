@@ -295,6 +295,10 @@ class MapViewModel(
 
     fun openGroupPicker() {
         _state.update { it.copy(isGroupPickerOpen = true) }
+        viewModelScope.launch {
+            val counts = anonymousGroupService.countMembers()
+            _state.update { it.copy(memberCounts = counts) }
+        }
     }
 
     fun closeGroupPicker() {

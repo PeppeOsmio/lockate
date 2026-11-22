@@ -55,6 +55,7 @@ import com.peppeosmio.lockate.ui.composables.ErrorDialog
 import com.peppeosmio.lockate.ui.composables.FormField
 import com.peppeosmio.lockate.ui.composables.MemberAvatar
 import com.peppeosmio.lockate.ui.routes.ServerScreenMode
+import com.peppeosmio.lockate.ui.screens.join_anonymous_group.NewServerInvite
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -68,7 +69,9 @@ private val NOTICE_BEFORE_NAVIGATING = 1200.milliseconds
 fun ConnectionSettingsScreen(
     mode: ServerScreenMode,
     connectionId: Long?,
+    invite: NewServerInvite?,
     navigateToHome: () -> Unit,
+    navigateToJoin: (connectionId: Long, code: String) -> Unit,
     navigateBack: () -> Unit,
     viewModel: ConnectionSettingsViewModel = koinViewModel(),
 ) {
@@ -76,7 +79,10 @@ fun ConnectionSettingsScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
 
-    LaunchedEffect(mode, connectionId) { viewModel.load(mode, connectionId) }
+    LaunchedEffect(mode, connectionId) { viewModel.load(mode, connectionId, invite) }
+    LaunchedEffect(true) {
+        viewModel.navigateToJoinEvents.collect { (id, code) -> navigateToJoin(id, code) }
+    }
     LaunchedEffect(true) {
         viewModel.navigateHomeEvents.collect { notice ->
             if (notice != null) {
@@ -141,6 +147,13 @@ fun ConnectionSettingsScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 if (mode == ServerScreenMode.FirstLaunch) FirstLaunchIntro()
+                if (state.inviteCode != null) {
+                    Text(
+                        "This invite is on a server you don't have yet. Add it to join.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 Fields(state, viewModel)
                 if (mode == ServerScreenMode.Edit) EditExtras(state)
             }
@@ -240,7 +253,9 @@ private fun Fields(state: ConnectionSettingsState, viewModel: ConnectionSettings
         value = state.apiKey,
         onValueChange = viewModel::onApiKeyChanged,
         label = if (state.mode == ServerScreenMode.Edit) "API key" else "API key (optional)",
-        supportingText = "Only if the server asks for one",
+        supportingText =
+            if (state.inviteCode != null && state.apiKey.isNotEmpty()) "From the invite"
+            else "Only if the server asks for one",
         password = true,
         enabled = !state.isWorking,
     )
@@ -289,7 +304,9 @@ private fun Footer(state: ConnectionSettingsState, onConnect: () -> Unit, onRemo
         val hint =
             when (state.mode) {
                 ServerScreenMode.FirstLaunch -> "You can add more servers later from the menu"
-                ServerScreenMode.Add -> "It opens with no groups. Create or join one there."
+                ServerScreenMode.Add ->
+                    if (state.inviteCode != null) ""
+                    else "It opens with no groups. Create or join one there."
                 ServerScreenMode.Edit -> removeConsequence(state.groups)
             }
         if (state.mode == ServerScreenMode.Edit) {
@@ -307,14 +324,20 @@ private fun Footer(state: ConnectionSettingsState, onConnect: () -> Unit, onRemo
                 Text("Remove from this phone")
             }
         }
-        if (state.mode == ServerScreenMode.Add) Hint(hint)
+        if (state.mode == ServerScreenMode.Add && hint.isNotEmpty()) Hint(hint)
         if (state.mode != ServerScreenMode.Edit) {
             Button(
                 modifier = Modifier.fillMaxWidth(),
                 onClick = onConnect,
                 enabled = !state.isWorking,
             ) {
-                Text(if (state.isWorking) "Connecting…" else "Connect")
+                Text(
+                    when {
+                        state.isWorking -> "Connecting…"
+                        state.inviteCode != null -> "Connect and join"
+                        else -> "Connect"
+                    }
+                )
             }
         }
         if (state.mode != ServerScreenMode.Add) Hint(hint)

@@ -25,6 +25,7 @@ import com.peppeosmio.lockate.ui.screens.connection_settings.ConnectionSettingsS
 import com.peppeosmio.lockate.ui.screens.create_anonymous_group.CreateAnonymousGroupScreen
 import com.peppeosmio.lockate.ui.screens.invite.InviteScreen
 import com.peppeosmio.lockate.ui.screens.join_anonymous_group.JoinAnonymousGroupScreen
+import com.peppeosmio.lockate.ui.screens.join_anonymous_group.NewServerInvite
 import com.peppeosmio.lockate.ui.screens.loading.LoadingScreen
 import com.peppeosmio.lockate.ui.screens.map.MapScreen
 import com.peppeosmio.lockate.ui.screens.settings.SettingsScreen
@@ -120,12 +121,24 @@ fun LockateApp(startLocationService: () -> Unit) {
                 )
             }
             composable<JoinAnonymousGroupRoute> { navBackStackEntry ->
-                val joinAnonymousGroupRoute = navBackStackEntry.toRoute<JoinAnonymousGroupRoute>()
+                val route = navBackStackEntry.toRoute<JoinAnonymousGroupRoute>()
                 JoinAnonymousGroupScreen(
-                    navigateBack = {
-                        appNavController.popBackStack()
+                    connectionId = route.connectionSettingsId,
+                    code = route.code,
+                    navigateBack = { appNavController.popBackStack() },
+                    navigateToHome = {
+                        appNavController.navigate(HomeRoute) { popUpTo(0) { inclusive = true } }
                     },
-                    connectionId = joinAnonymousGroupRoute.connectionSettingsId,
+                    navigateToAddServer = { invite ->
+                        appNavController.navigate(
+                            ConnectionSettingsRoute(
+                                mode = ServerScreenMode.Add,
+                                inviteServer = invite.server,
+                                inviteApiKey = invite.apiKey,
+                                inviteCode = invite.code,
+                            )
+                        )
+                    },
                 )
             }
             composable<InviteRoute> { navBackStackEntry ->
@@ -159,16 +172,25 @@ fun LockateApp(startLocationService: () -> Unit) {
                 )
             }
             composable<ConnectionSettingsRoute> { navBackStackEntry ->
-                val connectionSettingsRoute = navBackStackEntry.toRoute<ConnectionSettingsRoute>()
+                val route = navBackStackEntry.toRoute<ConnectionSettingsRoute>()
                 ConnectionSettingsScreen(
-                    mode = connectionSettingsRoute.mode,
-                    connectionId = connectionSettingsRoute.connectionId,
-                    navigateBack = {
-                        appNavController.popBackStack()
-                    },
+                    mode = route.mode,
+                    connectionId = route.connectionId,
+                    invite =
+                        if (route.inviteServer != null && route.inviteCode != null) {
+                            NewServerInvite(
+                                route.inviteServer,
+                                route.inviteApiKey,
+                                route.inviteCode,
+                            )
+                        } else null,
+                    navigateBack = { appNavController.popBackStack() },
                     navigateToHome = {
-                        appNavController.navigate(HomeRoute) {
-                            popUpTo(0) { inclusive = true }
+                        appNavController.navigate(HomeRoute) { popUpTo(0) { inclusive = true } }
+                    },
+                    navigateToJoin = { connectionId, code ->
+                        appNavController.navigate(JoinAnonymousGroupRoute(connectionId, code)) {
+                            popUpTo<HomeRoute>()
                         }
                     },
                 )

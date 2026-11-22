@@ -25,7 +25,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
@@ -49,9 +48,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.peppeosmio.lockate.R
 import com.peppeosmio.lockate.domain.anonymous_group.AnonymousGroup
+import com.peppeosmio.lockate.ui.composables.MemberAvatar
 
 /**
  * Pill floating on top of the map. Tapping the group name expands it downwards into the group
@@ -63,6 +65,7 @@ fun FloatingGroupBar(
     selectedGroup: AnonymousGroup?,
     subtitle: String?,
     groups: List<AnonymousGroup>,
+    memberCounts: Map<Long, Int>,
     isPickerOpen: Boolean,
     query: String,
     onQueryChange: (String) -> Unit,
@@ -99,11 +102,11 @@ fun FloatingGroupBar(
                             modifier = Modifier.size(18.dp),
                         )
                         Spacer(Modifier.size(8.dp))
-                        Text("Create")
+                        Text("New group")
                     }
                     FilledTonalButton(onClick = onJoinGroup, modifier = Modifier.weight(1f)) {
                         Icon(
-                            Icons.Default.Person,
+                            painterResource(R.drawable.baseline_person_add_24),
                             contentDescription = null,
                             modifier = Modifier.size(18.dp),
                         )
@@ -118,6 +121,7 @@ fun FloatingGroupBar(
                     items(groups, key = { it.internalId }) { group ->
                         GroupRow(
                             group = group,
+                            memberCount = memberCounts[group.internalId],
                             isSelected = group.internalId == selectedGroup?.internalId,
                             onClick = { onSelectGroup(group.internalId) },
                         )
@@ -235,23 +239,40 @@ private fun PickerHeader(query: String, onQueryChange: (String) -> Unit, onClose
 }
 
 @Composable
-private fun GroupRow(group: AnonymousGroup, isSelected: Boolean, onClick: () -> Unit) {
+private fun GroupRow(
+    group: AnonymousGroup,
+    memberCount: Int?,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+) {
     ListItem(
         modifier = Modifier.clickable(onClick = onClick),
+        leadingContent = { MemberAvatar(name = group.name, memberId = group.id) },
         headlineContent = { Text(group.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        supportingContent =
-            when {
-                !group.existsRemote -> ({ Text("Group no longer exists") })
-                !group.isMember -> ({ Text("You were removed") })
-                else -> null
-            },
+        supportingContent = { Text(groupStatus(group, memberCount)) },
         trailingContent =
             if (isSelected) {
                 { Icon(Icons.Default.Check, contentDescription = "Selected") }
             } else null,
         colors =
             ListItemDefaults.colors(
-                containerColor = androidx.compose.ui.graphics.Color.Transparent
+                containerColor =
+                    if (isSelected) MaterialTheme.colorScheme.secondaryContainer
+                    else androidx.compose.ui.graphics.Color.Transparent
             ),
     )
+}
+
+/** "Sharing · 3 members", "Not sharing · only you", or why the group can't be used anymore */
+internal fun groupStatus(group: AnonymousGroup, memberCount: Int?): String {
+    if (!group.existsRemote) return "Deleted"
+    if (!group.isMember) return "Removed"
+    val sharing = if (group.sendLocation) "Sharing" else "Not sharing"
+    val members =
+        when (memberCount) {
+            null -> null
+            1 -> "only you"
+            else -> "$memberCount members"
+        }
+    return listOfNotNull(sharing, members).joinToString(" · ")
 }

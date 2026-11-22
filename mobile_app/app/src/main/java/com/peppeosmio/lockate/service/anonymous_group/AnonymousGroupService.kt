@@ -182,6 +182,14 @@ class AnonymousGroupService(
             }
         }
 
+    /** How many members each group has, as last known on this phone, by group */
+    suspend fun countMembers(): Map<Long, Int> =
+        withContext(Dispatchers.IO) {
+            anonymousGroupDao.countMembers().associate {
+                it.anonymousGroupInternalId to it.memberCount
+            }
+        }
+
     suspend fun getAGByInternalId(anonymousGroupInternalId: Long): AnonymousGroup =
         withContext(Dispatchers.IO) {
             val entity =

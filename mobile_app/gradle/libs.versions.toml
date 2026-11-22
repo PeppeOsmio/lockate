@@ -25,6 +25,8 @@ navigationCompose = "2.10.2"
 composeBom = "2026.09.00"
 playServicesLocation = "21.4.0"
 firebaseBom = "34.0.0"
+playServicesCodeScanner = "16.1.0"
+zxing = "3.5.4"
 roomRuntime = "2.8.5"
 spotless = "8.10.0"
 ktfmt = "0.64"
@@ -67,6 +69,8 @@ ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "kto
 ktor-ktor-client-logging = { module = "io.ktor:ktor-client-logging", version.ref = "ktorIo"}
 ktor-serialization-kotlinx-json = { module = "io.ktor:ktor-serialization-kotlinx-json", version.ref = "ktorSerializationKotlinxJson" }
 play-services-location = { module = "com.google.android.gms:play-services-location", version.ref = "playServicesLocation" }
+play-services-code-scanner = { module = "com.google.android.gms:play-services-code-scanner", version.ref = "playServicesCodeScanner" }
+zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }
 firebase-messaging = { module = "com.google.firebase:firebase-messaging" }
 maplibre-compose = { module = "org.maplibre.compose:maplibre-compose", version.ref = "maplibreCompose" }

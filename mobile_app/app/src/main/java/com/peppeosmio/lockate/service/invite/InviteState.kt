@@ -5,7 +5,11 @@ import kotlin.time.Instant
 sealed interface InviteState {
     data object Creating : InviteState
 
-    data class WaitingForInvitee(val code: InviteCode, val expiresAt: Instant) : InviteState
+    /** [link] is what the QR code holds: the code, with the server and its API key */
+    data class WaitingForInvitee(val link: InviteLink, val expiresAt: Instant) : InviteState {
+        val code: InviteCode
+            get() = link.code
+    }
 
     /** The invitee answered and the two phones are checking that they used the same code */
     data object Verifying : InviteState
