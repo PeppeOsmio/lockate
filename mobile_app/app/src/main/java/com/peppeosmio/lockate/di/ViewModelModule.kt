@@ -18,6 +18,7 @@ import com.peppeosmio.lockate.ui.screens.invite.InviteViewModel
 import com.peppeosmio.lockate.ui.screens.join_anonymous_group.JoinAnonymousGroupViewModel
 import com.peppeosmio.lockate.ui.screens.loading.LoadingViewModel
 import com.peppeosmio.lockate.ui.screens.map.MapViewModel
+import com.peppeosmio.lockate.ui.screens.permissions.PermissionsViewModel
 import com.peppeosmio.lockate.ui.screens.settings.SettingsViewModel
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
@@ -87,6 +88,14 @@ val viewModelModule = module {
         SettingsViewModel(
             mapStyleService = get<MapStyleService>(),
             placeSearchService = get<PlaceSearchService>(),
+            permissionsService = get<PermissionsService>(),
+        )
+    }
+
+    viewModel<PermissionsViewModel> {
+        PermissionsViewModel(
+            permissionsService = get<PermissionsService>(),
+            anonymousGroupService = get<AnonymousGroupService>(),
         )
     }
 }

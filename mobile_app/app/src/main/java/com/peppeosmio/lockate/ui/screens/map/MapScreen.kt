@@ -4,8 +4,6 @@ import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.Intent
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -55,13 +53,13 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.core.net.toUri
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LifecycleStartEffect
 import com.peppeosmio.lockate.R
 import com.peppeosmio.lockate.domain.Coordinates
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.ui.composables.ErrorDialog
 import com.peppeosmio.lockate.ui.composables.PeekHeaderBottomSheetScaffold
-import com.peppeosmio.lockate.ui.composables.PermissionsRequester
 import com.peppeosmio.lockate.ui.composables.ServerUnreachableBanner
 import com.peppeosmio.lockate.ui.routes.ConnectionSettingsRoute
 import com.peppeosmio.lockate.ui.routes.ServerScreenMode
@@ -74,7 +72,6 @@ import com.peppeosmio.lockate.ui.screens.anonymous_group_details.MembersMap
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.lastSeenFreshness
 import com.peppeosmio.lockate.utils.DateTimeUtils
 import com.peppeosmio.lockate.utils.LoadingState
-import com.peppeosmio.lockate.utils.LockatePermissions
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -103,6 +100,7 @@ fun MapScreen(
     navigateToInvite: (anonymousGroupInternalId: Long) -> Unit,
     navigateToCircles: (anonymousGroupInternalId: Long) -> Unit,
     navigateToSettings: () -> Unit,
+    navigateToPermissions: (groupInternalId: Long?) -> Unit,
     startLocationService: () -> Unit,
     viewModel: MapViewModel = koinViewModel(),
     detailsViewModel: AGDetailsViewModel = koinViewModel(),
@@ -280,22 +278,17 @@ fun MapScreen(
         }
     }
 
-    val multiplePermissionsLauncher =
-        rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.RequestMultiplePermissions(),
-            onResult = { detailsViewModel.startMyLocation() },
-        )
-    PermissionsRequester(
-        permissionRequests = LockatePermissions.PERMISSION_REQUESTS,
-        requestPermissions = { permissions ->
-            multiplePermissionsLauncher.launch(permissions.toTypedArray())
-        },
-        checkPermissionGranted = { permission -> viewModel.checkPermissionGranted(permission) },
-        onPermissionsRequested = {
-            startLocationService()
-            detailsViewModel.startMyLocation()
-        },
-    )
+    // the service stops by itself when no group shares; it can start only with the permissions
+    LaunchedEffect(state.canShare) { startLocationService() }
+
+    LifecycleResumeEffect(viewModel) {
+        viewModel.refreshPermissions()
+        onPauseOrDispose {}
+    }
+
+    LaunchedEffect(selectedGroup?.internalId, selectedGroup?.sendLocation) {
+        if (viewModel.shouldPromptPermissions()) navigateToPermissions(selectedGroup!!.internalId)
+    }
 
     BackHandler(enabled = state.isGroupPickerOpen || details.selectedMemberId != null) {
         if (state.isGroupPickerOpen) {
@@ -384,7 +377,13 @@ fun MapScreen(
             details.locationStreamState == LocationStreamState.Reconnecting
     val sheetActions =
         MapSheetActions(
-            onSharingChange = { detailsViewModel.toggleAGShareLocation() },
+            onSharingChange = { sharing ->
+                if (sharing && !state.canShare) {
+                    selectedGroup?.let { navigateToPermissions(it.internalId) }
+                } else {
+                    detailsViewModel.toggleAGShareLocation()
+                }
+            },
             onCreateGroup = { connectionId?.let(navigateToCreateAG) },
             onJoinGroup = { connectionId?.let(navigateToJoinAG) },
             onRemoveGroup = viewModel::removeLocalGroup,
@@ -452,7 +451,13 @@ fun MapScreen(
                     selectedGroup = selectedGroup,
                     details = details,
                     now = now,
-                    sharingSupporting = if (isOffline) "Sends again once connected" else null,
+                    sharingSupporting =
+                        when {
+                            details.anonymousGroup?.sendLocation == true && !state.canShare ->
+                                "Waiting for location permission"
+                            isOffline -> "Sends again once connected"
+                            else -> null
+                        },
                     actions = sheetActions,
                 )
             },
@@ -581,7 +586,10 @@ fun MapScreen(
                             Modifier.align(Alignment.BottomEnd)
                                 .padding(16.dp)
                                 .padding(bottom = sheetPeekHeight),
-                        onClick = detailsViewModel::onTapMyLocation,
+                        onClick = {
+                            if (state.canShare) detailsViewModel.onTapMyLocation()
+                            else navigateToPermissions(null)
+                        },
                     ) {
                         Icon(
                             painter = painterResource(R.drawable.outline_location_searching_24),

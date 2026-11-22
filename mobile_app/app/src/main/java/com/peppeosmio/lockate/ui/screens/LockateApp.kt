@@ -17,6 +17,7 @@ import com.peppeosmio.lockate.ui.routes.HomeRoute
 import com.peppeosmio.lockate.ui.routes.InviteRoute
 import com.peppeosmio.lockate.ui.routes.JoinAnonymousGroupRoute
 import com.peppeosmio.lockate.ui.routes.LoadingRoute
+import com.peppeosmio.lockate.ui.routes.PermissionsRoute
 import com.peppeosmio.lockate.ui.routes.ServerScreenMode
 import com.peppeosmio.lockate.ui.routes.SettingsRoute
 import com.peppeosmio.lockate.ui.screens.circles.CircleEditorScreen
@@ -28,6 +29,7 @@ import com.peppeosmio.lockate.ui.screens.join_anonymous_group.JoinAnonymousGroup
 import com.peppeosmio.lockate.ui.screens.join_anonymous_group.NewServerInvite
 import com.peppeosmio.lockate.ui.screens.loading.LoadingScreen
 import com.peppeosmio.lockate.ui.screens.map.MapScreen
+import com.peppeosmio.lockate.ui.screens.permissions.PermissionsScreen
 import com.peppeosmio.lockate.ui.screens.settings.SettingsScreen
 import com.peppeosmio.lockate.ui.theme.LockateTheme
 import org.koin.compose.koinInject
@@ -104,11 +106,23 @@ fun LockateApp(startLocationService: () -> Unit) {
                         appNavController.navigate(CirclesRoute(anonymousGroupInternalId))
                     },
                     navigateToSettings = { appNavController.navigate(SettingsRoute) },
+                    navigateToPermissions = { groupInternalId ->
+                        appNavController.navigate(PermissionsRoute(groupInternalId))
+                    },
                     startLocationService = startLocationService,
                 )
             }
             composable<SettingsRoute> {
-                SettingsScreen(navigateBack = { appNavController.popBackStack() })
+                SettingsScreen(
+                    navigateBack = { appNavController.popBackStack() },
+                    navigateToPermissions = { appNavController.navigate(PermissionsRoute()) },
+                )
+            }
+            composable<PermissionsRoute> { navBackStackEntry ->
+                PermissionsScreen(
+                    groupInternalId = navBackStackEntry.toRoute<PermissionsRoute>().groupInternalId,
+                    navigateBack = { appNavController.popBackStack() },
+                )
             }
             composable<CreateAnonymousGroupRoute> { navBackStackEntry ->
                 val createAnonymousGroupRoute =
