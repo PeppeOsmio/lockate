@@ -9,49 +9,76 @@ import org.junit.Test
 
 class CircleEditorRadiusTest {
     @Test
-    fun `a radius inside the range is parsed`() {
-        assertEquals(150.0, parseRadiusMeters("150")!!, 0.0)
-        assertEquals(500.0, parseRadiusMeters("0500")!!, 0.0)
+    fun `the ends of the slider are the limits of the range`() {
+        assertEquals(30.0, sliderToRadius(0f), 0.0)
+        assertEquals(5000.0, sliderToRadius(1f), 0.0)
+        assertEquals(0f, radiusToSlider(30.0), 0f)
+        assertEquals(1f, radiusToSlider(5000.0), 0f)
     }
 
     @Test
-    fun `the limits of the range are accepted`() {
+    fun `the scale is logarithmic, so the middle is about 390 m`() {
+        assertEquals(390.0, sliderToRadius(0.5f), 0.0)
+    }
+
+    @Test
+    fun `radii are rounded to 10 m below 1 km and to 50 m above`() {
+        assertEquals(0, (sliderToRadius(0.3f) % 10).toInt())
+        assertEquals(0, (sliderToRadius(0.8f) % 50).toInt())
+    }
+
+    @Test
+    fun `a preset goes back to itself through the slider`() {
+        for (preset in CircleEditorViewModel.RADIUS_PRESETS) {
+            assertEquals(preset, sliderToRadius(radiusToSlider(preset)), 0.0)
+        }
+    }
+
+    @Test
+    fun `radii read in meters, then in kilometers`() {
+        assertEquals("250 m", formatRadius(250.0))
+        assertEquals("1 km", formatRadius(1000.0))
+        assertEquals("1.5 km", formatRadius(1500.0))
+    }
+
+    @Test
+    fun `a typed radius is accepted only inside the range`() {
         assertEquals(30.0, parseRadiusMeters("30")!!, 0.0)
-        assertEquals(2000.0, parseRadiusMeters("2000")!!, 0.0)
-    }
-
-    @Test
-    fun `values outside the range are refused`() {
+        assertEquals(5000.0, parseRadiusMeters("5000")!!, 0.0)
+        assertEquals(150.0, parseRadiusMeters("0150")!!, 0.0)
         assertNull(parseRadiusMeters("29"))
-        assertNull(parseRadiusMeters("2001"))
-        assertNull(parseRadiusMeters("0"))
-    }
-
-    @Test
-    fun `an empty or non numeric text is refused`() {
+        assertNull(parseRadiusMeters("5001"))
         assertNull(parseRadiusMeters(""))
-        assertNull(parseRadiusMeters("abc"))
         assertNull(parseRadiusMeters("12.5"))
-        assertNull(parseRadiusMeters("-100"))
     }
 
-    private fun readyState(radiusText: String) =
+    private fun readyState(
+        name: String = "Home",
+        isDeleting: Boolean = false,
+        radiusText: String = "250",
+    ) =
         CircleEditorState(
             isLoading = false,
-            name = "Home",
+            name = name,
             center = Coordinates(40.0, 14.0),
+            isDeleting = isDeleting,
             radiusText = radiusText,
         )
 
     @Test
-    fun `a circle with a valid radius can be saved`() {
-        assertTrue(readyState("150").canSave)
+    fun `a named circle with a point can be saved`() {
+        assertTrue(readyState().canSave)
     }
 
     @Test
-    fun `a circle can't be saved while the radius text is not valid`() {
-        assertFalse(readyState("").canSave)
-        assertFalse(readyState("5").canSave)
-        assertFalse(readyState("3000").canSave)
+    fun `a circle can't be saved without a name or while it is being deleted`() {
+        assertFalse(readyState(name = " ").canSave)
+        assertFalse(readyState(isDeleting = true).canSave)
+    }
+
+    @Test
+    fun `a circle can't be saved while the typed radius is not valid`() {
+        assertFalse(readyState(radiusText = "").canSave)
+        assertFalse(readyState(radiusText = "10").canSave)
     }
 }

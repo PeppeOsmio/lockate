@@ -1,6 +1,5 @@
 package com.peppeosmio.lockate.ui.screens.map
 
-import com.peppeosmio.lockate.domain.Coordinates
 import com.peppeosmio.lockate.domain.UserActivity
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.domain.anonymous_group.Circle
@@ -11,7 +10,6 @@ import com.peppeosmio.lockate.ui.screens.anonymous_group_details.label
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.lastSeenFreshness
 import com.peppeosmio.lockate.utils.DateTimeUtils
 import java.time.format.TextStyle
-import kotlin.math.roundToInt
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.datetime.DatePeriod
@@ -82,15 +80,13 @@ fun sheetContent(mapState: MapState, details: AGDetailsState): SheetContent {
 }
 
 /**
- * One line about a member: where (a circle), how (moving), how far from this phone and how long
- * ago, e.g. "At Home · Still · now" or "On foot · 1.2 km away · 1 min ago". A member whose last
- * position is older than the sharing window paused sharing.
+ * One line about a member: where (a circle), how (moving) and how long ago, e.g. "At Home · still ·
+ * just now" or "On foot · 1 min ago". A member whose last position is older than the sharing window
+ * paused sharing.
  */
 @OptIn(ExperimentalTime::class)
 fun memberStatus(
     member: AGMember,
-    isMe: Boolean,
-    myCoordinates: Coordinates?,
     circles: List<Circle>,
     now: Instant,
 ): String {
@@ -106,15 +102,8 @@ fun memberStatus(
             UserActivity.Still -> if (place != null) "still" else "Still"
             else -> record.activity.label
         }
-    val distance =
-        if (isMe) null
-        else myCoordinates?.let { formatDistance(it.distanceMetersTo(record.coordinates)) }
-    return listOfNotNull(place, activity, distance, ago).joinToString(" · ")
+    return listOfNotNull(place, activity, ago).joinToString(" · ")
 }
-
-internal fun formatDistance(meters: Double): String =
-    if (meters < 1000) "${(meters / 10).roundToInt() * 10} m away"
-    else "${"%.1f".format(java.util.Locale.ENGLISH, meters / 1000)} km away"
 
 /** Whether the member counts as sharing now, for the dot next to their status */
 @OptIn(ExperimentalTime::class)

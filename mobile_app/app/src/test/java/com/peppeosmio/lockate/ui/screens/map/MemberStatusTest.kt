@@ -40,8 +40,7 @@ class MemberStatusTest {
             isAGAdmin = false,
         )
 
-    private fun status(member: AGMember, isMe: Boolean = false, me: Coordinates? = null) =
-        memberStatus(member, isMe, me, circles, now)
+    private fun status(member: AGMember) = memberStatus(member, circles, now)
 
     @Test
     fun `no position yet`() {
@@ -50,30 +49,21 @@ class MemberStatusTest {
 
     @Test
     fun `still inside a circle`() {
-        assertEquals("At Home · still · just now", status(member(), isMe = true))
+        assertEquals("At Home · still · just now", status(member()))
     }
 
     @Test
-    fun `moving outside circles, with the distance from this phone`() {
+    fun `moving outside circles`() {
         val away = Coordinates(latitude = 40.86, longitude = 14.25)
         assertEquals(
-            "On foot · 1.1 km away · 1 min ago",
-            status(
-                member(coordinates = away, activity = UserActivity.OnFoot, age = 1.minutes),
-                me = home,
-            ),
+            "On foot · 1 min ago",
+            status(member(coordinates = away, activity = UserActivity.OnFoot, age = 1.minutes)),
         )
     }
 
     @Test
     fun `an old position means sharing is paused`() {
         assertEquals("Paused sharing · 42 min ago", status(member(age = 42.minutes)))
-    }
-
-    @Test
-    fun `short distances in tens of meters`() {
-        assertEquals("80 m away", formatDistance(83.0))
-        assertEquals("1.2 km away", formatDistance(1234.0))
     }
 
     @Test

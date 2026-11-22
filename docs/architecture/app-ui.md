@@ -68,13 +68,34 @@ worked out from the groups and the group on screen:
 
 - **Tapping a member doesn't follow them.** The camera moves to them once and the sheet shows
   their details; following is the Follow button, and a drag of the map or ✕ on the pill stops it.
-- **A member's status** is one line built by `memberStatus`: the circle they are in, how they move,
-  how far from this phone and how long ago ("At Home · still · just now"). A position older than
+- **A member's status** is one line built by `memberStatus`: the circle they are in, how they move
+  and how long ago ("At Home · still · just now"). It doesn't say how far they are from this
+  phone: the map already shows it. A position older than
   the sharing window ([Sharing](sharing.md)) reads "Paused sharing" and greys the avatar.
 - **Notifications about a member** are switched off per member on this phone only, in the same
   Room table as the muted circles ([Circles](circles.md)).
 - **Times** read as people say them: "Today at 13:25", "Joined yesterday", "3 Nov at 18:40".
 - **Can't connect**: while the server can't be reached, a pill under the top bar says positions
   may be old, with Retry, and the sharing row adds "Sends again once connected".
+- Tapping a circle with someone in it fits it in the map and draws its edge.
+- **Members are balloons**, like Life360: their avatar in a white balloon whose tip is the exact
+  position, the name under the tip, a halo in their colour when selected. This phone's own
+  position stays a dot, so it never reads as someone else.
+- **Layers**, from the bottom: the edge of the circle picked, the circle pins, this phone's dot,
+  the members. A balloon over a pin hides it rather than the other way round, since the people
+  matter more than the places.
 - The ⋮ menu has Invite people, Circles, Leave group and, for admins, Delete group; a group this
   phone can no longer use only offers to remove it.
+
+## Circles
+
+The Circles page lists every circle of the group by name, with a local search once there is one.
+Each row says the radius and who is inside, with their avatars, and ends with a bell: on, the
+phone is notified when someone arrives or leaves; off, it isn't, on this phone only. The ⋮ menu
+turns every bell on or off. Tapping a circle opens the editor, which is also where it is deleted.
+
+On the map a circle is a pin with its name, never a drawn area: with dozens of circles, or large
+ones, drawn areas would cover the map and the members, and a 30 m circle seen from afar would
+vanish. Only the circle tapped (on its pin or its row in the sheet) or being edited shows its
+edge. The pins are the scheme's `outline` and the circle picked is `tertiary`, so neither looks
+like this phone's position, which is the primary.

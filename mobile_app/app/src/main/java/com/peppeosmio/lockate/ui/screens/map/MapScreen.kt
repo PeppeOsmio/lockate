@@ -71,6 +71,7 @@ import com.peppeosmio.lockate.ui.screens.anonymous_group_details.MARKER_MOVE_DUR
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.MapPoint
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.MembersMap
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.lastSeenFreshness
+import com.peppeosmio.lockate.utils.DateTimeUtils
 import com.peppeosmio.lockate.utils.LoadingState
 import com.peppeosmio.lockate.utils.LockatePermissions
 import kotlin.time.Clock
@@ -83,6 +84,8 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toInstant
 import org.koin.compose.viewmodel.koinViewModel
 import org.maplibre.compose.camera.CameraAnimation
 import org.maplibre.compose.camera.CameraPosition
@@ -225,13 +228,22 @@ fun MapScreen(
                     return@mapNotNull null
                 }
                 val locationRecord = member.lastLocationRecord ?: return@mapNotNull null
+                val isLive =
+                    lastSeenFreshness(locationRecord.timestamp, now) == LastSeenFreshness.Live
                 MapPoint(
                     coordinates = locationRecord.coordinates,
                     name = member.name,
-                    isOld =
-                        lastSeenFreshness(locationRecord.timestamp, now) != LastSeenFreshness.Live,
+                    isOld = !isLive,
                     isSelected = memberId == details.selectedMemberId,
                     id = memberId,
+                    activity = locationRecord.activity,
+                    caption =
+                        if (isLive) null
+                        else
+                            DateTimeUtils.formatRelative(
+                                locationRecord.timestamp.toInstant(TimeZone.UTC),
+                                now,
+                            ),
                 )
             }
         }
@@ -370,7 +382,6 @@ fun MapScreen(
         state.isServerUnreachable ||
             details.remoteDataLoadingState == LoadingState.Failed ||
             details.locationStreamState == LocationStreamState.Reconnecting
-    val myCoordinates = details.myLocationRecordFromGPS?.coordinates
     val sheetActions =
         MapSheetActions(
             onSharingChange = { detailsViewModel.toggleAGShareLocation() },
@@ -379,6 +390,12 @@ fun MapScreen(
             onRemoveGroup = viewModel::removeLocalGroup,
             onInvite = { selectedGroup?.let { navigateToInvite(it.internalId) } },
             onOpenCircles = { selectedGroup?.let { navigateToCircles(it.internalId) } },
+            onShowCircle = { circle ->
+                coroutineScope.launch {
+                    sheetState.partialExpand()
+                    detailsViewModel.showCircle(circle)
+                }
+            },
             onSelectMember = ::selectMember,
             onBackToGroup = detailsViewModel::clearSelectedMember,
             onFollow = {
@@ -437,7 +454,6 @@ fun MapScreen(
                     content = content,
                     selectedGroup = selectedGroup,
                     details = details,
-                    myCoordinates = myCoordinates,
                     now = now,
                     sharingSupporting = if (isOffline) "Sends again once connected" else null,
                     actions = sheetActions,
@@ -449,7 +465,6 @@ fun MapScreen(
                         MapSheetBody(
                             content = content,
                             details = details,
-                            myCoordinates = myCoordinates,
                             now = now,
                             actions = sheetActions,
                         )

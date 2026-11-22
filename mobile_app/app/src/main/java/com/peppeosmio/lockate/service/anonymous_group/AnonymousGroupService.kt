@@ -1467,18 +1467,6 @@ class AnonymousGroupService(
         }
     }
 
-    /** Asks the map to move to [circle]. */
-    fun showCircleOnMap(anonymousGroup: AnonymousGroup, circle: Circle) {
-        _events.tryEmit(
-            AnonymousGroupEvent.ShowCircleOnMapEvent(
-                anonymousGroupInternalId = anonymousGroup.internalId,
-                anonymousGroupId = anonymousGroup.id,
-                connectionId = anonymousGroup.connectionId,
-                circle = circle,
-            )
-        )
-    }
-
     suspend fun listCircles(anonymousGroupInternalId: Long): List<Circle> =
         withContext(Dispatchers.IO) {
             anonymousGroupDao.listCircles(anonymousGroupInternalId).map {

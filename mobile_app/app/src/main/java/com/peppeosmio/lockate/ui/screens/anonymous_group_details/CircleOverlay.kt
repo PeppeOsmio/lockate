@@ -80,8 +80,8 @@ fun CircleOverlay(mapState: MapState, circle: Circle, style: CircleStyle = Circl
     val (center, radius) = projection ?: return
     val color =
         if (style == CircleStyle.Faint) {
-            MaterialTheme.colorScheme.tertiary
-        } else MaterialTheme.colorScheme.primary
+            MaterialTheme.colorScheme.outline
+        } else MaterialTheme.colorScheme.tertiary
     val fillAlpha =
         when (style) {
             CircleStyle.Outline -> 0.06f
@@ -131,7 +131,7 @@ fun CirclePin(mapState: MapState, circle: Circle, isSelected: Boolean, onClick: 
         }
     val tip = projection ?: return
     val color =
-        if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary
+        if (isSelected) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.outline
     val pinSize = if (isSelected) 36.dp else 30.dp
     val haloSize = pinSize + 6.dp
     // the tip of the drop sits a little above the bottom of its icon

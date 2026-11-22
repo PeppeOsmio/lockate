@@ -11,6 +11,7 @@ import com.peppeosmio.lockate.domain.anonymous_group.AGLocationUpdate
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.domain.anonymous_group.AnonymousGroup
 import com.peppeosmio.lockate.domain.anonymous_group.ChannelState
+import com.peppeosmio.lockate.domain.anonymous_group.Circle
 import com.peppeosmio.lockate.exceptions.AGMemberNotAdminException
 import com.peppeosmio.lockate.exceptions.LocationDisabledException
 import com.peppeosmio.lockate.exceptions.NoPermissionException
@@ -74,15 +75,9 @@ class AGDetailsViewModel(
         startMyLocation()
     }
 
-    // Going back to the map from the circles page starts the location again, and moving the camera
-    // to the phone would undo showing a circle
-    private var skipNextMoveToMyLocation = false
-
     fun startMyLocation() {
-        val moveCamera = !skipNextMoveToMyLocation
-        skipNextMoveToMyLocation = false
         viewModelScope.launch {
-            runCatching { getAndMoveToMyLocation(moveCamera) }
+            runCatching { getAndMoveToMyLocation(moveCamera = true) }
         }
     }
 
@@ -160,25 +155,6 @@ class AGDetailsViewModel(
     private suspend fun collectAGEvents() {
         anonymousGroupService.events.collect { event ->
             when (event) {
-                is AnonymousGroupEvent.ShowCircleOnMapEvent -> {
-                    if (event.anonymousGroupId != state.value.anonymousGroup?.id) {
-                        return@collect
-                    }
-                    _state.update {
-                        it.copy(
-                            isFollowingSelectedMember = false,
-                            selectedCircleId = event.circle.id,
-                        )
-                    }
-                    skipNextMoveToMyLocation = true
-                    _cameraPositionEvents.trySend(
-                        CameraTarget(
-                            event.circle.center,
-                            fitRadiusMeters = event.circle.radiusMeters,
-                        )
-                    )
-                }
-
                 is AnonymousGroupEvent.AGLocationSentEvent -> {
                     if (state.value.members == null || state.value.anonymousGroup == null) {
                         return@collect
@@ -751,6 +727,14 @@ class AGDetailsViewModel(
 
     fun onMapGesture() {
         _state.update { it.copy(isFollowingSelectedMember = false) }
+    }
+
+    /** Draws the circle's edge and fits the whole circle in the map */
+    fun showCircle(circle: Circle) {
+        _state.update { it.copy(isFollowingSelectedMember = false, selectedCircleId = circle.id) }
+        _cameraPositionEvents.trySend(
+            CameraTarget(circle.center, fitRadiusMeters = circle.radiusMeters)
+        )
     }
 
     fun toggleCircle(circleId: String) {
