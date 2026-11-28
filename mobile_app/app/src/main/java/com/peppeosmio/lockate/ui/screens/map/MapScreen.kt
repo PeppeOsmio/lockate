@@ -94,6 +94,9 @@ import org.maplibre.compose.style.BaseStyle
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalTime::class)
 @Composable
 fun MapScreen(
+    // a member to show, from another screen: opened once the group's members are loaded
+    memberToShow: String?,
+    onMemberShown: () -> Unit,
     navigateToConnectionSettings: (route: ConnectionSettingsRoute) -> Unit,
     navigateToCreateAG: (connectionSettingsId: Long) -> Unit,
     navigateToJoinAG: (connectionSettingsId: Long) -> Unit,
@@ -143,6 +146,17 @@ fun MapScreen(
 
     // The check at launch may have run while the server was down: the group's channel connecting
     // means it's back, so check again rather than keep the banner until Retry is tapped
+    // coming back to the map reloads the group, which clears the members first: the current state,
+    // not this composition's, says when they are back
+    LaunchedEffect(memberToShow, details.members) {
+        val members = detailsViewModel.state.value.members
+        if (memberToShow == null || members?.containsKey(memberToShow) != true) {
+            return@LaunchedEffect
+        }
+        detailsViewModel.selectMember(memberToShow)
+        onMemberShown()
+    }
+
     LaunchedEffect(details.remoteDataLoadingState) {
         if (state.isServerUnreachable && details.remoteDataLoadingState == LoadingState.Success) {
             viewModel.retryServer()

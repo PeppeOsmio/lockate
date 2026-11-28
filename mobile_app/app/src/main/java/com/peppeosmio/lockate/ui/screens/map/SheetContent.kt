@@ -150,12 +150,26 @@ private fun dayName(
     return if (capitalized) name.replaceFirstChar { it.uppercase() } else name
 }
 
+/** Who is inside a place, this phone's member first, then by name */
+internal fun youFirst(inside: List<AGMember>, myMemberId: String): List<AGMember> =
+    inside.sortedWith(compareByDescending<AGMember> { it.id == myMemberId }.thenBy { it.name })
+
+sealed interface PlaceDot {
+    data class Avatar(val member: AGMember) : PlaceDot
+
+    data class More(val count: Int) : PlaceDot
+}
+
+/** Who is inside a place in two dots at most: one or two avatars, or one avatar and "+N" */
+internal fun placeDots(inside: List<AGMember>, myMemberId: String): List<PlaceDot> {
+    val sorted = youFirst(inside, myMemberId)
+    return if (sorted.size <= 2) sorted.map { PlaceDot.Avatar(it) }
+    else listOf(PlaceDot.Avatar(sorted.first()), PlaceDot.More(sorted.size - 1))
+}
+
 /** Who is inside a place, as one line: "You're here", "Marco and Sara are here" */
 internal fun whoIsHere(inside: List<AGMember>, myMemberId: String): String {
-    val names =
-        inside
-            .sortedWith(compareByDescending<AGMember> { it.id == myMemberId }.thenBy { it.name })
-            .map { if (it.id == myMemberId) "You" else it.name }
+    val names = youFirst(inside, myMemberId).map { if (it.id == myMemberId) "You" else it.name }
     return when (names.size) {
         1 -> if (names[0] == "You") "You're here" else "${names[0]} is here"
         2 -> "${names[0]} and ${names[1]} are here"

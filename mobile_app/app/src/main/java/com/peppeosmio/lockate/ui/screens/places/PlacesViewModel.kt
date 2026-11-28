@@ -7,6 +7,8 @@ import com.peppeosmio.lockate.domain.anonymous_group.AGLocationUpdate
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.domain.anonymous_group.AnonymousGroup
 import com.peppeosmio.lockate.domain.anonymous_group.Place
+import com.peppeosmio.lockate.service.MapStyleService
+import com.peppeosmio.lockate.service.MapStyleUrls
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
 import com.peppeosmio.lockate.utils.ErrorInfo
 import com.peppeosmio.lockate.utils.SnackbarErrorMessage
@@ -30,6 +32,8 @@ data class PlacesScreenState(
     val members: List<AGMember> = emptyList(),
     val mutedTargets: Set<String> = emptySet(),
     val query: String = "",
+    val mapStyleUrls: MapStyleUrls = MapStyleUrls(),
+    val isDeleting: Boolean = false,
 ) {
     /** The places whose name matches the search, by name */
     val shownPlaces: List<Place>
@@ -39,7 +43,11 @@ data class PlacesScreenState(
                 .sortedBy { it.name.lowercase() }
 }
 
-class PlacesViewModel(private val anonymousGroupService: AnonymousGroupService) : ViewModel() {
+/** The Places list and a place's details: the places of a group and who is inside each */
+class PlacesViewModel(
+    private val anonymousGroupService: AnonymousGroupService,
+    mapStyleService: MapStyleService,
+) : ViewModel() {
     private val _state = MutableStateFlow(PlacesScreenState())
     val state = _state.asStateFlow()
     private val _snackbarEvents = Channel<SnackbarErrorMessage>(Channel.BUFFERED)
@@ -47,6 +55,14 @@ class PlacesViewModel(private val anonymousGroupService: AnonymousGroupService) 
 
     private var group: AnonymousGroup? = null
     private var loadJob: Job? = null
+
+    init {
+        viewModelScope.launch {
+            mapStyleService.mapStyleUrls.collect { urls ->
+                _state.update { it.copy(mapStyleUrls = urls) }
+            }
+        }
+    }
 
     fun load(anonymousGroupInternalId: Long) {
         loadJob?.cancel()
@@ -170,6 +186,29 @@ class PlacesViewModel(private val anonymousGroupService: AnonymousGroupService) 
                     mutedTargets =
                         if (muted) it.mutedTargets + placeIds
                         else it.mutedTargets - placeIds.toSet()
+                )
+            }
+        }
+    }
+
+    fun deletePlace(placeId: String) {
+        val anonymousGroup = group ?: return
+        viewModelScope.launch {
+            _state.update { it.copy(isDeleting = true) }
+            try {
+                anonymousGroupService.deletePlace(
+                    anonymousGroup.connectionId,
+                    anonymousGroup,
+                    placeId,
+                )
+                // the deletion's own frame takes the place out of the list
+                _state.update { it.copy(isDeleting = false) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(isDeleting = false) }
+                _snackbarEvents.trySend(
+                    SnackbarErrorMessage("Can't delete the place", ErrorInfo.fromException(e))
                 )
             }
         }

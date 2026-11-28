@@ -54,14 +54,12 @@ class PlaceEditorRadiusTest {
 
     private fun readyState(
         name: String = "Home",
-        isDeleting: Boolean = false,
         radiusText: String = "250",
     ) =
         PlaceEditorState(
             isLoading = false,
             name = name,
             center = Coordinates(40.0, 14.0),
-            isDeleting = isDeleting,
             radiusText = radiusText,
         )
 
@@ -71,9 +69,8 @@ class PlaceEditorRadiusTest {
     }
 
     @Test
-    fun `a place can't be saved without a name or while it is being deleted`() {
+    fun `a place can't be saved without a name`() {
         assertFalse(readyState(name = " ").canSave)
-        assertFalse(readyState(isDeleting = true).canSave)
     }
 
     @Test

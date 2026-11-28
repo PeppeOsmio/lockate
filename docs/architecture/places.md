@@ -72,5 +72,5 @@ Notifications come only from live `place.event` and sharing frames, never from s
 by push ([Push notifications](push.md)); a server without a push relay notifies nothing.
 `PlaceNotifier` shows them: one notification per member, replaced by each new event, under one
 summary per group (`PlaceNotificationBook`); they expire after 1 hour. Muted places and members
-are kept only in Room: a place is muted with its bell in the Places list (or all of them from
-its menu), a member from their details on the map, which also silences their sharing changes.
+are kept only in Room: a place is muted with its bell in the Places list or the switch on its
+page (or all of them from the list's menu), a member from their details on the map, which also silences their sharing changes.

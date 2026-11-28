@@ -63,7 +63,10 @@ val viewModelModule = module {
     }
 
     viewModel<PlacesViewModel> {
-        PlacesViewModel(anonymousGroupService = get<AnonymousGroupService>())
+        PlacesViewModel(
+            anonymousGroupService = get<AnonymousGroupService>(),
+            mapStyleService = get<MapStyleService>(),
+        )
     }
 
     viewModel<PlaceEditorViewModel> {
