@@ -48,8 +48,6 @@ data class PlaceEditorState(
     val radiusText: String = PlaceEditorViewModel.DEFAULT_RADIUS_METERS.roundToInt().toString(),
     // everyone in this group sees the place's name
     val groupName: String = "",
-    val isDeleting: Boolean = false,
-    val showDeleteDialog: Boolean = false,
     // null until the point is put on the map
     val center: Coordinates? = null,
     val initialCamera: Coordinates = Coordinates.NAPOLI,
@@ -73,7 +71,6 @@ data class PlaceEditorState(
                 name.isNotBlank() &&
                 center != null &&
                 !isSaving &&
-                !isDeleting &&
                 parseRadiusMeters(radiusText) != null
 }
 
@@ -380,33 +377,6 @@ class PlaceEditorViewModel(
                 _state.update { it.copy(isSaving = false) }
                 _snackbarEvents.trySend(
                     SnackbarErrorMessage("Can't save the place", ErrorInfo.fromException(e))
-                )
-            }
-        }
-    }
-
-    fun askToDelete() {
-        _state.update { it.copy(showDeleteDialog = true) }
-    }
-
-    fun cancelDelete() {
-        _state.update { it.copy(showDeleteDialog = false) }
-    }
-
-    fun confirmDelete() {
-        val anonymousGroup = group ?: return
-        val id = placeId ?: return
-        viewModelScope.launch {
-            _state.update { it.copy(isDeleting = true, showDeleteDialog = false) }
-            try {
-                anonymousGroupService.deletePlace(anonymousGroup.connectionId, anonymousGroup, id)
-                _navigateBackEvents.trySend(Unit)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _state.update { it.copy(isDeleting = false) }
-                _snackbarEvents.trySend(
-                    SnackbarErrorMessage("Can't delete the place", ErrorInfo.fromException(e))
                 )
             }
         }

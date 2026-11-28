@@ -1,5 +1,7 @@
 package com.peppeosmio.lockate.ui.screens.places
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -10,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -42,8 +45,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.peppeosmio.lockate.R
@@ -51,19 +57,21 @@ import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.domain.anonymous_group.Place
 import com.peppeosmio.lockate.ui.composables.MemberAvatar
 import com.peppeosmio.lockate.ui.composables.PlaceRow
+import com.peppeosmio.lockate.ui.screens.map.PlaceDot
 import com.peppeosmio.lockate.ui.screens.map.occupiedPlaces
+import com.peppeosmio.lockate.ui.screens.map.placeDots
 import com.peppeosmio.lockate.ui.screens.map.whoIsHere
 import org.koin.compose.viewmodel.koinViewModel
 
-// the avatars of who is inside a place stop here, the rest is in the line under the name
-private const val MAX_AVATARS = 3
+private val DOT_SIZE = 28.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlacesScreen(
     anonymousGroupInternalId: Long,
     navigateBack: () -> Unit,
-    navigateToPlaceEditor: (placeId: String?) -> Unit,
+    navigateToNewPlace: () -> Unit,
+    navigateToPlace: (placeId: String) -> Unit,
     viewModel: PlacesViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
@@ -100,7 +108,7 @@ fun PlacesScreen(
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                onClick = { navigateToPlaceEditor(null) },
+                onClick = navigateToNewPlace,
                 icon = { Icon(Icons.Default.Add, contentDescription = null) },
                 text = { Text("Add place") },
             )
@@ -150,7 +158,7 @@ fun PlacesScreen(
                     inside = inside,
                     myMemberId = state.myMemberId,
                     isMuted = place.id in state.mutedTargets,
-                    onClick = { navigateToPlaceEditor(place.id) },
+                    onClick = { navigateToPlace(place.id) },
                     onMutedChange = { viewModel.setTargetMuted(place.id, it) },
                 )
             }
@@ -249,6 +257,42 @@ private fun BellHint() {
     }
 }
 
+/** Overlapping, each ringed in the surface colour so the one behind still reads */
+@Composable
+private fun PlaceDots(dots: List<PlaceDot>, myMemberId: String, modifier: Modifier = Modifier) {
+    val ring = MaterialTheme.colorScheme.surface
+    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy((-6).dp)) {
+        for (dot in dots) {
+            val dotModifier = Modifier.border(2.dp, ring, CircleShape).padding(2.dp)
+            when (dot) {
+                is PlaceDot.Avatar ->
+                    MemberAvatar(
+                        name = dot.member.name,
+                        memberId = dot.member.id,
+                        isMe = dot.member.id == myMemberId,
+                        size = DOT_SIZE,
+                        modifier = dotModifier,
+                    )
+                is PlaceDot.More ->
+                    Box(
+                        modifier =
+                            dotModifier
+                                .size(DOT_SIZE)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            "+${dot.count}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+            }
+        }
+    }
+}
+
 @Composable
 private fun PlaceListRow(
     place: Place,
@@ -260,20 +304,18 @@ private fun PlaceListRow(
 ) {
     PlaceRow(
         name = place.name,
-        supporting =
-            formatRadius(place.radiusMeters) +
-                " · " +
-                (if (inside.isEmpty()) "No one inside" else whoIsHere(inside, myMemberId)),
+        supporting = formatRadius(place.radiusMeters),
         onClick = onClick,
         trailing = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                for (member in inside.take(MAX_AVATARS)) {
-                    MemberAvatar(
-                        name = member.name,
-                        memberId = member.id,
-                        isMe = member.id == myMemberId,
-                        size = 24.dp,
-                        modifier = Modifier.padding(end = 4.dp),
+                if (inside.isNotEmpty()) {
+                    PlaceDots(
+                        dots = placeDots(inside, myMemberId),
+                        myMemberId = myMemberId,
+                        modifier =
+                            Modifier.padding(end = 4.dp).clearAndSetSemantics {
+                                contentDescription = whoIsHere(inside, myMemberId)
+                            },
                     )
                 }
                 if (isMuted) {

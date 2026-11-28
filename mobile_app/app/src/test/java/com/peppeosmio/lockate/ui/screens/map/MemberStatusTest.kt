@@ -80,4 +80,22 @@ class MemberStatusTest {
             whoIsHere(listOf(sara, marco, luca, me), "giulia"),
         )
     }
+
+    @Test
+    fun `at most two dots for who is in a place`() {
+        val me = member(id = "giulia")
+        val marco = member(id = "marco")
+        val sara = member(id = "sara")
+        val luca = member(id = "luca")
+        assertEquals(emptyList<PlaceDot>(), placeDots(emptyList(), "giulia"))
+        assertEquals(listOf(PlaceDot.Avatar(marco)), placeDots(listOf(marco), "giulia"))
+        assertEquals(
+            listOf(PlaceDot.Avatar(me), PlaceDot.Avatar(marco)),
+            placeDots(listOf(marco, me), "giulia"),
+        )
+        assertEquals(
+            listOf(PlaceDot.Avatar(luca), PlaceDot.More(2)),
+            placeDots(listOf(sara, marco, luca), "giulia"),
+        )
+    }
 }

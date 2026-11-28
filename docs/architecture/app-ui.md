@@ -102,15 +102,35 @@ from the groups and the group on screen:
 ## Places
 
 The Places page ("Family's places") lists every place of the group by name, with a local search once there is one.
-Each row says the radius and who is inside, with their avatars, and ends with a bell: on, the
-phone is notified when someone arrives or leaves; off, it isn't, on this phone only. The ⋮ menu
-turns every bell on or off. Tapping a place opens the editor, which is also where it is deleted.
+Each row says the radius and, on the right, who is inside in two dots at most: one or two
+avatars, or the first avatar and "+N" from three people on (`placeDots`, this phone's member
+first); the names are only read out by TalkBack, since a row with "You and Marco are here" under
+every name read as clutter. The row ends with a bell: on, the phone is notified when someone
+arrives or leaves; off, it isn't, on this phone only. The ⋮ menu turns every bell on or off.
+
+Tapping a place opens its page (`PlaceDetailScreen`): the place on a map with who is inside, the
+top bar with its name and a pencil to the editor, the radius, the same bell as a switch, "Here
+now · N" with one row per member inside, and "Delete place" at the bottom. A member's row opens
+the map on that member. Delete lives here and not in the editor, so the editor only edits, and
+going back from it returns to the place's page. When the place disappears, deleted here or by
+someone else, the page goes back to the list.
 
 On the map a place is a pin with its name, never a drawn area: with dozens of places, or large
 ones, drawn areas would cover the map and the members, and a 30 m place seen from afar would
 vanish. Only the place tapped (on its pin) or being edited shows its
 edge. The pins are the scheme's `outline` and the place picked is `tertiary`, so neither looks
 like this phone's position, which is the primary.
+
+## Navigation
+
+A screen navigates only while it is the one on top (`RESUMED`): taps on a screen that is still
+sliding away are dropped, with `dropUnlessResumed`, or `isOnTop()` in `LockateApp` for the taps
+that carry an argument. Otherwise a second tap on ← during the animation would also take away
+the screen under it, leaving a blank page, and a second tap on a row would open its screen
+twice. Navigations the app makes by itself (startup, Permissions from the map, after joining)
+aren't guarded, since they can happen while a screen is still coming in; the place page that
+closes because its place was deleted waits to be on top again, so it isn't skipped while the
+editor is open over it.
 
 ## Servers
 

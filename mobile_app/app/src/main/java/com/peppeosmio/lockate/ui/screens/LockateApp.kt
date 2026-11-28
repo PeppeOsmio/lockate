@@ -3,6 +3,11 @@ package com.peppeosmio.lockate.ui.screens
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.dropUnlessResumed
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -16,6 +21,7 @@ import com.peppeosmio.lockate.ui.routes.InviteRoute
 import com.peppeosmio.lockate.ui.routes.JoinAnonymousGroupRoute
 import com.peppeosmio.lockate.ui.routes.LoadingRoute
 import com.peppeosmio.lockate.ui.routes.PermissionsRoute
+import com.peppeosmio.lockate.ui.routes.PlaceDetailRoute
 import com.peppeosmio.lockate.ui.routes.PlaceEditorRoute
 import com.peppeosmio.lockate.ui.routes.PlacesRoute
 import com.peppeosmio.lockate.ui.routes.ServerScreenMode
@@ -28,11 +34,23 @@ import com.peppeosmio.lockate.ui.screens.join_anonymous_group.NewServerInvite
 import com.peppeosmio.lockate.ui.screens.loading.LoadingScreen
 import com.peppeosmio.lockate.ui.screens.map.MapScreen
 import com.peppeosmio.lockate.ui.screens.permissions.PermissionsScreen
+import com.peppeosmio.lockate.ui.screens.places.PlaceDetailScreen
 import com.peppeosmio.lockate.ui.screens.places.PlaceEditorScreen
 import com.peppeosmio.lockate.ui.screens.places.PlacesScreen
 import com.peppeosmio.lockate.ui.screens.settings.SettingsScreen
 import com.peppeosmio.lockate.ui.theme.LockateTheme
 import org.koin.compose.koinInject
+
+// a member the map opens on when it comes back to the front, set by the screen that goes back to it
+private const val SHOW_MEMBER_KEY = "showMember"
+
+/**
+ * Whether this screen is the one on top: a screen on its way out, while the animation runs, is not.
+ * A tap there is dropped, like [dropUnlessResumed] does for the taps that take no argument: a
+ * second tap on back would otherwise also take away the screen under it (with nothing left the app
+ * shows a blank page), and a second tap on a row would open its screen twice.
+ */
+private fun NavBackStackEntry.isOnTop() = lifecycle.currentState == Lifecycle.State.RESUMED
 
 @Composable
 fun LockateApp(startLocationService: () -> Unit) {
@@ -90,22 +108,33 @@ fun LockateApp(startLocationService: () -> Unit) {
                     },
                 )
             }
-            composable<HomeRoute> {
+            composable<HomeRoute> { navBackStackEntry ->
+                val memberToShow by
+                    navBackStackEntry.savedStateHandle
+                        .getStateFlow<String?>(SHOW_MEMBER_KEY, null)
+                        .collectAsState()
                 MapScreen(
+                    memberToShow = memberToShow,
+                    onMemberShown = { navBackStackEntry.savedStateHandle[SHOW_MEMBER_KEY] = null },
                     navigateToConnectionSettings = { route -> appNavController.navigate(route) },
                     navigateToCreateAG = { connectionSettingsId ->
+                        if (!navBackStackEntry.isOnTop()) return@MapScreen
                         appNavController.navigate(CreateAnonymousGroupRoute(connectionSettingsId))
                     },
                     navigateToJoinAG = { connectionSettingsId ->
+                        if (!navBackStackEntry.isOnTop()) return@MapScreen
                         appNavController.navigate(JoinAnonymousGroupRoute(connectionSettingsId))
                     },
                     navigateToInvite = { anonymousGroupInternalId ->
+                        if (!navBackStackEntry.isOnTop()) return@MapScreen
                         appNavController.navigate(InviteRoute(anonymousGroupInternalId))
                     },
                     navigateToPlaces = { anonymousGroupInternalId ->
+                        if (!navBackStackEntry.isOnTop()) return@MapScreen
                         appNavController.navigate(PlacesRoute(anonymousGroupInternalId))
                     },
-                    navigateToSettings = { appNavController.navigate(SettingsRoute) },
+                    navigateToSettings =
+                        dropUnlessResumed { appNavController.navigate(SettingsRoute) },
                     navigateToPermissions = { groupInternalId ->
                         appNavController.navigate(PermissionsRoute(groupInternalId))
                     },
@@ -114,23 +143,22 @@ fun LockateApp(startLocationService: () -> Unit) {
             }
             composable<SettingsRoute> {
                 SettingsScreen(
-                    navigateBack = { appNavController.popBackStack() },
-                    navigateToPermissions = { appNavController.navigate(PermissionsRoute()) },
+                    navigateBack = dropUnlessResumed { appNavController.popBackStack() },
+                    navigateToPermissions =
+                        dropUnlessResumed { appNavController.navigate(PermissionsRoute()) },
                 )
             }
             composable<PermissionsRoute> { navBackStackEntry ->
                 PermissionsScreen(
                     groupInternalId = navBackStackEntry.toRoute<PermissionsRoute>().groupInternalId,
-                    navigateBack = { appNavController.popBackStack() },
+                    navigateBack = dropUnlessResumed { appNavController.popBackStack() },
                 )
             }
             composable<CreateAnonymousGroupRoute> { navBackStackEntry ->
                 val createAnonymousGroupRoute =
                     navBackStackEntry.toRoute<CreateAnonymousGroupRoute>()
                 CreateAnonymousGroupScreen(
-                    navigateBack = {
-                        appNavController.popBackStack()
-                    },
+                    navigateBack = dropUnlessResumed { appNavController.popBackStack() },
                     connectionSettingsId = createAnonymousGroupRoute.connectionSettingsId,
                 )
             }
@@ -139,7 +167,7 @@ fun LockateApp(startLocationService: () -> Unit) {
                 JoinAnonymousGroupScreen(
                     connectionId = route.connectionSettingsId,
                     code = route.code,
-                    navigateBack = { appNavController.popBackStack() },
+                    navigateBack = dropUnlessResumed { appNavController.popBackStack() },
                     navigateToHome = {
                         appNavController.navigate(HomeRoute) { popUpTo(0) { inclusive = true } }
                     },
@@ -159,21 +187,47 @@ fun LockateApp(startLocationService: () -> Unit) {
                 val inviteRoute = navBackStackEntry.toRoute<InviteRoute>()
                 InviteScreen(
                     anonymousGroupInternalId = inviteRoute.anonymousGroupInternalId,
-                    navigateBack = { appNavController.popBackStack() },
+                    navigateBack = dropUnlessResumed { appNavController.popBackStack() },
                 )
             }
             composable<PlacesRoute> { navBackStackEntry ->
                 val placesRoute = navBackStackEntry.toRoute<PlacesRoute>()
                 PlacesScreen(
                     anonymousGroupInternalId = placesRoute.anonymousGroupInternalId,
-                    navigateBack = { appNavController.popBackStack() },
-                    navigateToPlaceEditor = { placeId ->
-                        appNavController.navigate(
-                            PlaceEditorRoute(
-                                anonymousGroupInternalId = placesRoute.anonymousGroupInternalId,
-                                placeId = placeId,
+                    navigateBack = dropUnlessResumed { appNavController.popBackStack() },
+                    navigateToNewPlace =
+                        dropUnlessResumed {
+                            appNavController.navigate(
+                                PlaceEditorRoute(placesRoute.anonymousGroupInternalId)
                             )
+                        },
+                    navigateToPlace = { placeId ->
+                        if (!navBackStackEntry.isOnTop()) return@PlacesScreen
+                        appNavController.navigate(
+                            PlaceDetailRoute(placesRoute.anonymousGroupInternalId, placeId)
                         )
+                    },
+                )
+            }
+            composable<PlaceDetailRoute> { navBackStackEntry ->
+                val route = navBackStackEntry.toRoute<PlaceDetailRoute>()
+                PlaceDetailScreen(
+                    anonymousGroupInternalId = route.anonymousGroupInternalId,
+                    placeId = route.placeId,
+                    navigateBack = dropUnlessResumed { appNavController.popBackStack() },
+                    navigateToEditor =
+                        dropUnlessResumed {
+                            appNavController.navigate(
+                                PlaceEditorRoute(route.anonymousGroupInternalId, route.placeId)
+                            )
+                        },
+                    navigateToMember = { memberId ->
+                        if (!navBackStackEntry.isOnTop()) return@PlaceDetailScreen
+                        // the map is under the places, on the same group: it opens on the member
+                        appNavController
+                            .getBackStackEntry<HomeRoute>()
+                            .savedStateHandle[SHOW_MEMBER_KEY] = memberId
+                        appNavController.popBackStack<HomeRoute>(inclusive = false)
                     },
                 )
             }
@@ -182,7 +236,7 @@ fun LockateApp(startLocationService: () -> Unit) {
                 PlaceEditorScreen(
                     anonymousGroupInternalId = route.anonymousGroupInternalId,
                     placeId = route.placeId,
-                    navigateBack = { appNavController.popBackStack() },
+                    navigateBack = dropUnlessResumed { appNavController.popBackStack() },
                 )
             }
             composable<ConnectionSettingsRoute> { navBackStackEntry ->
@@ -198,7 +252,7 @@ fun LockateApp(startLocationService: () -> Unit) {
                                 route.inviteCode,
                             )
                         } else null,
-                    navigateBack = { appNavController.popBackStack() },
+                    navigateBack = dropUnlessResumed { appNavController.popBackStack() },
                     navigateToHome = {
                         appNavController.navigate(HomeRoute) { popUpTo(0) { inclusive = true } }
                     },

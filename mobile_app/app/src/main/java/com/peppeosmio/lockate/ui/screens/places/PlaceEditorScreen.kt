@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -32,11 +31,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Place
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -651,37 +647,6 @@ private fun EditorFields(
                 )
             }
         }
-        if (state.isEditing) {
-            TextButton(
-                onClick = viewModel::askToDelete,
-                enabled = !state.isSaving && !state.isDeleting,
-                colors =
-                    ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-            ) {
-                Icon(Icons.Default.Delete, contentDescription = null, Modifier.size(18.dp))
-                Spacer(Modifier.size(8.dp))
-                Text("Delete place")
-            }
-        }
-    }
-    if (state.showDeleteDialog) {
-        AlertDialog(
-            title = { Text("Delete ${state.name}?") },
-            text = { Text("The place disappears for everyone in ${state.groupName}.") },
-            dismissButton = { TextButton(onClick = viewModel::cancelDelete) { Text("Cancel") } },
-            confirmButton = {
-                TextButton(
-                    onClick = viewModel::confirmDelete,
-                    colors =
-                        ButtonDefaults.textButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error
-                        ),
-                ) {
-                    Text("Delete")
-                }
-            },
-            onDismissRequest = viewModel::cancelDelete,
-        )
     }
 }
 
