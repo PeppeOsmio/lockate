@@ -152,7 +152,12 @@ private fun ListRowsPreview() {
                 statusColor = Color(0xFF4CAF50),
                 onClick = {},
             )
-            MemberRow(name = "Sara", memberId = "b", supporting = "Paused sharing", paused = true)
+            MemberRow(
+                name = "Sara",
+                memberId = "b",
+                supporting = "Last location 42 min ago",
+                paused = true,
+            )
             PlaceRow(
                 name = "Home",
                 supporting = "250 m · Sara",
