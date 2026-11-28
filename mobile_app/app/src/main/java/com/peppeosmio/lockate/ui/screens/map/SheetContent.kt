@@ -62,8 +62,8 @@ fun sheetContent(mapState: MapState, details: AGDetailsState): SheetContent {
 
 /**
  * One line about a member: where (a place), how (moving) and how long ago, e.g. "At Home · still ·
- * just now" or "On foot · 1 min ago". A member whose last position is older than the sharing window
- * paused sharing.
+ * just now" or "On foot · 1 min ago". An old position reads the same, with its age: the grey dot
+ * and avatar say it is old.
  */
 @OptIn(ExperimentalTime::class)
 fun memberStatus(
@@ -73,9 +73,6 @@ fun memberStatus(
 ): String {
     val record = member.lastLocationRecord ?: return "No location yet"
     val ago = DateTimeUtils.formatRelative(record.timestamp.toInstant(TimeZone.UTC), now)
-    if (lastSeenFreshness(record.timestamp, now) == LastSeenFreshness.Stale) {
-        return "Paused sharing · $ago"
-    }
     val place = places.nearestContaining(record.coordinates)?.let { "At ${it.name}" }
     val activity =
         when (record.activity) {

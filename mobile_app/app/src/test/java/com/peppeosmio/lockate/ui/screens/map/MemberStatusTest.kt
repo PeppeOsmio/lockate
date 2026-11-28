@@ -62,8 +62,8 @@ class MemberStatusTest {
     }
 
     @Test
-    fun `an old position means sharing is paused`() {
-        assertEquals("Paused sharing · 42 min ago", status(member(age = 42.minutes)))
+    fun `an old position reads like a fresh one, with its age`() {
+        assertEquals("At Home · still · 42 min ago", status(member(age = 42.minutes)))
     }
 
     @Test

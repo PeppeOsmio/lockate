@@ -81,7 +81,9 @@ from the groups and the group on screen:
 - **A member's status** is one line built by `memberStatus`: the place they are in, how they move
   and how long ago ("At Home · still · just now"). It doesn't say how far they are from this
   phone: the map already shows it. A position older than
-  the sharing window ([Sharing](sharing.md)) reads "Paused sharing" and greys the avatar.
+  the sharing window ([Sharing](sharing.md)) reads like a fresh one, with its age ("Still · 42
+  min ago"), and the grey dot and avatar say it is old. It doesn't say why: the server can't tell
+  a member who turned sharing off from a phone that is off or offline.
 - **Notifications about a member** are switched off per member on this phone only, in the same
   Room table as the muted places ([Places](places.md)). One switch covers both what is notified
   about them: arriving at or leaving a place, and starting or stopping sharing
