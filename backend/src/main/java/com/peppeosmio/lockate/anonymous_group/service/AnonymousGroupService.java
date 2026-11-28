@@ -1,8 +1,8 @@
 package com.peppeosmio.lockate.anonymous_group.service;
 
 import com.peppeosmio.lockate.anonymous_group.dto.*;
-import com.peppeosmio.lockate.anonymous_group.entity.AGCircleEntity;
 import com.peppeosmio.lockate.anonymous_group.entity.AGMemberEntity;
+import com.peppeosmio.lockate.anonymous_group.entity.AGPlaceEntity;
 import com.peppeosmio.lockate.anonymous_group.entity.AnonymousGroupEntity;
 import com.peppeosmio.lockate.anonymous_group.exceptions.*;
 import com.peppeosmio.lockate.anonymous_group.location.AGLastLocationService;
@@ -10,8 +10,8 @@ import com.peppeosmio.lockate.anonymous_group.mapper.AGMemberMapper;
 import com.peppeosmio.lockate.anonymous_group.mapper.AnonymousGroupMapper;
 import com.peppeosmio.lockate.anonymous_group.presence.AGPresenceService;
 import com.peppeosmio.lockate.anonymous_group.push.AGPushService;
-import com.peppeosmio.lockate.anonymous_group.repository.AGCircleRepository;
 import com.peppeosmio.lockate.anonymous_group.repository.AGMemberRepository;
+import com.peppeosmio.lockate.anonymous_group.repository.AGPlaceRepository;
 import com.peppeosmio.lockate.anonymous_group.repository.AnonymousGroupRepository;
 import com.peppeosmio.lockate.anonymous_group.security.AGMemberAuthentication;
 import com.peppeosmio.lockate.common.classes.EncryptedString;
@@ -38,7 +38,7 @@ public class AnonymousGroupService {
   private final AnonymousGroupRepository anonymousGroupRepository;
   private final AGMemberRepository agMemberRepository;
   private final AGLastLocationService lastLocationService;
-  private final AGCircleRepository agCircleRepository;
+  private final AGPlaceRepository agPlaceRepository;
   private final RedisService redisService;
   private final InviteService inviteService;
   private final ObjectMapper objectMapper;
@@ -51,7 +51,7 @@ public class AnonymousGroupService {
       AnonymousGroupRepository anonymousGroupRepository,
       AGMemberRepository agMemberRepository,
       AGLastLocationService lastLocationService,
-      AGCircleRepository agCircleRepository,
+      AGPlaceRepository agPlaceRepository,
       RedisService redisService,
       InviteService inviteService,
       ObjectMapper objectMapper,
@@ -62,7 +62,7 @@ public class AnonymousGroupService {
     this.agMemberRepository = agMemberRepository;
     this.anonymousGroupRepository = anonymousGroupRepository;
     this.lastLocationService = lastLocationService;
-    this.agCircleRepository = agCircleRepository;
+    this.agPlaceRepository = agPlaceRepository;
     this.redisService = redisService;
     this.inviteService = inviteService;
     this.objectMapper = objectMapper;
@@ -72,15 +72,15 @@ public class AnonymousGroupService {
     this.pushService = pushService;
   }
 
-  public static final int MAX_CIRCLES_PER_GROUP = 50;
+  public static final int MAX_PLACES_PER_GROUP = 50;
   // Every encrypted field has one size, plus the 16-byte GCM tag: two big-endian Int32
-  // microdegrees, one activity byte, a Float64 radius, a name (of a group, member or circle) padded
-  // to 128, a circle event (16-byte circle id and one enter/exit byte)
+  // microdegrees, one activity byte, a Float64 radius, a name (of a group, member or place) padded
+  // to 128, a place event (16-byte place id and one enter/exit byte)
   public static final int COORDINATES_CIPHER_BYTES = 24;
   public static final int MEMBER_ACTIVITY_CIPHER_BYTES = 17;
-  public static final int CIRCLE_RADIUS_CIPHER_BYTES = 24;
+  public static final int PLACE_RADIUS_CIPHER_BYTES = 24;
   public static final int NAME_CIPHER_BYTES = 144;
-  public static final int CIRCLE_EVENT_CIPHER_BYTES = 33;
+  public static final int PLACE_EVENT_CIPHER_BYTES = 33;
 
   public static String getRedisAGEventsChannel(UUID anonymousGroupId) {
     return "ag-" + anonymousGroupId + "-events";
@@ -112,8 +112,8 @@ public class AnonymousGroupService {
     }
   }
 
-  private CircleDto toCircleDto(AGCircleEntity entity) {
-    return new CircleDto(
+  private PlaceDto toPlaceDto(AGPlaceEntity entity) {
+    return new PlaceDto(
         entity.getId(),
         EncryptedDataDto.fromEncryptedString(entity.getEncryptedCoordinates()),
         EncryptedDataDto.fromEncryptedString(entity.getEncryptedRadius()),
@@ -131,61 +131,61 @@ public class AnonymousGroupService {
     return snapshotOf(agEntity);
   }
 
-  public long getCirclesVersion(UUID anonymousGroupId) throws AGNotFoundException {
+  public long getPlacesVersion(UUID anonymousGroupId) throws AGNotFoundException {
     return anonymousGroupRepository
-        .findCirclesVersionById(anonymousGroupId)
+        .findPlacesVersionById(anonymousGroupId)
         .orElseThrow(() -> new AGNotFoundException(anonymousGroupId));
   }
 
   private AGFrameDto snapshotOf(AnonymousGroupEntity agEntity) {
-    var circles =
-        agCircleRepository.findByAnonymousGroupIdOrderByCreatedAtAscIdAsc(agEntity.getId()).stream()
-            .map(this::toCircleDto)
+    var places =
+        agPlaceRepository.findByAnonymousGroupIdOrderByCreatedAtAscIdAsc(agEntity.getId()).stream()
+            .map(this::toPlaceDto)
             .toList();
-    return AGFrameDto.snapshot(listMembers(agEntity), circles);
+    return AGFrameDto.snapshot(listMembers(agEntity), places);
   }
 
   @Transactional
-  public void upsertCircle(UUID anonymousGroupId, UUID circleId, CircleUpsertReqDto dto)
-      throws AGNotFoundException, AGCircleConflictException, InvalidEncryptedDataException {
+  public void upsertPlace(UUID anonymousGroupId, UUID placeId, PlaceUpsertReqDto dto)
+      throws AGNotFoundException, AGPlaceConflictException, InvalidEncryptedDataException {
     var coordinates =
         dto.encryptedCoordinates().toEncryptedStringOfLength(COORDINATES_CIPHER_BYTES);
-    var radius = dto.encryptedRadius().toEncryptedStringOfLength(CIRCLE_RADIUS_CIPHER_BYTES);
+    var radius = dto.encryptedRadius().toEncryptedStringOfLength(PLACE_RADIUS_CIPHER_BYTES);
     var name = dto.encryptedName().toEncryptedStringOfLength(NAME_CIPHER_BYTES);
-    // locked, or two creations at once could both see room for one more circle
+    // locked, or two creations at once could both see room for one more place
     var agEntity =
         anonymousGroupRepository
             .findByIdForUpdate(anonymousGroupId)
             .orElseThrow(() -> new AGNotFoundException(anonymousGroupId));
     var now = LocalDateTime.now(ZoneOffset.UTC);
-    var existing = agCircleRepository.findById(circleId).orElse(null);
-    AGCircleEntity circle;
+    var existing = agPlaceRepository.findById(placeId).orElse(null);
+    AGPlaceEntity place;
     if (existing == null) {
-      if (agCircleRepository.countByAnonymousGroupId(anonymousGroupId) >= MAX_CIRCLES_PER_GROUP) {
-        throw new AGCircleConflictException("circle_limit_reached");
+      if (agPlaceRepository.countByAnonymousGroupId(anonymousGroupId) >= MAX_PLACES_PER_GROUP) {
+        throw new AGPlaceConflictException("place_limit_reached");
       }
-      circle =
-          agCircleRepository.save(
-              new AGCircleEntity(circleId, coordinates, radius, name, agEntity, now));
+      place =
+          agPlaceRepository.save(
+              new AGPlaceEntity(placeId, coordinates, radius, name, agEntity, now));
     } else if (!existing.getAnonymousGroupId().equals(anonymousGroupId)) {
-      throw new AGCircleConflictException("circle_id_taken");
+      throw new AGPlaceConflictException("place_id_taken");
     } else {
       existing.setEncryptedFields(coordinates, radius, name, now);
-      circle = existing;
+      place = existing;
     }
-    anonymousGroupRepository.incrementCirclesVersion(anonymousGroupId);
-    publishFrame(anonymousGroupId, AGFrameDto.circleUpserted(toCircleDto(circle)));
+    anonymousGroupRepository.incrementPlacesVersion(anonymousGroupId);
+    publishFrame(anonymousGroupId, AGFrameDto.placeUpserted(toPlaceDto(place)));
   }
 
   @Transactional
-  public void deleteCircle(UUID anonymousGroupId, UUID circleId) throws AGCircleNotFoundException {
-    var circle =
-        agCircleRepository
-            .findByIdAndAnonymousGroupId(circleId, anonymousGroupId)
-            .orElseThrow(() -> new AGCircleNotFoundException(circleId));
-    agCircleRepository.delete(circle);
-    anonymousGroupRepository.incrementCirclesVersion(anonymousGroupId);
-    publishFrame(anonymousGroupId, AGFrameDto.circleDeleted(circleId));
+  public void deletePlace(UUID anonymousGroupId, UUID placeId) throws AGPlaceNotFoundException {
+    var place =
+        agPlaceRepository
+            .findByIdAndAnonymousGroupId(placeId, anonymousGroupId)
+            .orElseThrow(() -> new AGPlaceNotFoundException(placeId));
+    agPlaceRepository.delete(place);
+    anonymousGroupRepository.incrementPlacesVersion(anonymousGroupId);
+    publishFrame(anonymousGroupId, AGFrameDto.placeDeleted(placeId));
   }
 
   private void requireFreeMemberId(UUID memberId) throws AGIdTakenException {
@@ -322,7 +322,7 @@ public class AnonymousGroupService {
         anonymousGroupMapper.toDto(agEntity),
         agMemberWithTokenDto,
         snapshot.members(),
-        snapshot.circles());
+        snapshot.places());
   }
 
   @Transactional
@@ -365,18 +365,18 @@ public class AnonymousGroupService {
     lastLocationService.put(anonymousGroupId, authentication.getId(), record);
   }
 
-  /** Relays a circle event to the other members, without storing it. */
-  public void relayCircleEvent(
-      UUID anonymousGroupId, AGMemberAuthentication authentication, AGCircleEventReqDto dto)
+  /** Relays a place event to the other members, without storing it. */
+  public void relayPlaceEvent(
+      UUID anonymousGroupId, AGMemberAuthentication authentication, AGPlaceEventReqDto dto)
       throws InvalidEncryptedDataException {
     if (dto.encryptedEvent() == null) {
       throw new InvalidEncryptedDataException();
     }
-    dto.encryptedEvent().toEncryptedStringOfLength(CIRCLE_EVENT_CIPHER_BYTES);
+    dto.encryptedEvent().toEncryptedStringOfLength(PLACE_EVENT_CIPHER_BYTES);
     var frame =
-        AGFrameDto.circleEventOf(
+        AGFrameDto.placeEventOf(
             authentication.getId(),
-            new CircleEventDto(dto.encryptedEvent(), LocalDateTime.now(ZoneOffset.UTC)));
+            new PlaceEventDto(dto.encryptedEvent(), LocalDateTime.now(ZoneOffset.UTC)));
     publishFrame(anonymousGroupId, frame);
     pushService.notifyGroup(anonymousGroupId, authentication.getId(), frame);
   }

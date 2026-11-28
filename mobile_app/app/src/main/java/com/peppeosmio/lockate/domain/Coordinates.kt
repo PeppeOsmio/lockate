@@ -17,7 +17,7 @@ data class Coordinates(val latitude: Double, val longitude: Double) {
         return latitudeArray + longitudeArray
     }
 
-    /** Great-circle distance in meters (haversine) */
+    /** Great-place distance in meters (haversine) */
     fun distanceMetersTo(other: Coordinates): Double {
         val lat1 = Math.toRadians(latitude)
         val lat2 = Math.toRadians(other.latitude)

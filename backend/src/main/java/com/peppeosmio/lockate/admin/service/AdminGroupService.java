@@ -114,7 +114,7 @@ public class AdminGroupService {
                   row.adminCount(),
                   groupMembers.stream().filter(m -> live.online().contains(ref(m))).count(),
                   row.pushRegisteredCount(),
-                  row.circleCount(),
+                  row.placeCount(),
                   lastLocationAt);
             })
         .toList();

@@ -17,7 +17,7 @@ import kotlinx.serialization.json.Json
 
 const val DEFAULT_GEOCODER_URL = "https://photon.komoot.io"
 
-data class Place(val name: String, val description: String, val coordinates: Coordinates)
+data class SearchResult(val name: String, val description: String, val coordinates: Coordinates)
 
 @Serializable private data class PhotonResponseDto(val features: List<PhotonFeatureDto>)
 
@@ -42,13 +42,13 @@ private data class PhotonPropertiesDto(
 private val photonJson = Json { ignoreUnknownKeys = true }
 
 // OSM often maps one place more than once (a square and the road around it), a few metres apart
-private const val SAME_PLACE_METERS = 300.0
+private const val SAME_RESULT_METERS = 300.0
 
 /**
  * The places of a Photon GeoJSON answer. Features with neither a name nor a street are skipped, and
  * so are repeats of a place already listed.
  */
-internal fun parsePhotonPlaces(json: String): List<Place> =
+internal fun parsePhotonResults(json: String): List<SearchResult> =
     photonJson
         .decodeFromString<PhotonResponseDto>(json)
         .features
@@ -63,15 +63,15 @@ internal fun parsePhotonPlaces(json: String): List<Place> =
                     .joinToString(", ")
             // GeoJSON puts the longitude first
             val (longitude, latitude) = feature.geometry.coordinates
-            Place(name, description, Coordinates(latitude = latitude, longitude = longitude))
+            SearchResult(name, description, Coordinates(latitude = latitude, longitude = longitude))
         }
-        .fold(emptyList()) { places, place ->
-            val isRepeat = places.any {
-                it.name == place.name &&
-                    it.description == place.description &&
-                    it.coordinates.distanceMetersTo(place.coordinates) < SAME_PLACE_METERS
+        .fold(emptyList()) { results, result ->
+            val isRepeat = results.any {
+                it.name == result.name &&
+                    it.description == result.description &&
+                    it.coordinates.distanceMetersTo(result.coordinates) < SAME_RESULT_METERS
             }
-            if (isRepeat) places else places + place
+            if (isRepeat) results else results + result
         }
 
 /** Searches places with a Photon geocoder, which sees the query and the area it is biased to. */
@@ -90,7 +90,7 @@ class PlaceSearchService(private val context: Context, private val httpClient: H
     }
 
     /** Places matching [query], the ones closest to [near] first. */
-    suspend fun search(query: String, near: Coordinates): List<Place> {
+    suspend fun search(query: String, near: Coordinates): List<SearchResult> {
         val response =
             httpClient.get("${geocoderUrl.first() ?: DEFAULT_GEOCODER_URL}/api") {
                 parameter("q", query)
@@ -99,7 +99,7 @@ class PlaceSearchService(private val context: Context, private val httpClient: H
                 parameter("lon", near.longitude)
             }
         check(response.status.isSuccess()) { "The geocoder answered ${response.status}" }
-        return parsePhotonPlaces(response.bodyAsText())
+        return parsePhotonResults(response.bodyAsText())
     }
 
     suspend fun isValidGeocoderUrl(url: String): Boolean =
@@ -109,7 +109,7 @@ class PlaceSearchService(private val context: Context, private val httpClient: H
                     parameter("q", "Roma")
                     parameter("limit", 1)
                 }
-            response.status.isSuccess() && parsePhotonPlaces(response.bodyAsText()).isNotEmpty()
+            response.status.isSuccess() && parsePhotonResults(response.bodyAsText()).isNotEmpty()
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {

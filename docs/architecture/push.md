@@ -2,7 +2,7 @@
 
 [← Architecture](../architecture.md)
 
-Pushes reach a phone whose app isn't running: circle events, sharing changes, being removed from a
+Pushes reach a phone whose app isn't running: place events, sharing changes, being removed from a
 group, a group being deleted. They go backend → [push relay](push-relay.md) → FCM → phone, and only
 the backend and the app can read them.
 
@@ -38,7 +38,7 @@ An FCM `data` message, high priority:
 ```
 
 - `frame` is the same `AGFrameDto` JSON the SSE stream sends ([Real-time](realtime.md)), so the app
-  parses it with code it already has; a circle event inside is still encrypted with the group key.
+  parses it with code it already has; a place event inside is still encrypted with the group key.
   A few hundred bytes, under FCM's ~4 KB, so nothing is stored for later fetch.
 - `r` in the AAD stops a payload from being replayed under another registration.
 - AES-GCM authenticates too: neither the relay nor someone with a stolen token can make the app show
@@ -51,7 +51,7 @@ member:
 
 | Event | To |
 |---|---|
-| `circle.event` | the group's other members |
+| `place.event` | the group's other members |
 | `member.presence` (started / stopped sharing) | the group's other members, from the one instance that announces it |
 | `member.left` with the member's own id | a member removed by the server admin, read before the row goes |
 | `group.deleted` | every member but the one who deleted it, read before the delete |
@@ -65,20 +65,20 @@ without a relay, or with one unreachable, everything works except notifications.
 
 `LockateMessagingService.onMessageReceived` → `AnonymousGroupService.openPush`: look up `r` in Room
 (unknown: left group, old registration or forged → dropped), open it (fails → dropped), then show a
-circle event or sharing change through `CircleNotifier` ([Circles](circles.md#notifications)), or
+place event or sharing change through `PlaceNotifier` ([Places](places.md#notifications)), or
 mark the group removed / deleted as the stream's last frame does.
 
-### Members and circles the phone doesn't know yet
+### Members and places the phone doesn't know yet
 
-A push names a member and, for a circle event, a circle; the notification needs their names, which
+A push names a member and, for a place event, a place; the notification needs their names, which
 the phone has only once it has saved them. It saves them when it opens the group (the stream's
-snapshot and frames) and when a location post says the circles changed, so a member who joined or a
-circle created while the group wasn't on screen is usually unknown.
+snapshot and frames) and when a location post says the places changed, so a member who joined or a
+place created while the group wasn't on screen is usually unknown.
 
-So when a push names a member, or for a circle event a circle, missing from Room (`namesUnknown`),
+So when a push names a member, or for a place event a place, missing from Room (`namesUnknown`),
 `openPush` fetches the group's snapshot with `GET /api/v1/anonymous-groups/{id}/snapshot` (the same
 snapshot the streams start with), saves it through the usual snapshot code under the group's lock,
-and then describes the push. A member or circle still unknown after that (removed meanwhile), or a
+and then describes the push. A member or place still unknown after that (removed meanwhile), or a
 server that can't be reached, means the push is dropped. A high-priority push
 gives the app a few seconds of work, and a miss costs one request. Only on a miss: pushing every
 group change too would cost a push per change and still leave a gap whenever one is lost.

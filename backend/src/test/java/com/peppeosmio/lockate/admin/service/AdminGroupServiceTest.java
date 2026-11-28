@@ -83,7 +83,7 @@ class AdminGroupServiceTest {
     assertThat(dto.memberCount()).isEqualTo(2);
     assertThat(dto.adminCount()).isEqualTo(1);
     assertThat(dto.pushRegisteredCount()).isEqualTo(1);
-    assertThat(dto.circleCount()).isEqualTo(3);
+    assertThat(dto.placeCount()).isEqualTo(3);
     assertThat(dto.onlineCount()).isEqualTo(1);
     assertThat(dto.lastLocationAt()).isEqualTo(live);
   }

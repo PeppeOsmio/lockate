@@ -28,7 +28,7 @@ public record AdminOverviewDto(
       long groups,
       long members,
       long pushRegisteredMembers,
-      long circles,
+      long places,
       long groupsWithoutAdmin,
       long inactiveGroups,
       long savedLocations,

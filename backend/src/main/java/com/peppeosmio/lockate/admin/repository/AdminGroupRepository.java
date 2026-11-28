@@ -22,7 +22,7 @@ public class AdminGroupRepository {
       long memberCount,
       long adminCount,
       long pushRegisteredCount,
-      long circleCount,
+      long placeCount,
       LocalDateTime lastLocationAt) {}
 
   public record MemberRow(
@@ -57,7 +57,7 @@ public class AdminGroupRepository {
              COUNT(m.id) AS member_count,
              COUNT(m.id) FILTER (WHERE m.is_admin) AS admin_count,
              COUNT(m.id) FILTER (WHERE m.push_token IS NOT NULL) AS push_registered_count,
-             (SELECT COUNT(*) FROM ag_circle c WHERE c.anonymous_group_id = g.id) AS circle_count,
+             (SELECT COUNT(*) FROM ag_place c WHERE c.anonymous_group_id = g.id) AS place_count,
              MAX(l.timestamp) AS last_location_at
       FROM anonymous_group g
       LEFT JOIN ag_member m ON m.anonymous_group_id = g.id
@@ -147,7 +147,7 @@ public class AdminGroupRepository {
         rs.getLong("member_count"),
         rs.getLong("admin_count"),
         rs.getLong("push_registered_count"),
-        rs.getLong("circle_count"),
+        rs.getLong("place_count"),
         rs.getObject("last_location_at", LocalDateTime.class));
   }
 }

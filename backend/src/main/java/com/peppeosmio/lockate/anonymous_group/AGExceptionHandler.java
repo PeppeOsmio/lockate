@@ -1,14 +1,14 @@
 package com.peppeosmio.lockate.anonymous_group;
 
 import com.peppeosmio.lockate.anonymous_group.dto.AGPostLocationResDto;
-import com.peppeosmio.lockate.anonymous_group.exceptions.AGCircleConflictException;
-import com.peppeosmio.lockate.anonymous_group.exceptions.AGCircleNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGIdTakenException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotAdminException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
+import com.peppeosmio.lockate.anonymous_group.exceptions.AGPlaceConflictException;
+import com.peppeosmio.lockate.anonymous_group.exceptions.AGPlaceNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.Base64Exception;
-import com.peppeosmio.lockate.anonymous_group.exceptions.CirclesChangedException;
+import com.peppeosmio.lockate.anonymous_group.exceptions.PlacesChangedException;
 import com.peppeosmio.lockate.anonymous_group.push.InvalidPushRegistrationException;
 import com.peppeosmio.lockate.common.dto.ErrorResponseDto;
 import lombok.extern.slf4j.Slf4j;
@@ -43,14 +43,14 @@ public class AGExceptionHandler {
         .body(new ErrorResponseDto("ag_member_not_admin"));
   }
 
-  @ExceptionHandler(AGCircleNotFoundException.class)
-  public ResponseEntity<ErrorResponseDto> handleAGCircleNotFound(AGCircleNotFoundException e) {
+  @ExceptionHandler(AGPlaceNotFoundException.class)
+  public ResponseEntity<ErrorResponseDto> handleAGPlaceNotFound(AGPlaceNotFoundException e) {
     return ResponseEntity.status(HttpStatus.NOT_FOUND)
-        .body(new ErrorResponseDto("ag_circle_not_found"));
+        .body(new ErrorResponseDto("ag_place_not_found"));
   }
 
-  @ExceptionHandler(AGCircleConflictException.class)
-  public ResponseEntity<ErrorResponseDto> handleAGCircleConflict(AGCircleConflictException e) {
+  @ExceptionHandler(AGPlaceConflictException.class)
+  public ResponseEntity<ErrorResponseDto> handleAGPlaceConflict(AGPlaceConflictException e) {
     return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponseDto(e.getMessage()));
   }
 
@@ -61,11 +61,11 @@ public class AGExceptionHandler {
         .body(new ErrorResponseDto("invalid_push_registration"));
   }
 
-  /** The phone fetches the circles and computes the events again: the body is the version now. */
-  @ExceptionHandler(CirclesChangedException.class)
-  public ResponseEntity<AGPostLocationResDto> handleCirclesChanged(CirclesChangedException e) {
+  /** The phone fetches the places and computes the events again: the body is the version now. */
+  @ExceptionHandler(PlacesChangedException.class)
+  public ResponseEntity<AGPostLocationResDto> handlePlacesChanged(PlacesChangedException e) {
     return ResponseEntity.status(HttpStatus.CONFLICT)
-        .body(new AGPostLocationResDto(e.getCirclesVersion()));
+        .body(new AGPostLocationResDto(e.getPlacesVersion()));
   }
 
   @ExceptionHandler(AGIdTakenException.class)

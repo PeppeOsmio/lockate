@@ -48,4 +48,4 @@ colour while the dot is green, grey once it isn't, and the name then says how ol
 
 The announcement is a `member.presence` frame (`{memberId, online, lastSeen}`), published to the
 group ([Real-time](realtime.md)) and pushed to the other members ([Push notifications](push.md)).
-The app shows it in the member's notification like a circle event and doesn't store it.
+The app shows it in the member's notification like a place event and doesn't store it.

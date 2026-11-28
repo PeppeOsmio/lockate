@@ -3,6 +3,7 @@ package com.peppeosmio.lockate
 import androidx.room.AutoMigration
 import androidx.room.Database
 import androidx.room.DeleteColumn
+import androidx.room.RenameTable
 import androidx.room.RoomDatabase
 import androidx.room.migration.AutoMigrationSpec
 import androidx.room.migration.Migration
@@ -10,8 +11,8 @@ import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.execSQL
 import com.peppeosmio.lockate.dao.AnonymousGroupDao
 import com.peppeosmio.lockate.dao.ConnectionDao
-import com.peppeosmio.lockate.data.anonymous_group.database.AGCircleEntity
 import com.peppeosmio.lockate.data.anonymous_group.database.AGMemberEntity
+import com.peppeosmio.lockate.data.anonymous_group.database.AGPlaceEntity
 import com.peppeosmio.lockate.data.anonymous_group.database.AnonymousGroupEntity
 import com.peppeosmio.lockate.data.anonymous_group.database.ConnectionEntity
 import com.peppeosmio.lockate.data.anonymous_group.database.MutedTargetEntity
@@ -21,13 +22,13 @@ import com.peppeosmio.lockate.data.anonymous_group.database.mergeServers
 import com.peppeosmio.lockate.platform_service.KeyStoreService
 
 @Database(
-    version = 8,
+    version = 9,
     entities =
         [
             ConnectionEntity::class,
             AnonymousGroupEntity::class,
             AGMemberEntity::class,
-            AGCircleEntity::class,
+            AGPlaceEntity::class,
             MutedTargetEntity::class,
             PushRegistrationEntity::class,
         ],
@@ -37,8 +38,9 @@ import com.peppeosmio.lockate.platform_service.KeyStoreService
             AutoMigration(from = 1, to = 2),
             AutoMigration(from = 3, to = 4),
             AutoMigration(from = 4, to = 5),
-            AutoMigration(from = 5, to = 6, spec = AppDatabase.DropCircleSelfInside::class),
+            AutoMigration(from = 5, to = 6, spec = AppDatabase.DropPlaceSelfInside::class),
             AutoMigration(from = 6, to = 7),
+            AutoMigration(from = 8, to = 9, spec = AppDatabase.RenameCirclesToPlaces::class),
         ],
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -48,7 +50,10 @@ abstract class AppDatabase : RoomDatabase() {
 
     // the other members' arrivals are worked out from their positions now, never our own
     @DeleteColumn(tableName = "ag_circle", columnName = "selfInside")
-    class DropCircleSelfInside : AutoMigrationSpec
+    class DropPlaceSelfInside : AutoMigrationSpec
+
+    @RenameTable(fromTableName = "ag_circle", toTableName = "ag_place")
+    class RenameCirclesToPlaces : AutoMigrationSpec
 
     companion object {
         // Groups used to be protected by a password and the servers dropped them all when invites

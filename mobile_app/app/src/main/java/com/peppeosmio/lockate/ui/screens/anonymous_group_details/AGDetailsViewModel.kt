@@ -11,7 +11,6 @@ import com.peppeosmio.lockate.domain.anonymous_group.AGLocationUpdate
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.domain.anonymous_group.AnonymousGroup
 import com.peppeosmio.lockate.domain.anonymous_group.ChannelState
-import com.peppeosmio.lockate.domain.anonymous_group.Circle
 import com.peppeosmio.lockate.exceptions.AGMemberNotAdminException
 import com.peppeosmio.lockate.exceptions.ConnectionSettingsNotFoundException
 import com.peppeosmio.lockate.exceptions.LocationDisabledException
@@ -40,11 +39,8 @@ import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
-/**
- * Where the map should go: [fitRadiusMeters] zooms to show a whole circle, otherwise the zoom is
- * fixed.
- */
-data class CameraTarget(val coordinates: Coordinates, val fitRadiusMeters: Double? = null)
+/** Where the map should go, at a fixed zoom */
+data class CameraTarget(val coordinates: Coordinates)
 
 class AGDetailsViewModel(
     private val anonymousGroupService: AnonymousGroupService,
@@ -132,8 +128,8 @@ class AGDetailsViewModel(
             it.copy(
                 anonymousGroup = null,
                 members = null,
-                circles = emptyList(),
-                selectedCircleId = null,
+                places = emptyList(),
+                selectedPlaceId = null,
                 selectedMemberId = null,
                 isFollowingSelectedMember = false,
                 makeAdminDialogMemberId = null,
@@ -149,7 +145,7 @@ class AGDetailsViewModel(
             try {
                 getLocalAG(anonymousGroupInternalId)
                 getLocalMembers()
-                getLocalCircles()
+                getLocalPlaces()
                 _state.update {
                     it.copy(
                         mutedMemberIds =
@@ -302,7 +298,7 @@ class AGDetailsViewModel(
                 _state.update {
                     it.copy(
                         members = members,
-                        circles = frame.circles,
+                        places = frame.places,
                         anonymousGroup =
                             it.anonymousGroup?.let { group ->
                                 members[group.memberId]?.let { me ->
@@ -313,7 +309,7 @@ class AGDetailsViewModel(
                 }
             }
 
-            is AGChannelFrame.CircleEvent,
+            is AGChannelFrame.PlaceEvent,
             is AGChannelFrame.MemberPresence -> Unit
 
             is AGChannelFrame.MemberJoined ->
@@ -356,24 +352,23 @@ class AGDetailsViewModel(
                     )
                 }
 
-            is AGChannelFrame.CircleUpserted ->
+            is AGChannelFrame.PlaceUpserted ->
                 _state.update {
                     it.copy(
-                        circles =
-                            if (it.circles.any { c -> c.id == frame.circle.id })
-                                it.circles.map { c ->
-                                    if (c.id == frame.circle.id) frame.circle else c
+                        places =
+                            if (it.places.any { c -> c.id == frame.place.id })
+                                it.places.map { c ->
+                                    if (c.id == frame.place.id) frame.place else c
                                 }
-                            else it.circles + frame.circle
+                            else it.places + frame.place
                     )
                 }
 
-            is AGChannelFrame.CircleDeleted ->
+            is AGChannelFrame.PlaceDeleted ->
                 _state.update {
                     it.copy(
-                        circles = it.circles.filter { c -> c.id != frame.circleId },
-                        selectedCircleId =
-                            it.selectedCircleId.takeIf { id -> id != frame.circleId },
+                        places = it.places.filter { c -> c.id != frame.placeId },
+                        selectedPlaceId = it.selectedPlaceId.takeIf { id -> id != frame.placeId },
                     )
                 }
         }
@@ -730,7 +725,7 @@ class AGDetailsViewModel(
         }
     }
 
-    /** Turns the circle notifications about a member off or on, on this phone only */
+    /** Turns the place notifications about a member off or on, on this phone only */
     fun setMemberMuted(agMemberId: String, muted: Boolean) {
         val internalId = state.value.anonymousGroup?.internalId ?: return
         viewModelScope.launch {
@@ -759,17 +754,9 @@ class AGDetailsViewModel(
         _state.update { it.copy(isFollowingSelectedMember = false) }
     }
 
-    /** Draws the circle's edge and fits the whole circle in the map */
-    fun showCircle(circle: Circle) {
-        _state.update { it.copy(isFollowingSelectedMember = false, selectedCircleId = circle.id) }
-        _cameraPositionEvents.trySend(
-            CameraTarget(circle.center, fitRadiusMeters = circle.radiusMeters)
-        )
-    }
-
-    fun toggleCircle(circleId: String) {
+    fun togglePlace(placeId: String) {
         _state.update {
-            it.copy(selectedCircleId = if (it.selectedCircleId == circleId) null else circleId)
+            it.copy(selectedPlaceId = if (it.selectedPlaceId == placeId) null else placeId)
         }
     }
 
@@ -777,8 +764,8 @@ class AGDetailsViewModel(
         _state.update { it.copy(selectedMemberId = null, isFollowingSelectedMember = false) }
     }
 
-    private suspend fun getLocalCircles() {
+    private suspend fun getLocalPlaces() {
         val internalId = state.value.anonymousGroup?.internalId ?: return
-        _state.update { it.copy(circles = anonymousGroupService.listCircles(internalId)) }
+        _state.update { it.copy(places = anonymousGroupService.listPlaces(internalId)) }
     }
 }

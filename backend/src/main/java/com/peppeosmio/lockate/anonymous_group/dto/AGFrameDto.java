@@ -15,13 +15,13 @@ import org.springframework.aot.hint.annotation.RegisterReflectionForBinding;
 public record AGFrameDto(
     String type,
     List<AGMemberDto> members,
-    List<CircleDto> circles,
+    List<PlaceDto> places,
     AGMemberDto member,
     UUID memberId,
-    CircleEventDto circleEvent,
+    PlaceEventDto placeEvent,
     Boolean isAGAdmin,
-    CircleDto circle,
-    UUID circleId,
+    PlaceDto place,
+    UUID placeId,
     Boolean online,
     LocalDateTime lastSeen) {
 
@@ -29,15 +29,15 @@ public record AGFrameDto(
   public static final String MEMBER_JOINED = "member.joined";
   public static final String MEMBER_LEFT = "member.left";
   public static final String MEMBER_UPDATED = "member.updated";
-  public static final String CIRCLE_UPSERTED = "circle.upserted";
-  public static final String CIRCLE_DELETED = "circle.deleted";
-  public static final String CIRCLE_EVENT = "circle.event";
+  public static final String PLACE_UPSERTED = "place.upserted";
+  public static final String PLACE_DELETED = "place.deleted";
+  public static final String PLACE_EVENT = "place.event";
   public static final String MEMBER_PRESENCE = "member.presence";
   public static final String GROUP_DELETED = "group.deleted";
 
-  public static AGFrameDto snapshot(List<AGMemberDto> members, List<CircleDto> circles) {
+  public static AGFrameDto snapshot(List<AGMemberDto> members, List<PlaceDto> places) {
     return new AGFrameDto(
-        SNAPSHOT, members, circles, null, null, null, null, null, null, null, null);
+        SNAPSHOT, members, places, null, null, null, null, null, null, null, null);
   }
 
   public static AGFrameDto memberJoined(AGMemberDto member) {
@@ -55,19 +55,19 @@ public record AGFrameDto(
         MEMBER_UPDATED, null, null, null, memberId, null, isAGAdmin, null, null, null, null);
   }
 
-  public static AGFrameDto circleUpserted(CircleDto circle) {
+  public static AGFrameDto placeUpserted(PlaceDto place) {
     return new AGFrameDto(
-        CIRCLE_UPSERTED, null, null, null, null, null, null, circle, null, null, null);
+        PLACE_UPSERTED, null, null, null, null, null, null, place, null, null, null);
   }
 
-  public static AGFrameDto circleDeleted(UUID circleId) {
+  public static AGFrameDto placeDeleted(UUID placeId) {
     return new AGFrameDto(
-        CIRCLE_DELETED, null, null, null, null, null, null, null, circleId, null, null);
+        PLACE_DELETED, null, null, null, null, null, null, null, placeId, null, null);
   }
 
-  public static AGFrameDto circleEventOf(UUID memberId, CircleEventDto circleEvent) {
+  public static AGFrameDto placeEventOf(UUID memberId, PlaceEventDto placeEvent) {
     return new AGFrameDto(
-        CIRCLE_EVENT, null, null, null, memberId, circleEvent, null, null, null, null, null);
+        PLACE_EVENT, null, null, null, memberId, placeEvent, null, null, null, null, null);
   }
 
   public static AGFrameDto memberPresence(UUID memberId, boolean online, LocalDateTime lastSeen) {

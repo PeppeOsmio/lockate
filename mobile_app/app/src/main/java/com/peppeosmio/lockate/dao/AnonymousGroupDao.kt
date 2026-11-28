@@ -5,13 +5,13 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
-import com.peppeosmio.lockate.data.anonymous_group.database.AGCircleEntity
 import com.peppeosmio.lockate.data.anonymous_group.database.AGMemberEntity
+import com.peppeosmio.lockate.data.anonymous_group.database.AGPlaceEntity
 import com.peppeosmio.lockate.data.anonymous_group.database.AnonymousGroupEntity
 import com.peppeosmio.lockate.data.anonymous_group.database.MutedTargetEntity
 import com.peppeosmio.lockate.data.anonymous_group.database.PushRegistrationEntity
-import com.peppeosmio.lockate.data.anonymous_group.mappers.CircleMapper
-import com.peppeosmio.lockate.domain.anonymous_group.Circle
+import com.peppeosmio.lockate.data.anonymous_group.mappers.PlaceMapper
+import com.peppeosmio.lockate.domain.anonymous_group.Place
 
 data class GroupMemberCount(val anonymousGroupInternalId: Long, val memberCount: Int)
 
@@ -32,14 +32,14 @@ interface AnonymousGroupDao {
     suspend fun createAGWithMembers(
         agEntity: AnonymousGroupEntity,
         agMemberEntities: List<AGMemberEntity>,
-        circles: List<Circle> = emptyList(),
+        places: List<Place> = emptyList(),
     ): Long {
         val anonymousGroupInternalId = insertAnonymousGroup(agEntity)
         val agMembersWithAGId = agMemberEntities.map {
             it.copy(anonymousGroupInternalId = anonymousGroupInternalId)
         }
         insertAGMembers(agMembersWithAGId)
-        circles.forEach { upsertCircle(anonymousGroupInternalId, it) }
+        places.forEach { upsertPlace(anonymousGroupInternalId, it) }
         return anonymousGroupInternalId
     }
 
@@ -171,21 +171,21 @@ interface AnonymousGroupDao {
     @Insert suspend fun insertAGMember(agMember: AGMemberEntity): Long
 
     @Query(
-        "SELECT * FROM ag_circle WHERE anonymousGroupInternalId = :anonymousGroupInternalId ORDER BY internalId"
+        "SELECT * FROM ag_place WHERE anonymousGroupInternalId = :anonymousGroupInternalId ORDER BY internalId"
     )
-    suspend fun listCircles(anonymousGroupInternalId: Long): List<AGCircleEntity>
+    suspend fun listPlaces(anonymousGroupInternalId: Long): List<AGPlaceEntity>
 
-    @Insert suspend fun insertCircle(circle: AGCircleEntity)
+    @Insert suspend fun insertPlace(place: AGPlaceEntity)
 
     @Query(
         """
-        UPDATE ag_circle
+        UPDATE ag_place
         SET name = :name, latitude = :latitude, longitude = :longitude,
         radiusMeters = :radiusMeters
         WHERE id = :id AND anonymousGroupInternalId = :agInternalId
         """
     )
-    suspend fun updateCircle(
+    suspend fun updatePlace(
         id: String,
         agInternalId: Long,
         name: String,
@@ -194,39 +194,39 @@ interface AnonymousGroupDao {
         radiusMeters: Double,
     )
 
-    @Query("DELETE FROM ag_circle WHERE id = :id AND anonymousGroupInternalId = :agInternalId")
-    suspend fun deleteCircle(id: String, agInternalId: Long)
+    @Query("DELETE FROM ag_place WHERE id = :id AND anonymousGroupInternalId = :agInternalId")
+    suspend fun deletePlace(id: String, agInternalId: Long)
 
-    /** Makes the circles of the group the ones given, dropping the others. */
+    /** Makes the places of the group the ones given, dropping the others. */
     @Transaction
-    suspend fun syncCircles(agInternalId: Long, circles: List<Circle>) {
-        val existing = listCircles(agInternalId).associateBy { it.id }
+    suspend fun syncPlaces(agInternalId: Long, places: List<Place>) {
+        val existing = listPlaces(agInternalId).associateBy { it.id }
         existing.keys
-            .filter { id -> circles.none { it.id == id } }
-            .forEach { deleteCircle(it, agInternalId) }
-        circles.forEach { upsertCircle(agInternalId, it) }
+            .filter { id -> places.none { it.id == id } }
+            .forEach { deletePlace(it, agInternalId) }
+        places.forEach { upsertPlace(agInternalId, it) }
     }
 
-    @Query("SELECT * FROM ag_circle WHERE id = :id AND anonymousGroupInternalId = :agInternalId")
-    suspend fun getCircle(id: String, agInternalId: Long): AGCircleEntity?
+    @Query("SELECT * FROM ag_place WHERE id = :id AND anonymousGroupInternalId = :agInternalId")
+    suspend fun getPlace(id: String, agInternalId: Long): AGPlaceEntity?
 
     /**
-     * The circle can arrive twice at about the same time, from the server's answer to whoever saved
+     * The place can arrive twice at about the same time, from the server's answer to whoever saved
      * it and from the group's channel, so what is already there is read inside the transaction.
      */
     @Transaction
-    suspend fun upsertCircle(agInternalId: Long, circle: Circle) {
-        if (getCircle(circle.id, agInternalId) == null) {
-            insertCircle(CircleMapper.domainToEntity(circle, agInternalId))
+    suspend fun upsertPlace(agInternalId: Long, place: Place) {
+        if (getPlace(place.id, agInternalId) == null) {
+            insertPlace(PlaceMapper.domainToEntity(place, agInternalId))
             return
         }
-        updateCircle(
-            id = circle.id,
+        updatePlace(
+            id = place.id,
             agInternalId = agInternalId,
-            name = circle.name,
-            latitude = circle.center.latitude,
-            longitude = circle.center.longitude,
-            radiusMeters = circle.radiusMeters,
+            name = place.name,
+            latitude = place.center.latitude,
+            longitude = place.center.longitude,
+            radiusMeters = place.radiusMeters,
         )
     }
 

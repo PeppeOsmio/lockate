@@ -11,12 +11,11 @@ import org.koin.android.ext.android.inject
 class LockateMessagingService : FirebaseMessagingService() {
     private val pushRegistrationService: PushRegistrationService by inject()
     private val anonymousGroupService: AnonymousGroupService by inject()
-    private val circleNotifier: CircleNotifier by inject()
+    private val placeNotifier: PlaceNotifier by inject()
 
     // FCM calls this on a background thread and keeps the app awake until it returns
     override fun onMessageReceived(message: RemoteMessage) {
-        runBlocking { anonymousGroupService.openPush(message.data) }
-            ?.let { circleNotifier.show(it) }
+        runBlocking { anonymousGroupService.openPush(message.data) }?.let { placeNotifier.show(it) }
     }
 
     override fun onNewToken(token: String) {

@@ -11,10 +11,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.peppeosmio.lockate.anonymous_group.dto.AGCircleEventReqDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGMemberMessageReqDto;
+import com.peppeosmio.lockate.anonymous_group.dto.AGPlaceEventReqDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGPostLocationReqDto;
-import com.peppeosmio.lockate.anonymous_group.exceptions.CirclesChangedException;
+import com.peppeosmio.lockate.anonymous_group.exceptions.PlacesChangedException;
 import com.peppeosmio.lockate.anonymous_group.presence.AGPresenceService;
 import com.peppeosmio.lockate.anonymous_group.security.AGMemberAuthentication;
 import com.peppeosmio.lockate.common.dto.EncryptedDataDto;
@@ -50,10 +50,10 @@ class AGMemberMessageServiceTest {
   void setUp() throws Exception {
     service = new AGMemberMessageService(anonymousGroupService, presenceService, redisService);
     // the version the posts below were computed on, unless a test says otherwise
-    lenient().when(anonymousGroupService.getCirclesVersion(groupId)).thenReturn(CIRCLES_VERSION);
+    lenient().when(anonymousGroupService.getPlacesVersion(groupId)).thenReturn(PLACES_VERSION);
   }
 
-  private static final long CIRCLES_VERSION = 4;
+  private static final long PLACES_VERSION = 4;
 
   private static EncryptedDataDto blobOfSize(int cipherTextBytes) {
     return new EncryptedDataDto(
@@ -61,25 +61,24 @@ class AGMemberMessageServiceTest {
         Base64.getEncoder().encodeToString(new byte[12]));
   }
 
-  private static EncryptedDataDto circleEvent(byte marker) {
-    var cipherText = new byte[AnonymousGroupService.CIRCLE_EVENT_CIPHER_BYTES];
+  private static EncryptedDataDto placeEvent(byte marker) {
+    var cipherText = new byte[AnonymousGroupService.PLACE_EVENT_CIPHER_BYTES];
     cipherText[0] = marker;
     return new EncryptedDataDto(
         Base64.getEncoder().encodeToString(cipherText),
         Base64.getEncoder().encodeToString(new byte[12]));
   }
 
-  private static AGPostLocationReqDto post(List<EncryptedDataDto> circleEvents) {
-    return post(circleEvents, CIRCLES_VERSION);
+  private static AGPostLocationReqDto post(List<EncryptedDataDto> placeEvents) {
+    return post(placeEvents, PLACES_VERSION);
   }
 
-  private static AGPostLocationReqDto post(
-      List<EncryptedDataDto> circleEvents, Long circlesVersion) {
+  private static AGPostLocationReqDto post(List<EncryptedDataDto> placeEvents, Long placesVersion) {
     return new AGPostLocationReqDto(
         blobOfSize(AnonymousGroupService.COORDINATES_CIPHER_BYTES),
         blobOfSize(AnonymousGroupService.MEMBER_ACTIVITY_CIPHER_BYTES),
-        circleEvents,
-        circlesVersion);
+        placeEvents,
+        placesVersion);
   }
 
   private void underTheRateLimit() {
@@ -87,10 +86,10 @@ class AGMemberMessageServiceTest {
   }
 
   @Test
-  void postLocation_relaysThePositionThenEachCircleEventInOrder() throws Exception {
+  void postLocation_relaysThePositionThenEachPlaceEventInOrder() throws Exception {
     underTheRateLimit();
-    var first = circleEvent((byte) 1);
-    var second = circleEvent((byte) 2);
+    var first = placeEvent((byte) 1);
+    var second = placeEvent((byte) 2);
     var dto = post(List.of(first, second));
 
     service.postLocation(groupId, authentication, dto);
@@ -105,23 +104,23 @@ class AGMemberMessageServiceTest {
     order.verify(presenceService).onLocation(groupId, memberId);
     order
         .verify(anonymousGroupService)
-        .relayCircleEvent(groupId, authentication, new AGCircleEventReqDto(first));
+        .relayPlaceEvent(groupId, authentication, new AGPlaceEventReqDto(first));
     order
         .verify(anonymousGroupService)
-        .relayCircleEvent(groupId, authentication, new AGCircleEventReqDto(second));
+        .relayPlaceEvent(groupId, authentication, new AGPlaceEventReqDto(second));
   }
 
   @Test
-  void postLocation_answersTheGroupsCirclesVersion() throws Exception {
+  void postLocation_answersTheGroupsPlacesVersion() throws Exception {
     underTheRateLimit();
 
     var res = service.postLocation(groupId, authentication, post(null));
 
-    assertThat(res.circlesVersion()).isEqualTo(CIRCLES_VERSION);
+    assertThat(res.placesVersion()).isEqualTo(PLACES_VERSION);
   }
 
   @Test
-  void postLocation_eventsOnOtherCircles_throwsCirclesChangedAndRelaysNothing() throws Exception {
+  void postLocation_eventsOnOtherPlaces_throwsPlacesChangedAndRelaysNothing() throws Exception {
     underTheRateLimit();
 
     assertThatThrownBy(
@@ -129,54 +128,53 @@ class AGMemberMessageServiceTest {
                 service.postLocation(
                     groupId,
                     authentication,
-                    post(List.of(circleEvent((byte) 1)), CIRCLES_VERSION - 1)))
+                    post(List.of(placeEvent((byte) 1)), PLACES_VERSION - 1)))
         .isInstanceOfSatisfying(
-            CirclesChangedException.class,
-            e -> assertThat(e.getCirclesVersion()).isEqualTo(CIRCLES_VERSION));
+            PlacesChangedException.class,
+            e -> assertThat(e.getPlacesVersion()).isEqualTo(PLACES_VERSION));
     verifyNoInteractions(presenceService);
     verify(anonymousGroupService, never()).relayMemberMessage(any(), any(), any());
-    verify(anonymousGroupService, never()).relayCircleEvent(any(), any(), any());
+    verify(anonymousGroupService, never()).relayPlaceEvent(any(), any(), any());
   }
 
   @Test
-  void postLocation_eventsWithoutAVersion_throwsCirclesChanged() {
+  void postLocation_eventsWithoutAVersion_throwsPlacesChanged() {
     underTheRateLimit();
 
     assertThatThrownBy(
             () ->
                 service.postLocation(
-                    groupId, authentication, post(List.of(circleEvent((byte) 1)), null)))
-        .isInstanceOf(CirclesChangedException.class);
+                    groupId, authentication, post(List.of(placeEvent((byte) 1)), null)))
+        .isInstanceOf(PlacesChangedException.class);
   }
 
   @Test
-  void postLocation_noEventsOnOtherCircles_relaysThePositionAndAnswersTheNewVersion()
+  void postLocation_noEventsOnOtherPlaces_relaysThePositionAndAnswersTheNewVersion()
       throws Exception {
     underTheRateLimit();
 
     var res = service.postLocation(groupId, authentication, post(List.of(), null));
 
     verify(presenceService).onLocation(groupId, memberId);
-    assertThat(res.circlesVersion()).isEqualTo(CIRCLES_VERSION);
+    assertThat(res.placesVersion()).isEqualTo(PLACES_VERSION);
   }
 
   @Test
-  void postLocation_withoutCircleEvents_relaysOnlyThePosition() throws Exception {
+  void postLocation_withoutPlaceEvents_relaysOnlyThePosition() throws Exception {
     underTheRateLimit();
 
     service.postLocation(groupId, authentication, post(null));
 
     verify(presenceService).onLocation(groupId, memberId);
-    verify(anonymousGroupService, never()).relayCircleEvent(any(), any(), any());
+    verify(anonymousGroupService, never()).relayPlaceEvent(any(), any(), any());
   }
 
   @Test
-  void postLocation_tooManyCircleEvents_throwsAndRelaysNothing() {
+  void postLocation_tooManyPlaceEvents_throwsAndRelaysNothing() {
     underTheRateLimit();
     var events =
         new ArrayList<>(
-            Collections.nCopies(
-                AGMemberMessageService.MAX_CIRCLE_EVENTS + 1, circleEvent((byte) 1)));
+            Collections.nCopies(AGMemberMessageService.MAX_PLACE_EVENTS + 1, placeEvent((byte) 1)));
 
     assertThatThrownBy(() -> service.postLocation(groupId, authentication, post(events)))
         .isInstanceOf(InvalidEncryptedDataException.class);
@@ -185,9 +183,9 @@ class AGMemberMessageServiceTest {
   }
 
   @Test
-  void postLocation_aCircleEventOfTheWrongSize_throwsAndRelaysNothing() {
+  void postLocation_aPlaceEventOfTheWrongSize_throwsAndRelaysNothing() {
     underTheRateLimit();
-    var events = List.of(circleEvent((byte) 1), blobOfSize(20));
+    var events = List.of(placeEvent((byte) 1), blobOfSize(20));
 
     assertThatThrownBy(() -> service.postLocation(groupId, authentication, post(events)))
         .isInstanceOf(InvalidEncryptedDataException.class);
@@ -196,7 +194,7 @@ class AGMemberMessageServiceTest {
   }
 
   @Test
-  void postLocation_aMissingCircleEvent_throwsAndRelaysNothing() {
+  void postLocation_aMissingPlaceEvent_throwsAndRelaysNothing() {
     underTheRateLimit();
     var events = new ArrayList<EncryptedDataDto>();
     events.add(null);
@@ -208,7 +206,7 @@ class AGMemberMessageServiceTest {
   }
 
   @Test
-  void postLocation_invalidPosition_touchesNeitherPresenceNorCircleEvents() throws Exception {
+  void postLocation_invalidPosition_touchesNeitherPresenceNorPlaceEvents() throws Exception {
     underTheRateLimit();
     doThrow(new InvalidEncryptedDataException())
         .when(anonymousGroupService)
@@ -216,11 +214,11 @@ class AGMemberMessageServiceTest {
 
     assertThatThrownBy(
             () ->
-                service.postLocation(groupId, authentication, post(List.of(circleEvent((byte) 1)))))
+                service.postLocation(groupId, authentication, post(List.of(placeEvent((byte) 1)))))
         .isInstanceOf(InvalidEncryptedDataException.class);
 
     verifyNoInteractions(presenceService);
-    verify(anonymousGroupService, never()).relayCircleEvent(any(), any(), any());
+    verify(anonymousGroupService, never()).relayPlaceEvent(any(), any(), any());
   }
 
   @Test

@@ -2,8 +2,8 @@ package com.peppeosmio.lockate.service.geofence
 
 import com.peppeosmio.lockate.domain.Coordinates
 import com.peppeosmio.lockate.domain.LocationFix
-import com.peppeosmio.lockate.domain.anonymous_group.Circle
-import com.peppeosmio.lockate.domain.anonymous_group.CircleTransition
+import com.peppeosmio.lockate.domain.anonymous_group.Place
+import com.peppeosmio.lockate.domain.anonymous_group.PlaceTransition
 import com.peppeosmio.lockate.domain.anonymous_group.TransitionKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -12,7 +12,7 @@ import org.junit.Test
 class GeofenceTrackerTest {
 
     private val home =
-        Circle(
+        Place(
             id = "home",
             name = "Home",
             center = Coordinates(40.0, 14.0),
@@ -23,9 +23,9 @@ class GeofenceTrackerTest {
     private fun north(meters: Double) =
         Coordinates(home.center.latitude + meters / 111_195.0, home.center.longitude)
 
-    private fun tracker(vararg circles: Circle) =
+    private fun tracker(vararg places: Place) =
         GeofenceTracker().also {
-            it.replaceCircles(circles.toList())
+            it.replacePlaces(places.toList())
         }
 
     // a fix whose transitions the server gets at once
@@ -38,9 +38,9 @@ class GeofenceTrackerTest {
     private fun GeofenceTracker.unsent(position: Coordinates, nowMillis: Long = 0) =
         update(LocationFix(position, 10f, 0), nowMillis)
 
-    private fun enter(circle: String) = CircleTransition(circle, TransitionKind.Enter)
+    private fun enter(place: String) = PlaceTransition(place, TransitionKind.Enter)
 
-    private fun exit(circle: String) = CircleTransition(circle, TransitionKind.Exit)
+    private fun exit(place: String) = PlaceTransition(place, TransitionKind.Exit)
 
     @Test
     fun `the first position sets the state without a transition`() {
@@ -97,47 +97,47 @@ class GeofenceTrackerTest {
     }
 
     @Test
-    fun `a circle created while inside doesn't announce an arrival`() {
+    fun `a place created while inside doesn't announce an arrival`() {
         val tracker = tracker()
         tracker.update(north(10.0))
 
-        tracker.upsertCircle(home)
+        tracker.upsertPlace(home)
 
         assertTrue(tracker.update(north(10.0)).isEmpty())
         assertEquals(listOf(exit("home")), tracker.update(north(300.0)))
     }
 
     @Test
-    fun `a circle learned after the fix that crossed it announces the crossing on that fix`() {
+    fun `a place learned after the fix that crossed it announces the crossing on that fix`() {
         val tracker = tracker()
         tracker.update(north(500.0))
         tracker.unsent(north(50.0))
 
-        tracker.upsertCircle(home)
+        tracker.upsertPlace(home)
 
         assertEquals(listOf(enter("home")), tracker.unsent(north(50.0)))
     }
 
     @Test
-    fun `a circle crossed while the posts failed is announced when we learn of it`() {
+    fun `a place crossed while the posts failed is announced when we learn of it`() {
         val tracker = tracker()
         tracker.update(north(500.0), nowMillis = 0)
         tracker.unsent(north(300.0), nowMillis = 1_000)
         tracker.unsent(north(50.0), nowMillis = 2_000)
         tracker.unsent(north(40.0), nowMillis = 3_000)
 
-        tracker.upsertCircle(home)
+        tracker.upsertPlace(home)
 
         assertEquals(listOf(enter("home")), tracker.unsent(north(40.0), nowMillis = 4_000))
     }
 
     @Test
-    fun `a circle created around us while we stand still announces nothing`() {
+    fun `a place created around us while we stand still announces nothing`() {
         val tracker = tracker()
         tracker.update(north(10.0))
         tracker.unsent(north(10.0))
 
-        tracker.upsertCircle(home)
+        tracker.upsertPlace(home)
 
         assertTrue(tracker.unsent(north(10.0)).isEmpty())
     }
@@ -148,7 +148,7 @@ class GeofenceTrackerTest {
         tracker.update(north(500.0), nowMillis = 0)
         tracker.unsent(north(50.0), nowMillis = GeofenceTracker.MAX_PENDING_MILLIS)
 
-        tracker.upsertCircle(home)
+        tracker.upsertPlace(home)
 
         assertTrue(
             tracker.unsent(north(50.0), nowMillis = GeofenceTracker.MAX_PENDING_MILLIS).isEmpty()
@@ -156,52 +156,52 @@ class GeofenceTrackerTest {
     }
 
     @Test
-    fun `a circle moved onto us takes us as inside silently`() {
+    fun `a place moved onto us takes us as inside silently`() {
         val tracker = tracker(home)
         tracker.update(north(1_000.0))
 
-        tracker.upsertCircle(home.copy(center = north(1_000.0)))
+        tracker.upsertPlace(home.copy(center = north(1_000.0)))
 
         assertTrue(tracker.update(north(1_010.0)).isEmpty())
         assertEquals(listOf(exit("home")), tracker.update(north(1_500.0)))
     }
 
     @Test
-    fun `a circle renamed keeps its state`() {
+    fun `a place renamed keeps its state`() {
         val tracker = tracker(home)
         tracker.update(north(10.0))
         // inside the margin: still inside, though a fresh look would say outside
         tracker.update(north(110.0))
 
-        tracker.upsertCircle(home.copy(name = "Casa"))
+        tracker.upsertPlace(home.copy(name = "Casa"))
 
         assertTrue(tracker.update(north(110.0)).isEmpty())
         assertEquals(listOf(exit("home")), tracker.update(north(300.0)))
     }
 
     @Test
-    fun `a replaced circle list drops the missing circles`() {
+    fun `a replaced place list drops the missing places`() {
         val work = home.copy(id = "work", center = north(1_000.0))
         val tracker = tracker(home, work)
         tracker.update(north(10.0))
 
-        tracker.replaceCircles(listOf(work))
+        tracker.replacePlaces(listOf(work))
 
         assertEquals(listOf(enter("work")), tracker.update(work.center))
     }
 
     @Test
-    fun `removed circles are forgotten`() {
+    fun `removed places are forgotten`() {
         val tracker = tracker(home)
         tracker.update(north(10.0))
 
-        tracker.removeCircle("home")
+        tracker.removePlace("home")
 
         assertTrue(tracker.update(north(300.0)).isEmpty())
     }
 
     @Test
-    fun `several circles report their own transitions`() {
+    fun `several places report their own transitions`() {
         val work = home.copy(id = "work", center = north(1_000.0))
         val tracker = tracker(home, work)
         tracker.update(north(10.0))
@@ -296,11 +296,11 @@ class GeofenceTrackerTest {
     }
 
     @Test
-    fun `confirming a removed circle does nothing`() {
+    fun `confirming a removed place does nothing`() {
         val tracker = tracker(home)
         tracker.update(north(10.0))
         val sent = tracker.unsent(north(300.0))
-        tracker.removeCircle("home")
+        tracker.removePlace("home")
 
         tracker.confirm(sent, nowMillis = 1_000)
 

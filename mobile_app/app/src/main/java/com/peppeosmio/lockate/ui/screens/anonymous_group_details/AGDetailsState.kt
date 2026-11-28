@@ -4,7 +4,7 @@ import com.peppeosmio.lockate.domain.Coordinates
 import com.peppeosmio.lockate.domain.LocationRecord
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.domain.anonymous_group.AnonymousGroup
-import com.peppeosmio.lockate.domain.anonymous_group.Circle
+import com.peppeosmio.lockate.domain.anonymous_group.Place
 import com.peppeosmio.lockate.utils.LoadingState
 import com.peppeosmio.lockate.utils.SnackbarErrorMessage
 
@@ -19,9 +19,9 @@ data class AGDetailsState(
     val anonymousGroup: AnonymousGroup? = null,
     val members: Map<String, AGMember>? = null,
     val membersCoordinates: Map<String, Coordinates>? = null,
-    val circles: List<Circle> = emptyList(),
-    // the circle whose edge is drawn on the map
-    val selectedCircleId: String? = null,
+    val places: List<Place> = emptyList(),
+    // the place whose edge is drawn on the map
+    val selectedPlaceId: String? = null,
     val showLoadingOverlay: Boolean = false,
     val adminPasswordText: String = "",
     val showDeleteAGDialog: Boolean = false,
@@ -36,6 +36,6 @@ data class AGDetailsState(
     val selectedMemberId: String? = null,
     val isFollowingSelectedMember: Boolean = false,
     val makeAdminDialogMemberId: String? = null,
-    // members whose circle notifications are off on this phone
+    // members whose place notifications are off on this phone
     val mutedMemberIds: Set<String> = emptySet(),
 )

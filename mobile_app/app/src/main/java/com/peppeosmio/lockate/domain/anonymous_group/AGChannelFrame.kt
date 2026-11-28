@@ -4,11 +4,11 @@ import kotlinx.datetime.LocalDateTime
 
 /** What happens in a group, decrypted. The channel has already applied it to the local database. */
 sealed interface AGChannelFrame {
-    data class Snapshot(val members: List<AGMember>, val circles: List<Circle>) : AGChannelFrame
+    data class Snapshot(val members: List<AGMember>, val places: List<Place>) : AGChannelFrame
 
-    data class CircleEvent(
+    data class PlaceEvent(
         val memberId: String,
-        val transition: CircleTransition,
+        val transition: PlaceTransition,
         val timestamp: LocalDateTime,
     ) : AGChannelFrame
 
@@ -25,9 +25,9 @@ sealed interface AGChannelFrame {
 
     data class MemberUpdated(val memberId: String, val isAGAdmin: Boolean) : AGChannelFrame
 
-    data class CircleUpserted(val circle: Circle) : AGChannelFrame
+    data class PlaceUpserted(val place: Place) : AGChannelFrame
 
-    data class CircleDeleted(val circleId: String) : AGChannelFrame
+    data class PlaceDeleted(val placeId: String) : AGChannelFrame
 }
 
 data class GroupFrame(

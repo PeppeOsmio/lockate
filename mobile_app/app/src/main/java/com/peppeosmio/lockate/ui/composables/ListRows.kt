@@ -97,9 +97,9 @@ fun StatusLine(text: String, dotColor: Color?, modifier: Modifier = Modifier, ma
     }
 }
 
-/** A circle in a list: circle icon, name and one line (radius, who is inside) */
+/** A place in a list: place icon, name and one line (radius, who is inside) */
 @Composable
-fun CircleRow(
+fun PlaceRow(
     name: String,
     supporting: String,
     modifier: Modifier = Modifier,
@@ -153,7 +153,7 @@ private fun ListRowsPreview() {
                 onClick = {},
             )
             MemberRow(name = "Sara", memberId = "b", supporting = "Paused sharing", paused = true)
-            CircleRow(
+            PlaceRow(
                 name = "Home",
                 supporting = "250 m · Sara",
                 onClick = {},

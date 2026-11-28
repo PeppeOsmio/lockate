@@ -15,7 +15,7 @@ If every member leaves or uninstalls the app, the group can't be recovered: nobo
 
 Every sensitive field is AES-256-GCM with the group key and its own random 12-byte IV, and an AAD
 that binds the ciphertext to where it belongs, so a valid ciphertext can't be moved to another
-group, member, circle or field:
+group, member, place or field:
 
 | Field | Plaintext | AAD | Ciphertext size |
 |---|---|---|---|
@@ -23,10 +23,13 @@ group, member, circle or field:
 | Member name | same | `lockate-member-name-v1\|groupId\|memberId` | 144 |
 | Member coordinates | two big-endian `Int32` microdegrees | `lockate-member-coords-v1\|groupId\|memberId` | 24 |
 | Member activity | 1 byte: still / foot / bike / vehicle | `lockate-member-activity-v1\|groupId\|memberId` | 17 |
-| Circle centre | like a member's coordinates | `lockate-circle-coords-v1\|groupId\|circleId` | 24 |
-| Circle radius | big-endian `Float64` | `lockate-circle-radius-v1\|groupId\|circleId` | 24 |
-| Circle name | like a group name | `lockate-circle-name-v1\|groupId\|circleId` | 144 |
-| Circle event | circle id (16 bytes) + enter/exit (1 byte) | `lockate-circle-event-v1\|groupId\|memberId` | 33 |
+| Place centre | like a member's coordinates | `lockate-circle-coords-v1\|groupId\|placeId` | 24 |
+| Place radius | big-endian `Float64` | `lockate-circle-radius-v1\|groupId\|placeId` | 24 |
+| Place name | like a group name | `lockate-circle-name-v1\|groupId\|placeId` | 144 |
+| Place event | place id (16 bytes) + enter/exit (1 byte) | `lockate-circle-event-v1\|groupId\|memberId` | 33 |
+
+Places were called circles: their AADs keep the old name, so the places already stored on the
+servers stay readable. Changing an AAD would need every phone to re-encrypt them.
 
 The server accepts each field only at its exact size with a 12-byte IV. Fixed sizes mean the length
 of a field says nothing: not the length of a name, not which activity, not enter or exit.
@@ -34,7 +37,7 @@ of a field says nothing: not the length of a name, not which activity, not enter
 Push payloads add one layer on top, with a per-member key: see [Push notifications](push.md).
 
 On the phone all crypto goes through `CryptoService` (the `whyoleg/cryptography` library);
-`PayloadCodec` encodes and decodes member messages, circle events and circles.
+`PayloadCodec` encodes and decodes member messages, place events and places.
 
 ## What the server learns
 
@@ -44,7 +47,7 @@ avoid learning:
 - which members are in which group, when they joined and left, who is admin;
 - when each member sends, and therefore whether it is moving (a post every ~2 s) or still (one every
   10 min, see [Sending positions](sending.md));
-- that a request carries circle events, and how many, not which circle or whether in or out;
+- that a request carries place events, and how many, not which place or whether in or out;
 - the push registration of each member: an FCM token, a device identifier
   ([Push notifications](push.md)).
 
@@ -53,7 +56,7 @@ size, or not stored.
 
 ## Local storage
 
-Room stores decrypted data (group name, member names, positions, circles) for the UI, never
+Room stores decrypted data (group name, member names, positions, places) for the UI, never
 ciphertext or IVs. The secrets in Room are the group keys, the push keys and the servers' API keys,
 all encrypted with the Keystore. The Keystore key never leaves the phone, so neither the database
 nor the preferences that point into it are backed up or moved to a new phone

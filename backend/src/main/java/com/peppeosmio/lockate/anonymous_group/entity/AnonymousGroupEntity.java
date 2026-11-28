@@ -38,9 +38,9 @@ public class AnonymousGroupEntity {
   @Column(name = "created_at", nullable = false)
   private LocalDateTime createdAt;
 
-  // Goes up with every change to the group's circles, written only by the repository's update
-  @Column(name = "circles_version", nullable = false, insertable = false, updatable = false)
-  private long circlesVersion;
+  // Goes up with every change to the group's places, written only by the repository's update
+  @Column(name = "places_version", nullable = false, insertable = false, updatable = false)
+  private long placesVersion;
 
   @OneToMany(mappedBy = "anonymousGroupEntity", fetch = FetchType.LAZY)
   @OrderBy("createdAt DESC, id DESC")

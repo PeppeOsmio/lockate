@@ -2,7 +2,7 @@ package com.peppeosmio.lockate.ui.screens.map
 
 import com.peppeosmio.lockate.domain.UserActivity
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
-import com.peppeosmio.lockate.domain.anonymous_group.Circle
+import com.peppeosmio.lockate.domain.anonymous_group.Place
 import com.peppeosmio.lockate.domain.anonymous_group.nearestContaining
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.AGDetailsState
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.LastSeenFreshness
@@ -21,44 +21,25 @@ import kotlinx.datetime.toInstant
 import kotlinx.datetime.toJavaMonth
 import kotlinx.datetime.toLocalDateTime
 
-/**
- * What the map's bottom sheet shows. [hasBody]: whether there's more than the header to reveal by
- * dragging the sheet up.
- */
+/** What the map's bottom sheet shows */
 sealed interface SheetContent {
-    val hasBody: Boolean
+    data object Loading : SheetContent
 
-    data object Loading : SheetContent {
-        override val hasBody = false
-    }
-
-    data object NoGroups : SheetContent {
-        override val hasBody = false
-    }
+    data object NoGroups : SheetContent
 
     /** The group no longer exists, or this phone's member was removed from it */
-    data object GroupGone : SheetContent {
-        override val hasBody = false
-    }
+    data object GroupGone : SheetContent
 
     /** Nobody else is in the group yet */
-    data object Alone : SheetContent {
-        override val hasBody = false
-    }
+    data object Alone : SheetContent
 
-    /** Collapsed: sharing on or off. Expanded: members and circles */
-    data object Group : SheetContent {
-        override val hasBody = true
-    }
+    /** Sharing on or off, and the members */
+    data object Group : SheetContent
 
-    data class Member(val memberId: String) : SheetContent {
-        override val hasBody = true
-    }
+    data class Member(val memberId: String) : SheetContent
 
-    /** The camera follows the member; the sheet shows just who */
-    data class Following(val memberId: String) : SheetContent {
-        override val hasBody = false
-    }
+    /** The camera follows the member; the sheet stays down, the pill on the map says who */
+    data class Following(val memberId: String) : SheetContent
 }
 
 fun sheetContent(mapState: MapState, details: AGDetailsState): SheetContent {
@@ -80,14 +61,14 @@ fun sheetContent(mapState: MapState, details: AGDetailsState): SheetContent {
 }
 
 /**
- * One line about a member: where (a circle), how (moving) and how long ago, e.g. "At Home · still ·
+ * One line about a member: where (a place), how (moving) and how long ago, e.g. "At Home · still ·
  * just now" or "On foot · 1 min ago". A member whose last position is older than the sharing window
  * paused sharing.
  */
 @OptIn(ExperimentalTime::class)
 fun memberStatus(
     member: AGMember,
-    circles: List<Circle>,
+    places: List<Place>,
     now: Instant,
 ): String {
     val record = member.lastLocationRecord ?: return "No location yet"
@@ -95,7 +76,7 @@ fun memberStatus(
     if (lastSeenFreshness(record.timestamp, now) == LastSeenFreshness.Stale) {
         return "Paused sharing · $ago"
     }
-    val place = circles.nearestContaining(record.coordinates)?.let { "At ${it.name}" }
+    val place = places.nearestContaining(record.coordinates)?.let { "At ${it.name}" }
     val activity =
         when (record.activity) {
             UserActivity.Unknown -> null
@@ -110,15 +91,15 @@ fun memberStatus(
 fun memberFreshness(member: AGMember, now: Instant): LastSeenFreshness =
     lastSeenFreshness(member.lastLocationRecord?.timestamp, now)
 
-/** Who is inside each circle, for the circles that have someone in them */
-fun occupiedCircles(
-    circles: List<Circle>,
+/** Who is inside each place, for the places that have someone in them */
+fun occupiedPlaces(
+    places: List<Place>,
     members: Collection<AGMember>,
-): Map<Circle, List<AGMember>> =
+): Map<Place, List<AGMember>> =
     members
         .mapNotNull { member ->
             member.lastLocationRecord
-                ?.let { circles.nearestContaining(it.coordinates) }
+                ?.let { places.nearestContaining(it.coordinates) }
                 ?.let { it to member }
         }
         .groupBy({ it.first }, { it.second })
@@ -167,4 +148,17 @@ private fun dayName(
             }
         }
     return if (capitalized) name.replaceFirstChar { it.uppercase() } else name
+}
+
+/** Who is inside a place, as one line: "You're here", "Marco and Sara are here" */
+internal fun whoIsHere(inside: List<AGMember>, myMemberId: String): String {
+    val names =
+        inside
+            .sortedWith(compareByDescending<AGMember> { it.id == myMemberId }.thenBy { it.name })
+            .map { if (it.id == myMemberId) "You" else it.name }
+    return when (names.size) {
+        1 -> if (names[0] == "You") "You're here" else "${names[0]} is here"
+        2 -> "${names[0]} and ${names[1]} are here"
+        else -> "${names[0]}, ${names[1]} and ${names.size - 2} more are here"
+    }
 }

@@ -33,7 +33,7 @@ const group = {
   adminCount: 1,
   onlineCount: 1,
   pushRegisteredCount: 1,
-  circleCount: 2,
+  placeCount: 2,
   lastLocationAt: '2026-11-20T09:00:00',
 }
 

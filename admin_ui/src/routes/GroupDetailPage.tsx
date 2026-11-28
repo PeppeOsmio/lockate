@@ -242,7 +242,7 @@ function GroupStats({ group }: { group: AdminGroup }) {
         { label: 'Members', value: group.memberCount },
         { label: 'Online', value: group.onlineCount },
         { label: 'Admins', value: group.adminCount, warning: group.adminCount === 0 },
-        { label: 'Circles', value: group.circleCount },
+        { label: 'Places', value: group.placeCount },
         { label: 'Notifications', value: `${group.pushRegisteredCount} of ${group.memberCount}` },
         { label: 'Last position', value: <Time value={group.lastLocationAt} /> },
       ]}

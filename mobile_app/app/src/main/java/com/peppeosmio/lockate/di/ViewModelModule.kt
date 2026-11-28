@@ -10,8 +10,6 @@ import com.peppeosmio.lockate.service.PlaceSearchService
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
 import com.peppeosmio.lockate.service.invite.InviteService
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.AGDetailsViewModel
-import com.peppeosmio.lockate.ui.screens.circles.CircleEditorViewModel
-import com.peppeosmio.lockate.ui.screens.circles.CirclesViewModel
 import com.peppeosmio.lockate.ui.screens.connection_settings.ConnectionSettingsViewModel
 import com.peppeosmio.lockate.ui.screens.create_anonymous_group.CreateAnonymousGroupViewModel
 import com.peppeosmio.lockate.ui.screens.invite.InviteViewModel
@@ -19,6 +17,8 @@ import com.peppeosmio.lockate.ui.screens.join_anonymous_group.JoinAnonymousGroup
 import com.peppeosmio.lockate.ui.screens.loading.LoadingViewModel
 import com.peppeosmio.lockate.ui.screens.map.MapViewModel
 import com.peppeosmio.lockate.ui.screens.permissions.PermissionsViewModel
+import com.peppeosmio.lockate.ui.screens.places.PlaceEditorViewModel
+import com.peppeosmio.lockate.ui.screens.places.PlacesViewModel
 import com.peppeosmio.lockate.ui.screens.settings.SettingsViewModel
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
@@ -62,12 +62,12 @@ val viewModelModule = module {
         )
     }
 
-    viewModel<CirclesViewModel> {
-        CirclesViewModel(anonymousGroupService = get<AnonymousGroupService>())
+    viewModel<PlacesViewModel> {
+        PlacesViewModel(anonymousGroupService = get<AnonymousGroupService>())
     }
 
-    viewModel<CircleEditorViewModel> {
-        CircleEditorViewModel(
+    viewModel<PlaceEditorViewModel> {
+        PlaceEditorViewModel(
             anonymousGroupService = get<AnonymousGroupService>(),
             locationService = get<LocationService>(),
             mapStyleService = get<MapStyleService>(),
