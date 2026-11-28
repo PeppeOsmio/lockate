@@ -5,13 +5,13 @@ import com.peppeosmio.lockate.anonymous_group.dto.AGGetMembersCountDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGGetMembersResDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGPostLocationReqDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGPostLocationResDto;
-import com.peppeosmio.lockate.anonymous_group.dto.CircleUpsertReqDto;
-import com.peppeosmio.lockate.anonymous_group.exceptions.AGCircleConflictException;
-import com.peppeosmio.lockate.anonymous_group.exceptions.AGCircleNotFoundException;
+import com.peppeosmio.lockate.anonymous_group.dto.PlaceUpsertReqDto;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotAdminException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
-import com.peppeosmio.lockate.anonymous_group.exceptions.CirclesChangedException;
+import com.peppeosmio.lockate.anonymous_group.exceptions.AGPlaceConflictException;
+import com.peppeosmio.lockate.anonymous_group.exceptions.AGPlaceNotFoundException;
+import com.peppeosmio.lockate.anonymous_group.exceptions.PlacesChangedException;
 import com.peppeosmio.lockate.anonymous_group.push.AGPushRegistrationReqDto;
 import com.peppeosmio.lockate.anonymous_group.push.AGPushRegistrationResDto;
 import com.peppeosmio.lockate.anonymous_group.push.AGPushService;
@@ -119,28 +119,28 @@ public class SecuredAGController {
         anonymousGroupId, (AGMemberAuthentication) authentication);
   }
 
-  @PutMapping("/{anonymousGroupId}/circles/{circleId}")
+  @PutMapping("/{anonymousGroupId}/places/{placeId}")
   @ResponseStatus(HttpStatus.OK)
-  public void upsertCircle(
+  public void upsertPlace(
       @PathVariable UUID anonymousGroupId,
-      @PathVariable UUID circleId,
-      @Valid @RequestBody CircleUpsertReqDto dto,
+      @PathVariable UUID placeId,
+      @Valid @RequestBody PlaceUpsertReqDto dto,
       AGMemberAuthentication authentication)
-      throws AGNotFoundException, AGCircleConflictException, InvalidEncryptedDataException {
-    anonymousGroupService.upsertCircle(anonymousGroupId, circleId, dto);
+      throws AGNotFoundException, AGPlaceConflictException, InvalidEncryptedDataException {
+    anonymousGroupService.upsertPlace(anonymousGroupId, placeId, dto);
   }
 
-  @DeleteMapping("/{anonymousGroupId}/circles/{circleId}")
+  @DeleteMapping("/{anonymousGroupId}/places/{placeId}")
   @ResponseStatus(HttpStatus.OK)
-  public void deleteCircle(
+  public void deletePlace(
       @PathVariable UUID anonymousGroupId,
-      @PathVariable UUID circleId,
+      @PathVariable UUID placeId,
       AGMemberAuthentication authentication)
-      throws AGCircleNotFoundException {
-    anonymousGroupService.deleteCircle(anonymousGroupId, circleId);
+      throws AGPlaceNotFoundException {
+    anonymousGroupService.deletePlace(anonymousGroupId, placeId);
   }
 
-  /** The snapshot the streams start with, for a phone that must learn a member or circle. */
+  /** The snapshot the streams start with, for a phone that must learn a member or place. */
   @GetMapping("/{anonymousGroupId}/snapshot")
   AGFrameDto getSnapshot(@PathVariable UUID anonymousGroupId, AGMemberAuthentication authentication)
       throws AGNotFoundException {
@@ -164,7 +164,7 @@ public class SecuredAGController {
           InvalidEncryptedDataException,
           AGNotFoundException,
           UnauthorizedException,
-          CirclesChangedException {
+          PlacesChangedException {
     return agMemberMessageService.postLocation(anonymousGroupId, authentication, dto);
   }
 }

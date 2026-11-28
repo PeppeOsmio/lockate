@@ -23,10 +23,10 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * A group as it happens, streamed to a member only while it looks at the group: a {@code snapshot}
- * event (members with their last saved record, circles), then a {@code location} event for each
- * member message and a {@code frame} event ({@link AGFrameDto}) for each change and circle event.
- * Our own circle events and sharing changes aren't sent back to us. The stream ends after the
- * {@code member.left} of our removal or the {@code group.deleted} frame.
+ * event (members with their last saved record, places), then a {@code location} event for each
+ * member message and a {@code frame} event ({@link AGFrameDto}) for each change and place event.
+ * Our own place events and sharing changes aren't sent back to us. The stream ends after the {@code
+ * member.left} of our removal or the {@code group.deleted} frame.
  */
 @Slf4j
 @Component
@@ -98,7 +98,7 @@ public class AGStreams {
       var aboutUs = ownMemberId.equals(frame.memberId());
       var type = frame.type();
       if (aboutUs
-          && (AGFrameDto.CIRCLE_EVENT.equals(type) || AGFrameDto.MEMBER_PRESENCE.equals(type))) {
+          && (AGFrameDto.PLACE_EVENT.equals(type) || AGFrameDto.MEMBER_PRESENCE.equals(type))) {
         return;
       }
       sendOrHold(SseEmitter.event().name("frame").data(message));

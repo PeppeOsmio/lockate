@@ -2,11 +2,11 @@ package com.peppeosmio.lockate.service.anonymous_group
 
 import com.peppeosmio.lockate.domain.Coordinates
 import com.peppeosmio.lockate.domain.UserActivity
-import com.peppeosmio.lockate.domain.anonymous_group.Circle
-import com.peppeosmio.lockate.domain.anonymous_group.CircleTransition
-import com.peppeosmio.lockate.domain.anonymous_group.EncryptedCircle
 import com.peppeosmio.lockate.domain.anonymous_group.EncryptedMemberMessage
+import com.peppeosmio.lockate.domain.anonymous_group.EncryptedPlace
 import com.peppeosmio.lockate.domain.anonymous_group.MemberMessage
+import com.peppeosmio.lockate.domain.anonymous_group.Place
+import com.peppeosmio.lockate.domain.anonymous_group.PlaceTransition
 import com.peppeosmio.lockate.domain.anonymous_group.TransitionKind
 import com.peppeosmio.lockate.domain.crypto.EncryptedData
 import com.peppeosmio.lockate.service.crypto.CryptoException
@@ -17,12 +17,12 @@ import java.util.UUID
 import kotlin.math.roundToInt
 
 /**
- * Member messages, circle events, circles and names are made of fields of a fixed length (every
- * name, of a group, a member or a circle, is padded to one size), so the server learns nothing from
- * the length of what it stores or relays: not the hemisphere, the activity or the radius, not the
- * length of a name, not whether a circle event is an arrival or a departure. Every field is bound
- * to the ciphertext as associated data together with the ids of the group and of the author (or of
- * the circle), so the server can't hand one's data over as another's, nor one field as another.
+ * Member messages, place events, places and names are made of fields of a fixed length (every name,
+ * of a group, a member or a place, is padded to one size), so the server learns nothing from the
+ * length of what it stores or relays: not the hemisphere, the activity or the radius, not the
+ * length of a name, not whether a place event is an arrival or a departure. Every field is bound to
+ * the ciphertext as associated data together with the ids of the group and of the author (or of the
+ * place), so the server can't hand one's data over as another's, nor one field as another.
  */
 class PayloadCodec(private val cryptoService: CryptoService) {
 
@@ -124,94 +124,94 @@ class PayloadCodec(private val cryptoService: CryptoService) {
         )
     }
 
-    suspend fun encryptCircle(circle: Circle, key: ByteArray, groupId: String): EncryptedCircle =
-        EncryptedCircle(
+    suspend fun encryptPlace(place: Place, key: ByteArray, groupId: String): EncryptedPlace =
+        EncryptedPlace(
             coordinates =
                 cryptoService.encrypt(
-                    encodeCoordinates(circle.center),
+                    encodeCoordinates(place.center),
                     key,
-                    aad(CIRCLE_COORDINATES_AAD_PREFIX, groupId, circle.id),
+                    aad(PLACE_COORDINATES_AAD_PREFIX, groupId, place.id),
                 ),
             radius =
                 cryptoService.encrypt(
-                    ByteBuffer.allocate(RADIUS_BYTES).putDouble(circle.radiusMeters).array(),
+                    ByteBuffer.allocate(RADIUS_BYTES).putDouble(place.radiusMeters).array(),
                     key,
-                    aad(CIRCLE_RADIUS_AAD_PREFIX, groupId, circle.id),
+                    aad(PLACE_RADIUS_AAD_PREFIX, groupId, place.id),
                 ),
-            name = encryptName(circle.name, key, aad(CIRCLE_NAME_AAD_PREFIX, groupId, circle.id)),
+            name = encryptName(place.name, key, aad(PLACE_NAME_AAD_PREFIX, groupId, place.id)),
         )
 
-    suspend fun decryptCircle(
-        circle: EncryptedCircle,
+    suspend fun decryptPlace(
+        place: EncryptedPlace,
         key: ByteArray,
         groupId: String,
-        circleId: String,
-    ): Circle {
+        placeId: String,
+    ): Place {
         val coordinates =
             decrypt(
-                circle.coordinates,
+                place.coordinates,
                 key,
-                aad(CIRCLE_COORDINATES_AAD_PREFIX, groupId, circleId),
+                aad(PLACE_COORDINATES_AAD_PREFIX, groupId, placeId),
                 COORDINATES_BYTES,
             )
         val radius =
             ByteBuffer.wrap(
                     decrypt(
-                        circle.radius,
+                        place.radius,
                         key,
-                        aad(CIRCLE_RADIUS_AAD_PREFIX, groupId, circleId),
+                        aad(PLACE_RADIUS_AAD_PREFIX, groupId, placeId),
                         RADIUS_BYTES,
                     )
                 )
                 .getDouble()
         if (!radius.isFinite() || radius <= 0) throw CryptoException()
-        val name = decryptName(circle.name, key, aad(CIRCLE_NAME_AAD_PREFIX, groupId, circleId))
-        return Circle(
-            id = circleId,
+        val name = decryptName(place.name, key, aad(PLACE_NAME_AAD_PREFIX, groupId, placeId))
+        return Place(
+            id = placeId,
             name = name,
             center = decodeCoordinates(coordinates),
             radiusMeters = radius,
         )
     }
 
-    suspend fun encryptCircleEvent(
-        event: CircleTransition,
+    suspend fun encryptPlaceEvent(
+        event: PlaceTransition,
         key: ByteArray,
         groupId: String,
         memberId: String,
     ): EncryptedData {
-        val circleId = UUID.fromString(event.circleId)
+        val placeId = UUID.fromString(event.placeId)
         val plaintext =
-            ByteBuffer.allocate(CIRCLE_EVENT_BYTES)
-                .putLong(circleId.mostSignificantBits)
-                .putLong(circleId.leastSignificantBits)
+            ByteBuffer.allocate(PLACE_EVENT_BYTES)
+                .putLong(placeId.mostSignificantBits)
+                .putLong(placeId.leastSignificantBits)
                 .put(TRANSITION_CODES.indexOf(event.kind).toByte())
                 .array()
         return cryptoService.encrypt(
             plaintext,
             key,
-            aad(CIRCLE_EVENT_AAD_PREFIX, groupId, memberId),
+            aad(PLACE_EVENT_AAD_PREFIX, groupId, memberId),
         )
     }
 
-    suspend fun decryptCircleEvent(
+    suspend fun decryptPlaceEvent(
         data: EncryptedData,
         key: ByteArray,
         groupId: String,
         memberId: String,
-    ): CircleTransition {
+    ): PlaceTransition {
         val buffer =
             ByteBuffer.wrap(
                 decrypt(
                     data,
                     key,
-                    aad(CIRCLE_EVENT_AAD_PREFIX, groupId, memberId),
-                    CIRCLE_EVENT_BYTES,
+                    aad(PLACE_EVENT_AAD_PREFIX, groupId, memberId),
+                    PLACE_EVENT_BYTES,
                 )
             )
-        val circleId = UUID(buffer.getLong(), buffer.getLong()).toString()
+        val placeId = UUID(buffer.getLong(), buffer.getLong()).toString()
         val kind = TRANSITION_CODES.getOrNull(buffer.get().toInt()) ?: throw CryptoException()
-        return CircleTransition(circleId, kind)
+        return PlaceTransition(placeId, kind)
     }
 
     companion object {
@@ -227,7 +227,7 @@ class PayloadCodec(private val cryptoService: CryptoService) {
                 UserActivity.OnBicycle,
                 UserActivity.InVehicle,
             )
-        private const val CIRCLE_EVENT_BYTES = 17
+        private const val PLACE_EVENT_BYTES = 17
         private val TRANSITION_CODES = listOf(TransitionKind.Enter, TransitionKind.Exit)
         const val MAX_NAME_CHARS = 40
         // a char takes at most 3 bytes in UTF-8, plus the padding marker
@@ -236,9 +236,11 @@ class PayloadCodec(private val cryptoService: CryptoService) {
         private const val MEMBER_NAME_AAD_PREFIX = "lockate-member-name-v1"
         private const val MEMBER_COORDINATES_AAD_PREFIX = "lockate-member-coords-v1"
         private const val MEMBER_ACTIVITY_AAD_PREFIX = "lockate-member-activity-v1"
-        private const val CIRCLE_COORDINATES_AAD_PREFIX = "lockate-circle-coords-v1"
-        private const val CIRCLE_RADIUS_AAD_PREFIX = "lockate-circle-radius-v1"
-        private const val CIRCLE_NAME_AAD_PREFIX = "lockate-circle-name-v1"
-        private const val CIRCLE_EVENT_AAD_PREFIX = "lockate-circle-event-v1"
+        // places were called circles: the AADs keep that name so the places already stored stay
+        // readable
+        private const val PLACE_COORDINATES_AAD_PREFIX = "lockate-circle-coords-v1"
+        private const val PLACE_RADIUS_AAD_PREFIX = "lockate-circle-radius-v1"
+        private const val PLACE_NAME_AAD_PREFIX = "lockate-circle-name-v1"
+        private const val PLACE_EVENT_AAD_PREFIX = "lockate-circle-event-v1"
     }
 }

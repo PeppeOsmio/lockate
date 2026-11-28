@@ -29,7 +29,7 @@ export function DeleteGroupDialog({
       }}
       onClose={onClose}
     >
-      The group, its {memberCount === 1 ? 'member' : `${memberCount} members`}, circles and saved
+      The group, its {memberCount === 1 ? 'member' : `${memberCount} members`}, places and saved
       positions are deleted for good, and the members' apps are told by push (when the server has a
       push relay). This can't be undone.
     </ConfirmDialog>

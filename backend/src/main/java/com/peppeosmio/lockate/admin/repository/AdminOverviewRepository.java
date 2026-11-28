@@ -23,7 +23,7 @@ public class AdminOverviewRepository {
           (SELECT COUNT(*) FROM anonymous_group) AS groups,
           (SELECT COUNT(*) FROM ag_member) AS members,
           (SELECT COUNT(*) FROM ag_member WHERE push_token IS NOT NULL) AS push_registered,
-          (SELECT COUNT(*) FROM ag_circle) AS circles,
+          (SELECT COUNT(*) FROM ag_place) AS places,
           (SELECT COUNT(*) FROM anonymous_group g
            WHERE NOT EXISTS (SELECT 1 FROM ag_member m
                              WHERE m.anonymous_group_id = g.id AND m.is_admin))
@@ -44,7 +44,7 @@ public class AdminOverviewRepository {
                 rs.getLong("groups"),
                 rs.getLong("members"),
                 rs.getLong("push_registered"),
-                rs.getLong("circles"),
+                rs.getLong("places"),
                 rs.getLong("groups_without_admin"),
                 rs.getLong("inactive_groups"),
                 rs.getLong("saved_locations"),

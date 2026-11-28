@@ -155,10 +155,8 @@ fun MemberBody(
                     ),
                 colors = transparent,
                 leadingContent = { Icon(Icons.Outlined.Notifications, contentDescription = null) },
-                headlineContent = { Text("Notifications") },
-                supportingContent = {
-                    Text("When ${member.name} arrives at or leaves a circle")
-                },
+                headlineContent = { Text("Notifications about ${member.name}") },
+                supportingContent = { Text("Places and sharing") },
                 trailingContent = { Switch(checked = !isMuted, onCheckedChange = null) },
             )
         }

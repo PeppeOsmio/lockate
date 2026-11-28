@@ -4,7 +4,7 @@ import com.peppeosmio.lockate.domain.Coordinates
 import com.peppeosmio.lockate.domain.LocationRecord
 import com.peppeosmio.lockate.domain.UserActivity
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
-import com.peppeosmio.lockate.domain.anonymous_group.Circle
+import com.peppeosmio.lockate.domain.anonymous_group.Place
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
@@ -19,8 +19,8 @@ class MemberStatusTest {
 
     private val now = Instant.parse("2026-11-22T13:42:00Z")
     private val home = Coordinates(latitude = 40.85, longitude = 14.25)
-    private val circles =
-        listOf(Circle(id = "home", name = "Home", center = home, radiusMeters = 250.0))
+    private val places =
+        listOf(Place(id = "home", name = "Home", center = home, radiusMeters = 250.0))
 
     private fun member(
         id: String = "marco",
@@ -40,7 +40,7 @@ class MemberStatusTest {
             isAGAdmin = false,
         )
 
-    private fun status(member: AGMember) = memberStatus(member, circles, now)
+    private fun status(member: AGMember) = memberStatus(member, places, now)
 
     @Test
     fun `no position yet`() {
@@ -48,12 +48,12 @@ class MemberStatusTest {
     }
 
     @Test
-    fun `still inside a circle`() {
+    fun `still inside a place`() {
         assertEquals("At Home · still · just now", status(member()))
     }
 
     @Test
-    fun `moving outside circles`() {
+    fun `moving outside places`() {
         val away = Coordinates(latitude = 40.86, longitude = 14.25)
         assertEquals(
             "On foot · 1 min ago",
@@ -67,7 +67,7 @@ class MemberStatusTest {
     }
 
     @Test
-    fun `who is in a circle`() {
+    fun `who is in a place`() {
         val me = member(id = "giulia")
         val marco = member(id = "marco")
         val sara = member(id = "sara")

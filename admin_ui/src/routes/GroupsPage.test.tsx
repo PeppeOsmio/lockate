@@ -19,7 +19,7 @@ const group: AdminGroup = {
   adminCount: 0,
   onlineCount: 2,
   pushRegisteredCount: 1,
-  circleCount: 4,
+  placeCount: 4,
   lastLocationAt: null,
 }
 

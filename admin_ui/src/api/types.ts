@@ -32,7 +32,7 @@ export interface AdminGroup {
   adminCount: number
   onlineCount: number
   pushRegisteredCount: number
-  circleCount: number
+  placeCount: number
   lastLocationAt: string | null
 }
 
@@ -57,7 +57,7 @@ export interface OverviewCounts {
   groups: number
   members: number
   pushRegisteredMembers: number
-  circles: number
+  places: number
   groupsWithoutAdmin: number
   inactiveGroups: number
   savedLocations: number

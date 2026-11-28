@@ -42,10 +42,10 @@ data class JoinAnonymousGroupRoute(val connectionSettingsId: Long, val code: Str
 
 @Serializable data class InviteRoute(val anonymousGroupInternalId: Long) : Route
 
-@Serializable data class CirclesRoute(val anonymousGroupInternalId: Long) : Route
+@Serializable data class PlacesRoute(val anonymousGroupInternalId: Long) : Route
 
 @Serializable
-data class CircleEditorRoute(
+data class PlaceEditorRoute(
     val anonymousGroupInternalId: Long,
-    val circleId: String? = null,
+    val placeId: String? = null,
 ) : Route

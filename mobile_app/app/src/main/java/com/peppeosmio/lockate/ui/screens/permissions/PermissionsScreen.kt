@@ -274,9 +274,7 @@ private val LockatePermission.description: AnnotatedString
                     append(".")
                 }
             LockatePermission.Notifications ->
-                AnnotatedString(
-                    "A quiet notice while you share, and arrivals at circles you follow"
-                )
+                AnnotatedString("A quiet notice while you share, and arrivals at places you follow")
             LockatePermission.PhysicalActivity ->
                 AnnotatedString(
                     "Turns the GPS off while you're still, and shows if you walk, cycle or drive"

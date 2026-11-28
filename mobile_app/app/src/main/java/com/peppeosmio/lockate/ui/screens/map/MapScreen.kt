@@ -58,8 +58,8 @@ import androidx.lifecycle.compose.LifecycleStartEffect
 import com.peppeosmio.lockate.R
 import com.peppeosmio.lockate.domain.Coordinates
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
+import com.peppeosmio.lockate.ui.composables.CollapsibleSheetScaffold
 import com.peppeosmio.lockate.ui.composables.ErrorDialog
-import com.peppeosmio.lockate.ui.composables.PeekHeaderBottomSheetScaffold
 import com.peppeosmio.lockate.ui.composables.ServerUnreachableBanner
 import com.peppeosmio.lockate.ui.routes.ConnectionSettingsRoute
 import com.peppeosmio.lockate.ui.routes.ServerScreenMode
@@ -98,7 +98,7 @@ fun MapScreen(
     navigateToCreateAG: (connectionSettingsId: Long) -> Unit,
     navigateToJoinAG: (connectionSettingsId: Long) -> Unit,
     navigateToInvite: (anonymousGroupInternalId: Long) -> Unit,
-    navigateToCircles: (anonymousGroupInternalId: Long) -> Unit,
+    navigateToPlaces: (anonymousGroupInternalId: Long) -> Unit,
     navigateToSettings: () -> Unit,
     navigateToPermissions: (groupInternalId: Long?) -> Unit,
     startLocationService: () -> Unit,
@@ -110,7 +110,11 @@ fun MapScreen(
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val drawerState = rememberDrawerState(DrawerValue.Closed)
-    val sheetState = rememberStandardBottomSheetState(skipHiddenState = true)
+    val sheetState =
+        rememberStandardBottomSheetState(
+            initialValue = SheetValue.Expanded,
+            skipHiddenState = true,
+        )
     val scaffoldState =
         rememberBottomSheetScaffoldState(
             bottomSheetState = sheetState,
@@ -191,24 +195,15 @@ fun MapScreen(
                     zoom = 15.0,
                 ),
         )
-    val screenWidthDp = LocalConfiguration.current.screenWidthDp.toDouble()
     LaunchedEffect(true) {
         detailsViewModel.cameraPositionEvents.collect { target ->
-            val zoom =
-                target.fitRadiusMeters?.let {
-                    zoomToFitCircle(
-                        latitude = target.coordinates.latitude,
-                        radiusMeters = it,
-                        viewportWidthDp = screenWidthDp,
-                    )
-                } ?: 15.0
             // a map gesture cancels the animation by throwing, which would otherwise end this
             // collector
             try {
                 mapState.animateCamera(
                     CameraUpdate(
                         center = target.coordinates.toMapLibreComposePosition(),
-                        zoom = zoom,
+                        zoom = 15.0,
                     ),
                     CameraAnimation.Ease { duration = MARKER_MOVE_DURATION_MS.milliseconds },
                 )
@@ -329,13 +324,8 @@ fun MapScreen(
         }
     }
 
-    // Collapse before switching to the details, otherwise they'd show up fully expanded and then
-    // close
     fun selectMember(memberId: String) {
-        coroutineScope.launch {
-            sheetState.partialExpand()
-            detailsViewModel.selectMember(memberId)
-        }
+        detailsViewModel.selectMember(memberId)
     }
 
     if (state.showLoadingOverlay || details.showLoadingOverlay) {
@@ -388,13 +378,7 @@ fun MapScreen(
             onJoinGroup = { connectionId?.let(navigateToJoinAG) },
             onRemoveGroup = viewModel::removeLocalGroup,
             onInvite = { selectedGroup?.let { navigateToInvite(it.internalId) } },
-            onOpenCircles = { selectedGroup?.let { navigateToCircles(it.internalId) } },
-            onShowCircle = { circle ->
-                coroutineScope.launch {
-                    sheetState.partialExpand()
-                    detailsViewModel.showCircle(circle)
-                }
-            },
+            onOpenPlaces = { selectedGroup?.let { navigateToPlaces(it.internalId) } },
             onSelectMember = ::selectMember,
             onBackToGroup = detailsViewModel::clearSelectedMember,
             onFollow = {
@@ -441,11 +425,16 @@ fun MapScreen(
             )
         },
     ) {
-        PeekHeaderBottomSheetScaffold(
+        // A new content opens the sheet on it; following a member shows the map only
+        LaunchedEffect(content) {
+            if (content is SheetContent.Following) sheetState.partialExpand()
+            else sheetState.expand()
+        }
+        CollapsibleSheetScaffold(
             scaffoldState = scaffoldState,
             sheetMaxHeight = LocalConfiguration.current.screenHeightDp.dp * 0.6f,
             snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
-            sheetHeader = {
+            sheetContent = {
                 MapSheetHeader(
                     content = content,
                     selectedGroup = selectedGroup,
@@ -460,27 +449,22 @@ fun MapScreen(
                         },
                     actions = sheetActions,
                 )
+                MapSheetBody(
+                    content = content,
+                    details = details,
+                    now = now,
+                    actions = sheetActions,
+                )
             },
-            sheetBody =
-                if (content.hasBody) {
-                    {
-                        MapSheetBody(
-                            content = content,
-                            details = details,
-                            now = now,
-                            actions = sheetActions,
-                        )
-                    }
-                } else null,
         ) { sheetPeekHeight ->
             Box(modifier = Modifier.fillMaxSize()) {
                 MembersMap(
                     modifier = Modifier.fillMaxSize(),
                     mapState = mapState,
                     membersPoints = membersPoints,
-                    circles = details.circles,
-                    selectedCircleId = details.selectedCircleId,
-                    onTapCircle = detailsViewModel::toggleCircle,
+                    places = details.places,
+                    selectedPlaceId = details.selectedPlaceId,
+                    onTapPlace = detailsViewModel::togglePlace,
                     myPoint = myPoint,
                     myDeviceOrientation = details.myDeviceOrientation,
                     compassTopPadding = statusBarTop + 72.dp,
@@ -506,10 +490,9 @@ fun MapScreen(
                 ) {
                     FloatingGroupBar(
                         selectedGroup = selectedGroup,
-                        subtitle =
-                            details.members
-                                ?.takeIf { details.anonymousGroup != null }
-                                ?.let { if (it.size == 1) "Only you" else "${it.size} members" },
+                        isRemoved =
+                            selectedGroup != null &&
+                                (!selectedGroup.isMember || !selectedGroup.existsRemote),
                         groups =
                             filterGroups(sortGroups(state.groups ?: emptyList()), state.groupQuery),
                         memberCounts = state.memberCounts,
@@ -537,9 +520,9 @@ fun MapScreen(
                                         dismiss()
                                         navigateToInvite(group.internalId)
                                     },
-                                    onCircles = {
+                                    onPlaces = {
                                         dismiss()
-                                        navigateToCircles(group.internalId)
+                                        navigateToPlaces(group.internalId)
                                     },
                                     onLeave = {
                                         dismiss()
@@ -575,12 +558,8 @@ fun MapScreen(
                     }
                 }
 
-                // Without a body the sheet settles as expanded at its collapsed height, so only an
-                // expanded body hides the button
-                if (
-                    !content.hasBody ||
-                        scaffoldState.bottomSheetState.targetValue != SheetValue.Expanded
-                ) {
+                // the button belongs to the map, so it shows only with the sheet down
+                if (scaffoldState.bottomSheetState.targetValue != SheetValue.Expanded) {
                     FloatingActionButton(
                         modifier =
                             Modifier.align(Alignment.BottomEnd)

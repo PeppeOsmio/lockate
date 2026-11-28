@@ -11,5 +11,5 @@ public record AdminGroupDto(
     long adminCount,
     long onlineCount,
     long pushRegisteredCount,
-    long circleCount,
+    long placeCount,
     LocalDateTime lastLocationAt) {}

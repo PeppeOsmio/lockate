@@ -21,7 +21,7 @@ internal suspend fun <T> Flow<T>.postEach(
     var resend: Job? = null
     collect { item ->
         // stops a resend waiting for the network, and lets one already posting finish, so its
-        // circle events can't go out twice
+        // place events can't go out twice
         resend?.cancelAndJoin()
         if (!post(item) && !isNetworkAvailable()) {
             resend = launch {

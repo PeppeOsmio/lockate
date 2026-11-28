@@ -9,9 +9,9 @@ import static org.mockito.Mockito.when;
 
 import com.peppeosmio.lockate.anonymous_group.dto.AGFrameDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGMemberDto;
-import com.peppeosmio.lockate.anonymous_group.dto.CircleEventDto;
 import com.peppeosmio.lockate.anonymous_group.dto.LocationRecordDto;
 import com.peppeosmio.lockate.anonymous_group.dto.MemberLocationDto;
+import com.peppeosmio.lockate.anonymous_group.dto.PlaceEventDto;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.service.AnonymousGroupService;
 import com.peppeosmio.lockate.common.dto.EncryptedDataDto;
@@ -170,7 +170,7 @@ class AGStreamsTest {
   @Test
   void open_eventsArrivingDuringTheSnapshotAreSentAfterItInOrder() throws Exception {
     var early = json(location(UUID.randomUUID()));
-    var circle = json(AGFrameDto.circleDeleted(UUID.randomUUID()));
+    var place = json(AGFrameDto.placeDeleted(UUID.randomUUID()));
     when(redisService.subscribe(eq("ag-" + groupId + "-locations"), locations.capture()))
         .thenReturn(locationsListener);
     when(redisService.subscribe(eq("ag-" + groupId + "-events"), events.capture()))
@@ -178,7 +178,7 @@ class AGStreamsTest {
     when(anonymousGroupService.getSnapshot(groupId))
         .thenAnswer(
             i -> {
-              events.getValue().accept(circle);
+              events.getValue().accept(place);
               locations.getValue().accept(early);
               return emptySnapshot();
             });
@@ -188,14 +188,14 @@ class AGStreamsTest {
 
     assertThat(emitter.sent).hasSize(3);
     assertThat(emitter.sent.get(0)).contains("event:snapshot");
-    assertThat(emitter.sent.get(1)).contains("event:frame").contains(circle);
+    assertThat(emitter.sent.get(1)).contains("event:frame").contains(place);
     assertThat(emitter.sent.get(2)).contains("event:location").contains(early);
   }
 
   @Test
   void groupEvents_areSentAsFrames() throws Exception {
     var emitter = open(emptySnapshot());
-    var message = json(AGFrameDto.circleDeleted(UUID.randomUUID()));
+    var message = json(AGFrameDto.placeDeleted(UUID.randomUUID()));
 
     events.getValue().accept(message);
 
@@ -204,7 +204,7 @@ class AGStreamsTest {
   }
 
   @Test
-  void othersCircleEventsAndSharingChanges_areSent() throws Exception {
+  void othersPlaceEventsAndSharingChanges_areSent() throws Exception {
     var emitter = open(emptySnapshot());
     var other = UUID.randomUUID();
 
@@ -213,14 +213,13 @@ class AGStreamsTest {
         .getValue()
         .accept(
             json(
-                AGFrameDto.circleEventOf(
-                    other, new CircleEventDto(blob("e"), LocalDateTime.now()))));
+                AGFrameDto.placeEventOf(other, new PlaceEventDto(blob("e"), LocalDateTime.now()))));
 
     assertThat(emitter.sent).hasSize(3);
   }
 
   @Test
-  void ownCircleEventsAndSharingChanges_areNotSent() throws Exception {
+  void ownPlaceEventsAndSharingChanges_areNotSent() throws Exception {
     var emitter = open(emptySnapshot());
 
     events.getValue().accept(json(AGFrameDto.memberPresence(memberId, true, null)));
@@ -228,8 +227,8 @@ class AGStreamsTest {
         .getValue()
         .accept(
             json(
-                AGFrameDto.circleEventOf(
-                    memberId, new CircleEventDto(blob("e"), LocalDateTime.now()))));
+                AGFrameDto.placeEventOf(
+                    memberId, new PlaceEventDto(blob("e"), LocalDateTime.now()))));
 
     assertThat(emitter.sent).hasSize(1);
   }

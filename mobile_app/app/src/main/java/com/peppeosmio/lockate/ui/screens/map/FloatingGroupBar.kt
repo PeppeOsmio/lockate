@@ -63,7 +63,7 @@ import com.peppeosmio.lockate.ui.composables.MemberAvatar
 fun FloatingGroupBar(
     modifier: Modifier = Modifier,
     selectedGroup: AnonymousGroup?,
-    subtitle: String?,
+    isRemoved: Boolean,
     groups: List<AnonymousGroup>,
     memberCounts: Map<Long, Int>,
     isPickerOpen: Boolean,
@@ -130,7 +130,7 @@ fun FloatingGroupBar(
             } else {
                 CollapsedBar(
                     selectedGroup = selectedGroup,
-                    subtitle = subtitle,
+                    isRemoved = isRemoved,
                     onOpenDrawer = onOpenDrawer,
                     onOpenPicker = onOpenPicker,
                     groupMenu = groupMenu,
@@ -140,10 +140,14 @@ fun FloatingGroupBar(
     }
 }
 
+/**
+ * The group's name in the middle, between the drawer and the group menu. [isRemoved]: this phone is
+ * no longer in the group, said under the name.
+ */
 @Composable
 private fun CollapsedBar(
     selectedGroup: AnonymousGroup?,
-    subtitle: String?,
+    isRemoved: Boolean,
     onOpenDrawer: () -> Unit,
     onOpenPicker: () -> Unit,
     groupMenu: @Composable (onDismiss: () -> Unit) -> Unit,
@@ -165,13 +169,19 @@ private fun CollapsedBar(
                         else Modifier
                     )
                     .padding(horizontal = 4.dp),
+            horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(modifier = Modifier.weight(1f, fill = false)) {
+            // as wide as the arrow on the other side, so the name itself is centred
+            if (selectedGroup != null) Spacer(Modifier.size(24.dp))
+            Column(
+                modifier = Modifier.weight(1f, fill = false),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
                 Text(
                     text = selectedGroup?.name ?: "No groups yet",
                     style =
-                        if (subtitle != null) MaterialTheme.typography.titleMedium
+                        if (selectedGroup != null) MaterialTheme.typography.titleMedium
                         else MaterialTheme.typography.bodyLarge,
                     color =
                         if (selectedGroup != null) MaterialTheme.colorScheme.onSurface
@@ -179,11 +189,11 @@ private fun CollapsedBar(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (subtitle != null) {
+                if (isRemoved) {
                     Text(
-                        text = subtitle,
+                        text = "Removed",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.error,
                         maxLines = 1,
                     )
                 }
@@ -201,6 +211,9 @@ private fun CollapsedBar(
                     groupMenu { isMenuOpen = false }
                 }
             }
+        } else {
+            // balances the drawer button
+            Spacer(Modifier.size(48.dp))
         }
     }
 }

@@ -21,7 +21,7 @@ the screens are made of.
 
 Every colour with a meaning comes from the scheme, so it follows the accent:
 
-- **Circles** use the `tertiary` role (`tertiaryContainer` for their icon).
+- **Places** use the `tertiary` role (`tertiaryContainer` for their icon).
 - **Members** get one of five colours made from the primary's hue turned by 60° steps, with saturation and lightness fixed per theme so a filled avatar always reads
   with a white (light) or dark (dark theme) initial. The colour is chosen from the member id, so
   every phone shows the same one. This phone's member is the primary itself.
@@ -44,60 +44,72 @@ The freshness dot (green, yellow, grey) is a separate thing, described in [Shari
 | `FloatingTopBar` | The 56 dp pill over the map: navigation, title and subtitle, actions |
 | `SharingRow` | "Sharing your location" with a switch and an optional second line; the whole row toggles |
 | `MemberAvatar` | Initials on the member's colour, activity badge, greyed when paused |
-| `MemberRow`, `CircleRow` | List rows for members and circles: a name with an optional suffix ("You"), a status line after the freshness dot, an optional trailing slot |
+| `MemberRow`, `PlaceRow` | List rows for members and places: a name with an optional suffix ("You"), a status line after the freshness dot, an optional trailing slot |
 | `FormField` | Single-line outlined field; `password` adds the eye toggle, `monospace` is for codes |
 | `DayChips` | One filter chip per day of the 7 days of history |
 | `InfoCard` | Tonal box with an icon, for a note about what a screen does |
-| `PeekHeaderBottomSheetScaffold` | The map sheet: collapsed to its header, never hidden |
+| `CollapsibleSheetScaffold` | The sheets of the map and the place editor: collapsed, only the drag handle shows |
 | `ServerUnreachableBanner` | The pill under the top bar while the server can't be reached |
 
 ## The map
 
 The map is the only starting point of the app, and a single route: what changes is the bottom
-sheet, never hidden, whose content comes from `SheetContent` (`ui/screens/map/SheetContent.kt`),
-worked out from the groups and the group on screen:
+sheet, whose content comes from `SheetContent` (`ui/screens/map/SheetContent.kt`), worked out
+from the groups and the group on screen:
 
-| Content | Collapsed (header) | Expanded (body) |
-|---|---|---|
-| `NoGroups` | "Start a group": create, or join with a code | — |
-| `GroupGone` | The group was deleted or this phone's member removed; remove it from this phone | — |
-| `Alone` | Sharing row, then "You're the only one here" with an invite button | — |
-| `Group` | Sharing row only: the members are the markers on the map | Members, then the circles with someone inside and one row for all the others |
-| `Member` | Avatar, name, status; Follow and Maps | Notifications about them, last update, role, member ID |
-| `Following` | The followed member only; a pill under the top bar stops following | — |
+| Content | The sheet shows |
+|---|---|
+| `NoGroups` | "Start a group": create, or join with a code |
+| `GroupGone` | The group was deleted or this phone's member removed; remove it from this phone |
+| `Alone` | Sharing row, then "You're the only one here" with an invite button |
+| `Group` | Sharing row, then "Members · 3" and one row per member |
+| `Member` | Avatar, name, status; Follow and Maps; notifications about them, last update, role, member ID |
+| `Following` | Nothing: the sheet goes down and a pill under the top bar says who, and stops following |
+
+- **The sheet collapses all the way**: down, only its drag handle shows and the map is free; the
+  sharing row is not kept in view. A new content (another member, back to the group) opens the
+  sheet on it, and following a member closes it. The my-location button shows only with the
+  sheet down.
+- **The top bar** has the group's name in the middle and nothing under it, except a red
+  "Removed" when this phone is no longer in the group. How many members there are is in the
+  sheet, next to "Members".
+- **Places are not in the sheet**: each member's status already says the place they are in, and
+  the places have their own page in the ⋮ menu.
 
 - **Tapping a member doesn't follow them.** The camera moves to them once and the sheet shows
   their details; following is the Follow button, and a drag of the map or ✕ on the pill stops it.
-- **A member's status** is one line built by `memberStatus`: the circle they are in, how they move
+- **A member's status** is one line built by `memberStatus`: the place they are in, how they move
   and how long ago ("At Home · still · just now"). It doesn't say how far they are from this
   phone: the map already shows it. A position older than
   the sharing window ([Sharing](sharing.md)) reads "Paused sharing" and greys the avatar.
 - **Notifications about a member** are switched off per member on this phone only, in the same
-  Room table as the muted circles ([Circles](circles.md)).
+  Room table as the muted places ([Places](places.md)). One switch covers both what is notified
+  about them: arriving at or leaving a place, and starting or stopping sharing
+  ([Sharing](sharing.md)). It reads "Places and sharing", not "online": the server only knows
+  when positions arrive, so "stopped sharing" is all it can tell.
 - **Times** read as people say them: "Today at 13:25", "Joined yesterday", "3 Nov at 18:40".
 - **Can't connect**: while the server can't be reached, a pill under the top bar says positions
   may be old, with Retry, and the sharing row adds "Sends again once connected".
-- Tapping a circle with someone in it fits it in the map and draws its edge.
 - **Members are balloons**, like Life360: their avatar in a white balloon whose tip is the exact
   position, the name under the tip, a halo in their colour when selected. This phone's own
   position stays a dot, so it never reads as someone else.
-- **Layers**, from the bottom: the edge of the circle picked, the circle pins, this phone's dot,
+- **Layers**, from the bottom: the edge of the place picked, the place pins, this phone's dot,
   the members. A balloon over a pin hides it rather than the other way round, since the people
   matter more than the places.
-- The ⋮ menu has Invite people, Circles, Leave group and, for admins, Delete group; a group this
+- The ⋮ menu has Invite people, Places, Leave group and, for admins, Delete group; a group this
   phone can no longer use only offers to remove it.
 
-## Circles
+## Places
 
-The Circles page lists every circle of the group by name, with a local search once there is one.
+The Places page ("Family's places") lists every place of the group by name, with a local search once there is one.
 Each row says the radius and who is inside, with their avatars, and ends with a bell: on, the
 phone is notified when someone arrives or leaves; off, it isn't, on this phone only. The ⋮ menu
-turns every bell on or off. Tapping a circle opens the editor, which is also where it is deleted.
+turns every bell on or off. Tapping a place opens the editor, which is also where it is deleted.
 
-On the map a circle is a pin with its name, never a drawn area: with dozens of circles, or large
-ones, drawn areas would cover the map and the members, and a 30 m circle seen from afar would
-vanish. Only the circle tapped (on its pin or its row in the sheet) or being edited shows its
-edge. The pins are the scheme's `outline` and the circle picked is `tertiary`, so neither looks
+On the map a place is a pin with its name, never a drawn area: with dozens of places, or large
+ones, drawn areas would cover the map and the members, and a 30 m place seen from afar would
+vanish. Only the place tapped (on its pin) or being edited shows its
+edge. The pins are the scheme's `outline` and the place picked is `tertiary`, so neither looks
 like this phone's position, which is the primary.
 
 ## Servers
@@ -133,7 +145,8 @@ names the server. The pencil on a row opens the server screen, which has three m
 - **Join a group**: Scan QR code, or the code typed in a monospace field ([Invites](invites.md)).
   Joining is a full screen with its two steps and Cancel, not a dialog. Once in, the map opens
   on the group, on whichever server it is.
-- **Invite**: the code in two lines (the number large, the words under it), Copy and Share, the
+- **Invite**: the code on one line, as it is typed (`42-fog-dimly-old`, shrunk to fit), so the
+  number reads as part of it; Copy and Share, the
   QR code (`QrCode`, always black on white, which scanners read best), a bar running down the
   10 minutes, and the reminder that the first one who enters it gets in.
 

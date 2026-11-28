@@ -7,7 +7,7 @@ import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotAdminExcepti
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGMemberNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.AGNotFoundException;
 import com.peppeosmio.lockate.anonymous_group.exceptions.Base64Exception;
-import com.peppeosmio.lockate.anonymous_group.exceptions.CirclesChangedException;
+import com.peppeosmio.lockate.anonymous_group.exceptions.PlacesChangedException;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -25,11 +25,11 @@ class AGExceptionHandlerTest {
   }
 
   @Test
-  void handleCirclesChanged_returns409WithTheCurrentVersion() {
-    var response = handler.handleCirclesChanged(new CirclesChangedException(8));
+  void handlePlacesChanged_returns409WithTheCurrentVersion() {
+    var response = handler.handlePlacesChanged(new PlacesChangedException(8));
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-    assertThat(response.getBody().circlesVersion()).isEqualTo(8);
+    assertThat(response.getBody().placesVersion()).isEqualTo(8);
   }
 
   @Test

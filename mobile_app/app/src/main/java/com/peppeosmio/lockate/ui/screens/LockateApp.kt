@@ -9,8 +9,6 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupEvent
 import com.peppeosmio.lockate.service.anonymous_group.AnonymousGroupService
-import com.peppeosmio.lockate.ui.routes.CircleEditorRoute
-import com.peppeosmio.lockate.ui.routes.CirclesRoute
 import com.peppeosmio.lockate.ui.routes.ConnectionSettingsRoute
 import com.peppeosmio.lockate.ui.routes.CreateAnonymousGroupRoute
 import com.peppeosmio.lockate.ui.routes.HomeRoute
@@ -18,10 +16,10 @@ import com.peppeosmio.lockate.ui.routes.InviteRoute
 import com.peppeosmio.lockate.ui.routes.JoinAnonymousGroupRoute
 import com.peppeosmio.lockate.ui.routes.LoadingRoute
 import com.peppeosmio.lockate.ui.routes.PermissionsRoute
+import com.peppeosmio.lockate.ui.routes.PlaceEditorRoute
+import com.peppeosmio.lockate.ui.routes.PlacesRoute
 import com.peppeosmio.lockate.ui.routes.ServerScreenMode
 import com.peppeosmio.lockate.ui.routes.SettingsRoute
-import com.peppeosmio.lockate.ui.screens.circles.CircleEditorScreen
-import com.peppeosmio.lockate.ui.screens.circles.CirclesScreen
 import com.peppeosmio.lockate.ui.screens.connection_settings.ConnectionSettingsScreen
 import com.peppeosmio.lockate.ui.screens.create_anonymous_group.CreateAnonymousGroupScreen
 import com.peppeosmio.lockate.ui.screens.invite.InviteScreen
@@ -30,6 +28,8 @@ import com.peppeosmio.lockate.ui.screens.join_anonymous_group.NewServerInvite
 import com.peppeosmio.lockate.ui.screens.loading.LoadingScreen
 import com.peppeosmio.lockate.ui.screens.map.MapScreen
 import com.peppeosmio.lockate.ui.screens.permissions.PermissionsScreen
+import com.peppeosmio.lockate.ui.screens.places.PlaceEditorScreen
+import com.peppeosmio.lockate.ui.screens.places.PlacesScreen
 import com.peppeosmio.lockate.ui.screens.settings.SettingsScreen
 import com.peppeosmio.lockate.ui.theme.LockateTheme
 import org.koin.compose.koinInject
@@ -102,8 +102,8 @@ fun LockateApp(startLocationService: () -> Unit) {
                     navigateToInvite = { anonymousGroupInternalId ->
                         appNavController.navigate(InviteRoute(anonymousGroupInternalId))
                     },
-                    navigateToCircles = { anonymousGroupInternalId ->
-                        appNavController.navigate(CirclesRoute(anonymousGroupInternalId))
+                    navigateToPlaces = { anonymousGroupInternalId ->
+                        appNavController.navigate(PlacesRoute(anonymousGroupInternalId))
                     },
                     navigateToSettings = { appNavController.navigate(SettingsRoute) },
                     navigateToPermissions = { groupInternalId ->
@@ -162,26 +162,26 @@ fun LockateApp(startLocationService: () -> Unit) {
                     navigateBack = { appNavController.popBackStack() },
                 )
             }
-            composable<CirclesRoute> { navBackStackEntry ->
-                val circlesRoute = navBackStackEntry.toRoute<CirclesRoute>()
-                CirclesScreen(
-                    anonymousGroupInternalId = circlesRoute.anonymousGroupInternalId,
+            composable<PlacesRoute> { navBackStackEntry ->
+                val placesRoute = navBackStackEntry.toRoute<PlacesRoute>()
+                PlacesScreen(
+                    anonymousGroupInternalId = placesRoute.anonymousGroupInternalId,
                     navigateBack = { appNavController.popBackStack() },
-                    navigateToCircleEditor = { circleId ->
+                    navigateToPlaceEditor = { placeId ->
                         appNavController.navigate(
-                            CircleEditorRoute(
-                                anonymousGroupInternalId = circlesRoute.anonymousGroupInternalId,
-                                circleId = circleId,
+                            PlaceEditorRoute(
+                                anonymousGroupInternalId = placesRoute.anonymousGroupInternalId,
+                                placeId = placeId,
                             )
                         )
                     },
                 )
             }
-            composable<CircleEditorRoute> { navBackStackEntry ->
-                val route = navBackStackEntry.toRoute<CircleEditorRoute>()
-                CircleEditorScreen(
+            composable<PlaceEditorRoute> { navBackStackEntry ->
+                val route = navBackStackEntry.toRoute<PlaceEditorRoute>()
+                PlaceEditorScreen(
                     anonymousGroupInternalId = route.anonymousGroupInternalId,
-                    circleId = route.circleId,
+                    placeId = route.placeId,
                     navigateBack = { appNavController.popBackStack() },
                 )
             }

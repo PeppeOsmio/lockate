@@ -147,7 +147,7 @@ export function GroupsPage() {
             { header: 'Created', render: (g) => <Time value={g.createdAt} /> },
             { header: 'Members', render: (g) => <Members group={g} /> },
             { header: 'Admins', render: (g) => <Admins group={g} /> },
-            { header: 'Circles', render: (g) => g.circleCount },
+            { header: 'Places', render: (g) => g.placeCount },
             {
               header: 'Notifications',
               render: (g) => (
@@ -207,7 +207,7 @@ export function GroupsPage() {
           }}
           onClose={() => setDeletingSelected(false)}
         >
-          The groups, their members, circles and saved positions are deleted for good, and the
+          The groups, their members, places and saved positions are deleted for good, and the
           members' apps are told by push (when the server has a push relay). This can't be undone.
         </ConfirmDialog>
       )}

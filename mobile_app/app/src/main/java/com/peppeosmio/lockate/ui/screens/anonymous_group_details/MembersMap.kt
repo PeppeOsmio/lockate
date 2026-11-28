@@ -43,7 +43,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
-import com.peppeosmio.lockate.domain.anonymous_group.Circle
+import com.peppeosmio.lockate.domain.anonymous_group.Place
 import com.peppeosmio.lockate.ui.composables.MemberAvatar
 import com.peppeosmio.lockate.ui.theme.LockateTheme
 import kotlin.math.atan2
@@ -201,7 +201,7 @@ fun MemberMarker(tip: DpOffset, member: MapPoint, onClick: () -> Unit) {
     }
 }
 
-/** A circle of [radius] with a tail down to the tip at [height], [halfTail] wide on each side */
+/** A place of [radius] with a tail down to the tip at [height], [halfTail] wide on each side */
 private fun balloonPath(radius: Float, height: Float, halfTail: Float): Path {
     val joinY = radius + sqrt(radius * radius - halfTail * halfTail)
     return Path().apply {
@@ -300,9 +300,9 @@ fun MembersMap(
     modifier: Modifier = Modifier,
     mapState: MapState,
     membersPoints: List<MapPoint>?,
-    circles: List<Circle>,
-    selectedCircleId: String?,
-    onTapCircle: (circleId: String) -> Unit,
+    places: List<Place>,
+    selectedPlaceId: String?,
+    onTapPlace: (placeId: String) -> Unit,
     myPoint: MapPoint?,
     myDeviceOrientation: Float?,
     compassTopPadding: Dp,
@@ -383,16 +383,16 @@ fun MembersMap(
 
         // TODO consider returning to rendering via maplibre native layers
 
-        circles.firstOrNull { it.id == selectedCircleId }?.let { CircleOverlay(mapState, it) }
-        circles.forEach { circle ->
-            key(circle.id) {
-                CirclePin(mapState, circle, circle.id == selectedCircleId) {
-                    onTapCircle(circle.id)
+        places.firstOrNull { it.id == selectedPlaceId }?.let { PlaceOverlay(mapState, it) }
+        places.forEach { place ->
+            key(place.id) {
+                PlacePin(mapState, place, place.id == selectedPlaceId) {
+                    onTapPlace(place.id)
                 }
             }
         }
 
-        // from the bottom: circle pins, this phone's dot, the members, so a member's balloon is
+        // from the bottom: place pins, this phone's dot, the members, so a member's balloon is
         // never hidden by a pin
         myPointProjection?.let {
             MyMarker(
@@ -440,7 +440,7 @@ fun MembersMap(
             //              modifier = Modifier
             //                  .size(4.dp)
             //                  .offset(cluster.center.x, cluster.center.y)
-            //                      // anchor = center of the circle (16.dp)
+            //                      // anchor = center of the place (16.dp)
             //                      translationX = -2.dp.toPx()
             //                      translationY = -2.dp.toPx()
             //                  }

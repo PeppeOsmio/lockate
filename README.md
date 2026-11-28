@@ -76,7 +76,7 @@ Yes. Lockate is open source under the MIT license.
 - Group names, member names and coordinates are encrypted client-side with AES-256-GCM, with a random group key that never leaves the members' devices.
 - Invites use EC-JPAKE ([RFC 8236](https://www.rfc-editor.org/rfc/rfc8236)) keyed by the words of the invite code, from [Mbed TLS](https://github.com/Mbed-TLS/mbedtls) (Apache-2.0), called from Kotlin through `mobile_app/jpake`, a generic Kotlin Multiplatform J-PAKE module with RFC 8236 key confirmation. The server relays the messages through a short-lived Redis mailbox. Both phones confirm they derived the same key before the inviter sends the group key and a single-use join token, encrypted with a key derived from the shared secret.
 - Members authenticate with a random 32-byte token that the server stores as a SHA-256 hash.
-- Phones post their encrypted position over REST: every ~2 s while moving, every 10 minutes while still. Arrivals and departures at circles (places like home or school) are computed on the phone and sent encrypted with the position. The group on screen streams over SSE; everything else arrives as an end-to-end encrypted push, through a small relay that holds our Firebase credentials.
+- Phones post their encrypted position over REST: every ~2 s while moving, every 10 minutes while still. Arrivals and departures at places (places like home or school) are computed on the phone and sent encrypted with the position. The group on screen streams over SSE; everything else arrives as an end-to-end encrypted push, through a small relay that holds our Firebase credentials.
 
 The full architecture, with the reasons behind each choice, is in [docs/architecture.md](docs/architecture.md).
 

@@ -23,11 +23,11 @@ class PlaceSearchServiceTest {
                 )
             )
 
-        val places = parsePhotonPlaces(json)
+        val places = parsePhotonResults(json)
 
         assertEquals(
             listOf(
-                Place(
+                SearchResult(
                     name = "Colosseo",
                     description = "Piazza del Colosseo 1, Roma, Lazio, Italia",
                     coordinates = Coordinates(latitude = 41.8902, longitude = 12.4922),
@@ -48,7 +48,7 @@ class PlaceSearchServiceTest {
                 )
             )
 
-        val place = parsePhotonPlaces(json).single()
+        val place = parsePhotonResults(json).single()
 
         assertEquals("Via Toledo 10", place.name)
         assertEquals("Napoli, Italia", place.description)
@@ -65,7 +65,7 @@ class PlaceSearchServiceTest {
                 )
             )
 
-        assertEquals("Campania, Italia", parsePhotonPlaces(json).single().description)
+        assertEquals("Campania, Italia", parsePhotonResults(json).single().description)
     }
 
     @Test
@@ -76,7 +76,7 @@ class PlaceSearchServiceTest {
                 feature(1.0, 2.0, """{"name":"Somewhere"}"""),
             )
 
-        val places = parsePhotonPlaces(json)
+        val places = parsePhotonResults(json)
 
         assertEquals(listOf("Somewhere"), places.map { it.name })
         assertEquals("", places.single().description)
@@ -96,7 +96,7 @@ class PlaceSearchServiceTest {
                 ),
             )
 
-        val places = parsePhotonPlaces(json)
+        val places = parsePhotonResults(json)
 
         assertEquals(listOf("Napoli, Italia", "Casoria, Italia"), places.map { it.description })
         assertEquals(
@@ -110,11 +110,11 @@ class PlaceSearchServiceTest {
         val square = """{"name":"Piazza Dante","city":"Napoli","country":"Italia"}"""
         val json = collection(feature(14.2503, 40.8491, square), feature(14.20, 40.88, square))
 
-        assertEquals(2, parsePhotonPlaces(json).size)
+        assertEquals(2, parsePhotonResults(json).size)
     }
 
     @Test
     fun `no features gives no places`() {
-        assertEquals(emptyList<Place>(), parsePhotonPlaces(collection()))
+        assertEquals(emptyList<SearchResult>(), parsePhotonResults(collection()))
     }
 }

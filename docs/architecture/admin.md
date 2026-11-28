@@ -3,7 +3,7 @@
 [← Architecture](../architecture.md)
 
 Whoever runs a server manages it through the admin API and the admin UI on top of it. Since names,
-member names, positions and circles are encrypted on the phones, the admin sees what the server
+member names, positions and places are encrypted on the phones, the admin sees what the server
 sees: ids, counts, times, the admin flag. Anything added here must follow the same rule
 ([What the server learns](encryption.md#what-the-server-learns)).
 
@@ -15,8 +15,8 @@ constant time. The backend refuses to start without one. CORS allows only `ADMIN
 
 | Endpoint | What it does |
 |---|---|
-| `GET /overview` | The server at a glance: version and served APIs, when it started, `REQUIRE_API_KEY`, the push relay, the position settings (kept for, saved every, deletion cron), whether the database and Redis answer, counts (groups, members, members registered for push, circles, groups without an admin, groups inactive for 30 days, saved positions, API keys), members online now, and the last run of `LocationSaveJob` and `LocationRetentionJob` with whether the next one is late. |
-| `GET /anonymous-groups?page&size&q&sort&inactiveDays&noAdmin` | Groups with their counts (members, admins, online, push registered, circles) and last position. `q` is the start of a group's or one of its members' id; `sort` is `created` (default, newest first), `members` or `activity`; `inactiveDays` keeps the groups older than that with no position saved since; `noAdmin=true` the groups where nobody is an admin. |
+| `GET /overview` | The server at a glance: version and served APIs, when it started, `REQUIRE_API_KEY`, the push relay, the position settings (kept for, saved every, deletion cron), whether the database and Redis answer, counts (groups, members, members registered for push, places, groups without an admin, groups inactive for 30 days, saved positions, API keys), members online now, and the last run of `LocationSaveJob` and `LocationRetentionJob` with whether the next one is late. |
+| `GET /anonymous-groups?page&size&q&sort&inactiveDays&noAdmin` | Groups with their counts (members, admins, online, push registered, places) and last position. `q` is the start of a group's or one of its members' id; `sort` is `created` (default, newest first), `members` or `activity`; `inactiveDays` keeps the groups older than that with no position saved since; `noAdmin=true` the groups where nobody is an admin. |
 | `GET /anonymous-groups/{id}` | One group, with the same counts. |
 | `GET /anonymous-groups/{id}/members` | A group's members: joined, admin flag, online, push registered, last position. |
 | `DELETE /anonymous-groups/{id}` | Deletes the group; every member gets `group.deleted` by push. |
@@ -69,7 +69,7 @@ so it is gone with the tab; a 401 signs out and drops everything loaded.
   refreshed every minute.
 - **Groups**: paged list with search by group or member id, sorting and filters for groups with
   no position for 7, 30 or 90 days and groups without an admin, all in the URL. Each row shows members (and how many are
-  online), admins (a warning when there is none), circles, members registered for notifications
+  online), admins (a warning when there is none), places, members registered for notifications
   and the last position. Rows can be selected to delete several groups at once, one request each,
   after typing how many.
 - **A group's page**: the same counts, then its members with online or offline, whether their app

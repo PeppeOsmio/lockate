@@ -7,13 +7,13 @@ import java.util.List;
 import org.springframework.aot.hint.annotation.RegisterReflectionForBinding;
 
 /**
- * A position with the circle events it caused, which the server relays after it, in order. {@code
- * circlesVersion} is the version of the circles the events were computed on: events on any other
- * version are refused, so none goes out about circles that changed meanwhile.
+ * A position with the place events it caused, which the server relays after it, in order. {@code
+ * placesVersion} is the version of the places the events were computed on: events on any other
+ * version are refused, so none goes out about places that changed meanwhile.
  */
 @RegisterReflectionForBinding
 public record AGPostLocationReqDto(
     @Valid EncryptedDataDto encryptedCoordinates,
     @Valid EncryptedDataDto encryptedActivity,
-    @Nullable List<@Valid EncryptedDataDto> circleEvents,
-    @Nullable Long circlesVersion) {}
+    @Nullable List<@Valid EncryptedDataDto> placeEvents,
+    @Nullable Long placesVersion) {}

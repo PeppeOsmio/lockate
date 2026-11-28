@@ -70,7 +70,7 @@ function OverviewContent({ overview }: { overview: Overview }) {
               value: `${counts.pushRegisteredMembers} of ${counts.members}`,
               detail: 'members registered',
             },
-            { label: 'Circles', value: counts.circles },
+            { label: 'Places', value: counts.places },
             {
               label: 'Without an admin',
               value: counts.groupsWithoutAdmin,
@@ -167,7 +167,7 @@ function Problems({ overview }: { overview: Overview }) {
   if (!overview.pushRelayUrl) {
     problems.push({
       severity: 'warning',
-      text: 'No push relay (PUSH_RELAY_URL): apps get no notifications for circle crossings, removals or deleted groups.',
+      text: 'No push relay (PUSH_RELAY_URL): apps get no notifications for place crossings, removals or deleted groups.',
     })
   }
   if (!overview.requireApiKey) {

@@ -56,7 +56,7 @@ fun DeleteGroupDialog(
     DestructiveDialog(
         title = "Delete $groupName for everyone?",
         text =
-            "$groupName and its circles are deleted for " +
+            "$groupName and its places are deleted for " +
                 (if (membersCount == 1) "you" else "all $membersCount members") +
                 ". This can't be undone.",
         confirm = "Delete",

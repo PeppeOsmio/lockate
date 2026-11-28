@@ -22,7 +22,7 @@ fun GroupMenuItems(
     group: AnonymousGroup,
     isAdmin: Boolean,
     onInvite: () -> Unit,
-    onCircles: () -> Unit,
+    onPlaces: () -> Unit,
     onLeave: () -> Unit,
     onDelete: () -> Unit,
     onRemove: () -> Unit,
@@ -49,8 +49,8 @@ fun GroupMenuItems(
                 contentDescription = null,
             )
         },
-        text = { Text("Circles") },
-        onClick = onCircles,
+        text = { Text("Places") },
+        onClick = onPlaces,
     )
     HorizontalDivider()
     DropdownMenuItem(

@@ -29,14 +29,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.peppeosmio.lockate.R
 import com.peppeosmio.lockate.domain.UserActivity
 import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.domain.anonymous_group.AnonymousGroup
-import com.peppeosmio.lockate.domain.anonymous_group.Circle
-import com.peppeosmio.lockate.ui.composables.CircleRow
 import com.peppeosmio.lockate.ui.composables.MemberRow
 import com.peppeosmio.lockate.ui.composables.SharingRow
 import com.peppeosmio.lockate.ui.screens.anonymous_group_details.AGDetailsState
@@ -52,8 +54,7 @@ class MapSheetActions(
     val onJoinGroup: () -> Unit,
     val onRemoveGroup: () -> Unit,
     val onInvite: () -> Unit,
-    val onOpenCircles: () -> Unit,
-    val onShowCircle: (Circle) -> Unit,
+    val onOpenPlaces: () -> Unit,
     val onSelectMember: (memberId: String) -> Unit,
     val onBackToGroup: () -> Unit,
     val onFollow: () -> Unit,
@@ -68,7 +69,7 @@ class MapSheetActions(
 private val SHEET_BODY_BOTTOM_PADDING = 32.dp
 
 /**
- * The part of the sheet that stays visible when it's collapsed. [sharingSupporting] is the second
+ * The top of the sheet: sharing, or what this screen is about. [sharingSupporting] is the second
  * line of the sharing row, e.g. while the server can't be reached.
  */
 @OptIn(ExperimentalTime::class)
@@ -125,7 +126,7 @@ fun MapSheetHeader(
     }
 }
 
-/** The part of the sheet revealed by dragging it up, for the contents that have one */
+/** The rest of the sheet, under [MapSheetHeader], for the contents that have more */
 @OptIn(ExperimentalTime::class)
 @Composable
 fun MapSheetBody(
@@ -134,6 +135,8 @@ fun MapSheetBody(
     now: Instant,
     actions: MapSheetActions,
 ) {
+    // only the group and a member have more than the header, and both come with the group loaded
+    if (content !is SheetContent.Group && content !is SheetContent.Member) return
     val group = details.anonymousGroup!!
     val members = details.members!!
     val scroll = Modifier.verticalScroll(rememberScrollState())
@@ -142,8 +145,6 @@ fun MapSheetBody(
             Column(scroll.padding(bottom = SHEET_BODY_BOTTOM_PADDING)) {
                 HorizontalDivider(Modifier.padding(horizontal = 16.dp))
                 MembersSection(group, details, now, actions)
-                HorizontalDivider(Modifier.padding(horizontal = 16.dp))
-                CirclesSection(details, members.values, group.memberId, actions)
             }
         is SheetContent.Member -> {
             val member = members[content.memberId]!!
@@ -170,19 +171,33 @@ private fun statusOf(
 ): String =
     memberStatus(
         member = member,
-        circles = details.circles,
+        places = details.places,
         now = now,
     )
 
+/** [count] follows the title in a quieter colour, e.g. "Members · 3" */
 @Composable
-private fun SectionHeader(title: String, action: @Composable () -> Unit) {
+private fun SectionHeader(title: String, count: Int? = null, action: @Composable () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             modifier = Modifier.weight(1f),
-            text = title,
+            text =
+                buildAnnotatedString {
+                    append(title)
+                    if (count != null) {
+                        withStyle(
+                            SpanStyle(
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.Normal,
+                            )
+                        ) {
+                            append(" · $count")
+                        }
+                    }
+                },
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.primary,
         )
@@ -198,7 +213,7 @@ private fun MembersSection(
     now: Instant,
     actions: MapSheetActions,
 ) {
-    SectionHeader("Members") {
+    SectionHeader("Members", count = details.members!!.size) {
         TextButton(onClick = actions.onInvite) {
             Icon(
                 painterResource(R.drawable.baseline_person_add_24),
@@ -259,51 +274,6 @@ internal fun AdminBadge() {
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-    }
-}
-
-/** The circles someone is in, and one row for all the others, which opens Circles */
-@Composable
-private fun CirclesSection(
-    details: AGDetailsState,
-    members: Collection<AGMember>,
-    myMemberId: String,
-    actions: MapSheetActions,
-) {
-    val circles = details.circles
-    SectionHeader(if (circles.isEmpty()) "Circles" else "Circles · ${circles.size}") {
-        TextButton(onClick = actions.onOpenCircles) { Text("Manage") }
-    }
-    val occupied = occupiedCircles(circles, members)
-    for ((circle, inside) in occupied.entries.sortedBy { it.key.name.lowercase() }) {
-        CircleRow(
-            name = circle.name,
-            supporting = whoIsHere(inside, myMemberId),
-            onClick = { actions.onShowCircle(circle) },
-        )
-    }
-    val others = circles.size - occupied.size
-    if (others > 0) {
-        CircleRow(
-            name = if (others == 1) "1 more circle" else "$others more circles",
-            supporting = "No one inside",
-            onClick = actions.onOpenCircles,
-            trailing = {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
-            },
-        )
-    }
-}
-
-internal fun whoIsHere(inside: List<AGMember>, myMemberId: String): String {
-    val names =
-        inside
-            .sortedWith(compareByDescending<AGMember> { it.id == myMemberId }.thenBy { it.name })
-            .map { if (it.id == myMemberId) "You" else it.name }
-    return when (names.size) {
-        1 -> if (names[0] == "You") "You're here" else "${names[0]} is here"
-        2 -> "${names[0]} and ${names[1]} are here"
-        else -> "${names[0]}, ${names[1]} and ${names.size - 2} more are here"
     }
 }
 

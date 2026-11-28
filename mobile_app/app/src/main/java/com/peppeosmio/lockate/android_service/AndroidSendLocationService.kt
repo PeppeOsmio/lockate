@@ -200,6 +200,6 @@ class AndroidSendLocationService : Service() {
         const val ACTION_STOP = "ACTION_STOP"
         const val ACTION_RESTART = "ACTION_RESTART"
         const val NOTIFICATION_CHANNEL_ID = "lockateLocation"
-        const val CIRCLE_NOTIFICATION_CHANNEL_ID = "lockateCircles"
+        const val PLACE_NOTIFICATION_CHANNEL_ID = "lockatePlaces"
     }
 }

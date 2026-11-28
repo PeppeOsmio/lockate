@@ -4,17 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.peppeosmio.lockate.anonymous_group.controllers.AnonymousGroupController;
 import com.peppeosmio.lockate.anonymous_group.controllers.SecuredAGController;
-import com.peppeosmio.lockate.anonymous_group.dto.AGCircleEventReqDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGFrameDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGJoinReqDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGJoinResDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGMemberMessageReqDto;
+import com.peppeosmio.lockate.anonymous_group.dto.AGPlaceEventReqDto;
 import com.peppeosmio.lockate.anonymous_group.dto.AGPostLocationReqDto;
-import com.peppeosmio.lockate.anonymous_group.dto.CircleDto;
-import com.peppeosmio.lockate.anonymous_group.dto.CircleEventDto;
-import com.peppeosmio.lockate.anonymous_group.dto.CircleUpsertReqDto;
 import com.peppeosmio.lockate.anonymous_group.dto.LocationRecordDto;
 import com.peppeosmio.lockate.anonymous_group.dto.MemberLocationDto;
+import com.peppeosmio.lockate.anonymous_group.dto.PlaceDto;
+import com.peppeosmio.lockate.anonymous_group.dto.PlaceEventDto;
+import com.peppeosmio.lockate.anonymous_group.dto.PlaceUpsertReqDto;
 import com.peppeosmio.lockate.common.dto.EncryptedDataDto;
 import com.peppeosmio.lockate.common.dto.ErrorResponseDto;
 import com.peppeosmio.lockate.invite.InviteController;
@@ -46,7 +46,7 @@ class NativeReflectionTest {
 
     var reflection = RuntimeHintsPredicates.reflection();
     assertThat(reflection.onMethodInvocation(AGFrameDto.class, "type")).accepts(hints);
-    assertThat(reflection.onMethodInvocation(AGFrameDto.class, "circleEvent")).accepts(hints);
+    assertThat(reflection.onMethodInvocation(AGFrameDto.class, "placeEvent")).accepts(hints);
   }
 
   @Test
@@ -55,11 +55,10 @@ class NativeReflectionTest {
 
     assertThat(
             RuntimeHintsPredicates.reflection()
-                .onMethodInvocation(CircleEventDto.class, "encryptedEvent"))
+                .onMethodInvocation(PlaceEventDto.class, "encryptedEvent"))
         .accepts(hints);
     assertThat(
-            RuntimeHintsPredicates.reflection()
-                .onMethodInvocation(CircleDto.class, "encryptedName"))
+            RuntimeHintsPredicates.reflection().onMethodInvocation(PlaceDto.class, "encryptedName"))
         .accepts(hints);
   }
 
@@ -76,12 +75,12 @@ class NativeReflectionTest {
   }
 
   @Test
-  void agCircleEventReqDto_registersAccessors() {
-    register(AGCircleEventReqDto.class);
+  void agPlaceEventReqDto_registersAccessors() {
+    register(AGPlaceEventReqDto.class);
 
     assertThat(
             RuntimeHintsPredicates.reflection()
-                .onMethodInvocation(AGCircleEventReqDto.class, "encryptedEvent"))
+                .onMethodInvocation(AGPlaceEventReqDto.class, "encryptedEvent"))
         .accepts(hints);
   }
 
@@ -123,10 +122,10 @@ class NativeReflectionTest {
     assertThat(reflection.onMethodInvocation(InviterFinalDto.class, "payload")).accepts(hints);
     assertThat(reflection.onMethodInvocation(AGJoinReqDto.class, "joinToken")).accepts(hints);
     assertThat(reflection.onMethodInvocation(AGJoinResDto.class, "members")).accepts(hints);
-    assertThat(reflection.onMethodInvocation(AGPostLocationReqDto.class, "circleEvents"))
+    assertThat(reflection.onMethodInvocation(AGPostLocationReqDto.class, "placeEvents"))
         .accepts(hints);
     assertThat(reflection.onMethodInvocation(EncryptedDataDto.class, "cipherText")).accepts(hints);
-    assertThat(reflection.onMethodInvocation(CircleUpsertReqDto.class, "encryptedName"))
+    assertThat(reflection.onMethodInvocation(PlaceUpsertReqDto.class, "encryptedName"))
         .accepts(hints);
     // Only the controllers' own types: what the service serializes itself needs its annotation
     assertThat(reflection.onMethodInvocation(InviteRecord.class, "expiresAt")).rejects(hints);

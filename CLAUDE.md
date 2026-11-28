@@ -14,7 +14,7 @@ The design lives in `docs/`, and it is the only place it is written down: `docs/
 | Groups, members, member tokens, API keys, retention | `docs/architecture/groups-and-auth.md` |
 | The admin API or `admin_ui/` | `docs/architecture/admin.md` |
 | Invites, J-PAKE, `mobile_app/jpake*` | `docs/architecture/invites.md` |
-| Circles, geofencing, circle events, notifications | `docs/architecture/circles.md` |
+| Places, geofencing, place events, notifications | `docs/architecture/places.md` |
 | Sending positions: still/moving, wake locks, Doze, the locations endpoint | `docs/architecture/sending.md` |
 | Who is sharing, presence, map colours | `docs/architecture/sharing.md` |
 | The SSE stream, frames, Redis pub/sub | `docs/architecture/realtime.md` |
@@ -29,7 +29,7 @@ The design lives in `docs/`, and it is the only place it is written down: `docs/
 
 - All sensitive fields (group name, member names, coordinates) are encrypted **client-side** before leaving the device. The server must never receive or log plaintext versions of these.
 - The group key is 32 random bytes generated client-side. It reaches new members only inside an invite payload encrypted with a key derived from the J-PAKE shared key.
-- Every encrypted field has a fixed size, so its length tells the server nothing. The server may learn *when* members send (stillness from a still member posting every 10 minutes, circle crossings from circle events), never what: coordinates, activity, circle ids and enter/exit stay encrypted.
+- Every encrypted field has a fixed size, so its length tells the server nothing. The server may learn *when* members send (stillness from a still member posting every 10 minutes, place crossings from place events), never what: coordinates, activity, place ids and enter/exit stay encrypted.
 - The server relays invite messages as opaque blobs and stores join tokens only as SHA-256 hashes.
 - Every new entity or field added to the database must follow the same zero-knowledge model.
 

@@ -6,9 +6,9 @@ import com.peppeosmio.lockate.data.anonymous_group.database.AnonymousGroupEntity
 import com.peppeosmio.lockate.data.anonymous_group.database.MutedTargetEntity
 import com.peppeosmio.lockate.data.anonymous_group.mappers.AGMemberMapper
 import com.peppeosmio.lockate.data.anonymous_group.mappers.AnonymousGroupMapper
-import com.peppeosmio.lockate.data.anonymous_group.mappers.CircleMapper
 import com.peppeosmio.lockate.data.anonymous_group.mappers.EncryptedDataMapper
 import com.peppeosmio.lockate.data.anonymous_group.mappers.LocationRecordMapper
+import com.peppeosmio.lockate.data.anonymous_group.mappers.PlaceMapper
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGCreateReqDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGCreateResDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGFrameDto
@@ -16,10 +16,10 @@ import com.peppeosmio.lockate.data.anonymous_group.remote.AGJoinReqDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGJoinResDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGPostLocationReqDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.AGPostLocationResDto
-import com.peppeosmio.lockate.data.anonymous_group.remote.CircleDto
-import com.peppeosmio.lockate.data.anonymous_group.remote.CircleUpsertReqDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.EncryptedAGMemberDto
 import com.peppeosmio.lockate.data.anonymous_group.remote.MemberLocationDto
+import com.peppeosmio.lockate.data.anonymous_group.remote.PlaceDto
+import com.peppeosmio.lockate.data.anonymous_group.remote.PlaceUpsertReqDto
 import com.peppeosmio.lockate.data.apiJson
 import com.peppeosmio.lockate.domain.Connection
 import com.peppeosmio.lockate.domain.LocationRecord
@@ -30,10 +30,10 @@ import com.peppeosmio.lockate.domain.anonymous_group.AGMember
 import com.peppeosmio.lockate.domain.anonymous_group.AnonymousGroup
 import com.peppeosmio.lockate.domain.anonymous_group.ChannelState
 import com.peppeosmio.lockate.domain.anonymous_group.ChannelStatus
-import com.peppeosmio.lockate.domain.anonymous_group.Circle
-import com.peppeosmio.lockate.domain.anonymous_group.CircleTransition
 import com.peppeosmio.lockate.domain.anonymous_group.GroupFrame
 import com.peppeosmio.lockate.domain.anonymous_group.MemberMessage
+import com.peppeosmio.lockate.domain.anonymous_group.Place
+import com.peppeosmio.lockate.domain.anonymous_group.PlaceTransition
 import com.peppeosmio.lockate.domain.anonymous_group.SendLocationStatus
 import com.peppeosmio.lockate.domain.crypto.EncryptedData
 import com.peppeosmio.lockate.exceptions.AGMemberNotAdminException
@@ -55,9 +55,9 @@ import com.peppeosmio.lockate.platform_service.WakeLockService
 import com.peppeosmio.lockate.service.ConnectionService
 import com.peppeosmio.lockate.service.crypto.CryptoException
 import com.peppeosmio.lockate.service.crypto.CryptoService
-import com.peppeosmio.lockate.service.geofence.CircleEvents
 import com.peppeosmio.lockate.service.geofence.GeofenceTracker
-import com.peppeosmio.lockate.service.geofence.circleEventTexts
+import com.peppeosmio.lockate.service.geofence.PlaceEvents
+import com.peppeosmio.lockate.service.geofence.placeEventTexts
 import com.peppeosmio.lockate.service.geofence.presenceText
 import com.peppeosmio.lockate.service.location.Position
 import com.peppeosmio.lockate.service.location.PositionProvider
@@ -141,14 +141,14 @@ internal fun nextBackoffSeconds(retries: Int): Long = min(5L * retries, 60L)
 
 private val PAUSE_TIMEOUT = 10.seconds
 
-// a group whose circles keep changing while we post gives up until the next position
-private const val MAX_CIRCLE_REFRESHES = 2
+// a group whose places keep changing while we post gives up until the next position
+private const val MAX_PLACE_REFRESHES = 2
 
 // A post on a connection that died silently (NAT dropped, no FIN) waits for an answer that never
 // comes; it must fail while the phone is awake, so the next fix gets a new connection
 private const val POST_TIMEOUT_MILLIS = 15_000L
 
-// bounds a send (a post, its circle refreshes and their reposts) if it never returns
+// bounds a send (a post, its place refreshes and their reposts) if it never returns
 private const val POST_WAKE_LOCK_MILLIS = 60_000L
 
 class AnonymousGroupService(
@@ -549,7 +549,7 @@ class AnonymousGroupService(
                     anonymousGroupInternalId = 0,
                 )
             val snapshot =
-                decryptSnapshot(body.anonymousGroup.id, groupKey, body.members, body.circles)
+                decryptSnapshot(body.anonymousGroup.id, groupKey, body.members, body.places)
             val anonymousGroup =
                 AnonymousGroup(
                     internalId = 0,
@@ -581,7 +581,7 @@ class AnonymousGroupService(
                                 .map {
                                     AGMemberMapper.domainToEntity(it, anonymousGroupInternalId = 0)
                                 },
-                    circles = snapshot.circles,
+                    places = snapshot.places,
                 )
             _events.tryEmit(
                 AnonymousGroupEvent.NewAnonymousGroupEvent(
@@ -679,7 +679,7 @@ class AnonymousGroupService(
 
     /**
      * Shares our location with the group for as long as the caller is suspended here: follows it,
-     * runs the group's [GeofenceTracker] and posts each position with its circle events. Only the
+     * runs the group's [GeofenceTracker] and posts each position with its place events. Only the
      * foreground service holds it, and only for the groups we share with. [onStatus] gets the state
      * of the posts and of the location.
      */
@@ -689,9 +689,9 @@ class AnonymousGroupService(
     ): Unit = coroutineScope {
         val channel = GroupChannel()
         val statusJob = launch { channel.status.collect { onStatus(it) } }
-        // the saved circles, so we geofence also when the server can't be reached
+        // the saved places, so we geofence also when the server can't be reached
         val tracker =
-            GeofenceTracker().apply { replaceCircles(listCircles(anonymousGroup.internalId)) }
+            GeofenceTracker().apply { replacePlaces(listPlaces(anonymousGroup.internalId)) }
         try {
             sendLocationWhileEnabled(anonymousGroup, channel, tracker)
         } finally {
@@ -767,15 +767,13 @@ class AnonymousGroupService(
         }
     }
 
-    /**
-     * Posts [position] and the circle [transitions], computed on the circles of [circlesVersion].
-     */
+    /** Posts [position] and the place [transitions], computed on the places of [placesVersion]. */
     private suspend fun postLocation(
         anonymousGroup: AnonymousGroup,
         connectionSettings: Connection,
         position: Position,
-        transitions: List<CircleTransition>,
-        circlesVersion: Long?,
+        transitions: List<PlaceTransition>,
+        placesVersion: Long?,
     ): HttpResponse? {
         val encrypted =
             payloadCodec.encryptMemberMessage(
@@ -788,9 +786,9 @@ class AnonymousGroupService(
                 groupId = anonymousGroup.id,
                 memberId = anonymousGroup.memberId,
             )
-        val circleEvents = transitions.map {
+        val placeEvents = transitions.map {
             EncryptedDataMapper.toDto(
-                payloadCodec.encryptCircleEvent(
+                payloadCodec.encryptPlaceEvent(
                     it,
                     anonymousGroup.key,
                     anonymousGroup.id,
@@ -805,8 +803,8 @@ class AnonymousGroupService(
             AGPostLocationReqDto(
                 encryptedCoordinates = EncryptedDataMapper.toDto(encrypted.coordinates),
                 encryptedActivity = EncryptedDataMapper.toDto(encrypted.activity),
-                circleEvents = circleEvents,
-                circlesVersion = circlesVersion,
+                placeEvents = placeEvents,
+                placesVersion = placesVersion,
             ),
         )
     }
@@ -814,7 +812,7 @@ class AnonymousGroupService(
     /**
      * Posts [body] to the group's [path] as us. Null when it didn't get through; a removal or a
      * deleted group is applied here, which stops the sharing. A 409 is the answer of a location
-     * post whose circle events were computed on circles that changed, and is returned. A post that
+     * post whose place events were computed on places that changed, and is returned. A post that
      * failed on the network (timeout, connection closed) while the network is there is sent once
      * more on a new connection: the next fix may be 10 minutes away.
      */
@@ -890,8 +888,8 @@ class AnonymousGroupService(
         }
 
         var lastMode: Pair<UserActivity, Boolean>? = null
-        // null until the first post: the circles may have changed while we weren't sharing
-        var circlesVersion: Long? = null
+        // null until the first post: the places may have changed while we weren't sharing
+        var placesVersion: Long? = null
 
         var timeoutJob: Job? = launch {
             getTimeoutJob()
@@ -904,17 +902,17 @@ class AnonymousGroupService(
             throw LocationDisabledException()
         }
 
-        /** Whether the server got [position]; its circle events are confirmed when it did */
+        /** Whether the server got [position]; its place events are confirmed when it did */
         suspend fun send(position: Position): Boolean {
             val nowMillis = Clock.System.now().toEpochMilliseconds()
             var transitions = tracker.update(position.fix, nowMillis)
             var delivered = false
 
-            // The events are computed on the circles of `circlesVersion`; when the server has
-            // other circles it refuses them (409) or, without events, says so in its answer. Then
-            // we fetch the circles and look at the same fix again: the events go out only computed
-            // on the circles the server has, and a new circle we just crossed isn't missed.
-            repeat(MAX_CIRCLE_REFRESHES + 1) {
+            // The events are computed on the places of `placesVersion`; when the server has
+            // other places it refuses them (409) or, without events, says so in its answer. Then
+            // we fetch the places and look at the same fix again: the events go out only computed
+            // on the places the server has, and a new place we just crossed isn't missed.
+            repeat(MAX_PLACE_REFRESHES + 1) {
                 // the next position replaces this one, and carries the same transitions again
                 val response =
                     postLocation(
@@ -922,19 +920,19 @@ class AnonymousGroupService(
                         connectionSettings,
                         position,
                         transitions,
-                        circlesVersion,
+                        placesVersion,
                     ) ?: return delivered
-                val version = response.body<AGPostLocationResDto>().circlesVersion
+                val version = response.body<AGPostLocationResDto>().placesVersion
                 val sent = response.status.value == 200
-                // The circles are replaced before the post is confirmed: a changed circle takes the
+                // The places are replaced before the post is confirmed: a changed place takes the
                 // state of the last position the server got from us, before this one. A failed
                 // fetch leaves the version as it was, so the next post tries again.
                 val refreshed =
-                    version != circlesVersion &&
+                    version != placesVersion &&
                         refreshSnapshot(anonymousGroup).also { ok ->
                             if (ok) {
-                                circlesVersion = version
-                                tracker.replaceCircles(listCircles(anonymousGroup.internalId))
+                                placesVersion = version
+                                tracker.replacePlaces(listPlaces(anonymousGroup.internalId))
                             }
                         }
                 if (sent) {
@@ -998,7 +996,7 @@ class AnonymousGroupService(
         anonymousGroupId: String,
         key: ByteArray,
         members: List<EncryptedAGMemberDto>,
-        circles: List<CircleDto>,
+        places: List<PlaceDto>,
     ) =
         AGChannelFrame.Snapshot(
             members =
@@ -1009,13 +1007,13 @@ class AnonymousGroupService(
                 ) {
                     AGMemberMapper.dtoToDomain(it, payloadCodec, key, anonymousGroupId)
                 },
-            circles =
-                circles.mapDecryptable(
+            places =
+                places.mapDecryptable(
                     onUndecryptable = {
-                        Log.e("", "Skipped circle ${it.id} of $anonymousGroupId: can't decrypt it")
+                        Log.e("", "Skipped place ${it.id} of $anonymousGroupId: can't decrypt it")
                     }
                 ) {
-                    CircleMapper.dtoToDomain(it, payloadCodec, key, anonymousGroupId)
+                    PlaceMapper.dtoToDomain(it, payloadCodec, key, anonymousGroupId)
                 },
         )
 
@@ -1027,10 +1025,10 @@ class AnonymousGroupService(
     private suspend fun saveSnapshot(
         anonymousGroup: AnonymousGroup,
         members: List<EncryptedAGMemberDto>,
-        circles: List<CircleDto>,
+        places: List<PlaceDto>,
     ): AGChannelFrame.Snapshot {
         val internalId = anonymousGroup.internalId
-        val decrypted = decryptSnapshot(anonymousGroup.id, anonymousGroup.key, members, circles)
+        val decrypted = decryptSnapshot(anonymousGroup.id, anonymousGroup.key, members, places)
         val knownLocations =
             anonymousGroupDao.listAGMembers(internalId).associate {
                 it.id to AGMemberMapper.entityToDomain(it).lastLocationRecord
@@ -1060,7 +1058,7 @@ class AnonymousGroupService(
                     AGMemberMapper.domainToEntity(it, anonymousGroupInternalId = internalId)
                 },
         )
-        anonymousGroupDao.syncCircles(internalId, snapshot.circles)
+        anonymousGroupDao.syncPlaces(internalId, snapshot.places)
         return snapshot
     }
 
@@ -1080,8 +1078,7 @@ class AnonymousGroupService(
         val frame: AGChannelFrame =
             try {
                 when (dto.type) {
-                    AGFrameDto.SNAPSHOT ->
-                        saveSnapshot(anonymousGroup, dto.members!!, dto.circles!!)
+                    AGFrameDto.SNAPSHOT -> saveSnapshot(anonymousGroup, dto.members!!, dto.places!!)
 
                     AGFrameDto.MEMBER_JOINED -> {
                         val member = decryptMember(anonymousGroup, dto.member!!)
@@ -1127,22 +1124,22 @@ class AnonymousGroupService(
                         AGChannelFrame.MemberUpdated(dto.memberId, dto.isAGAdmin)
                     }
 
-                    AGFrameDto.CIRCLE_EVENT -> {
+                    AGFrameDto.PLACE_EVENT -> {
                         val memberId = dto.memberId!!
                         // the server never relays our own events, but if it did they mustn't tell
                         // us about ourselves
                         if (memberId == anonymousGroup.memberId) return
-                        val circleEvent = dto.circleEvent!!
-                        AGChannelFrame.CircleEvent(
+                        val placeEvent = dto.placeEvent!!
+                        AGChannelFrame.PlaceEvent(
                             memberId = memberId,
                             transition =
-                                payloadCodec.decryptCircleEvent(
-                                    EncryptedDataMapper.toDomain(circleEvent.encryptedEvent),
+                                payloadCodec.decryptPlaceEvent(
+                                    EncryptedDataMapper.toDomain(placeEvent.encryptedEvent),
                                     anonymousGroup.key,
                                     anonymousGroup.id,
                                     memberId,
                                 ),
-                            timestamp = circleEvent.timestamp,
+                            timestamp = placeEvent.timestamp,
                         )
                     }
 
@@ -1151,21 +1148,21 @@ class AnonymousGroupService(
                         AGChannelFrame.MemberPresence(dto.memberId!!, dto.online!!, dto.lastSeen)
                     }
 
-                    AGFrameDto.CIRCLE_UPSERTED -> {
-                        val circle =
-                            CircleMapper.dtoToDomain(
-                                dto.circle!!,
+                    AGFrameDto.PLACE_UPSERTED -> {
+                        val place =
+                            PlaceMapper.dtoToDomain(
+                                dto.place!!,
                                 payloadCodec,
                                 anonymousGroup.key,
                                 anonymousGroup.id,
                             )
-                        anonymousGroupDao.upsertCircle(internalId, circle)
-                        AGChannelFrame.CircleUpserted(circle)
+                        anonymousGroupDao.upsertPlace(internalId, place)
+                        AGChannelFrame.PlaceUpserted(place)
                     }
 
-                    AGFrameDto.CIRCLE_DELETED -> {
-                        anonymousGroupDao.deleteCircle(dto.circleId!!, internalId)
-                        AGChannelFrame.CircleDeleted(dto.circleId)
+                    AGFrameDto.PLACE_DELETED -> {
+                        anonymousGroupDao.deletePlace(dto.placeId!!, internalId)
+                        AGChannelFrame.PlaceDeleted(dto.placeId)
                     }
 
                     else -> return
@@ -1179,7 +1176,7 @@ class AnonymousGroupService(
 
     /**
      * Streams the group for as long as the caller is suspended here: first its snapshot, then its
-     * changes and the others' circle events and sharing changes, all emitted on [groupFrames], and
+     * changes and the others' place events and sharing changes, all emitted on [groupFrames], and
      * the live positions, handed to [onLocations]. Only the screens showing the group hold it, so
      * the phone receives the group live only while someone looks at it. Everything is saved locally
      * before it is handed over. A removal or a deleted group marks the group and ends it.
@@ -1236,7 +1233,7 @@ class AnonymousGroupService(
                                             saveSnapshot(
                                                 anonymousGroup,
                                                 dto.members!!,
-                                                dto.circles!!,
+                                                dto.places!!,
                                             )
                                         _groupFrames.emit(
                                             GroupFrame(
@@ -1337,7 +1334,7 @@ class AnonymousGroupService(
 
     /**
      * Holds the channel of every group we are in, for the foreground service: the groups we share
-     * the location with, and the others to be told about the circles.
+     * the location with, and the others to be told about the places.
      */
     /**
      * Shares our location with every group we share with, for as long as the caller is suspended
@@ -1425,12 +1422,12 @@ class AnonymousGroupService(
                 }
         }
 
-    private suspend fun circleRequest(
+    private suspend fun placeRequest(
         connectionSettingsId: Long,
         anonymousGroupInternalId: Long,
-        circleId: String,
+        placeId: String,
         method: HttpMethod,
-        body: CircleUpsertReqDto?,
+        body: PlaceUpsertReqDto?,
     ) {
         val connectionSettings = connectionService.getConnectionSettingsById(connectionSettingsId)
         val agEntity =
@@ -1444,7 +1441,7 @@ class AnonymousGroupService(
         val response = httpClient.request {
             this.method = method
             url(
-                "${connectionSettings.url}/api/v1/anonymous-groups/${anonymousGroup.id}/circles/$circleId"
+                "${connectionSettings.url}/api/v1/anonymous-groups/${anonymousGroup.id}/places/$placeId"
             )
             headers {
                 connectionSettings.apiKey?.let { ak -> append("X-API-KEY", ak) }
@@ -1475,75 +1472,74 @@ class AnonymousGroupService(
         }
     }
 
-    suspend fun listCircles(anonymousGroupInternalId: Long): List<Circle> =
+    suspend fun listPlaces(anonymousGroupInternalId: Long): List<Place> =
         withContext(Dispatchers.IO) {
-            anonymousGroupDao.listCircles(anonymousGroupInternalId).map {
-                CircleMapper.entityToDomain(it)
+            anonymousGroupDao.listPlaces(anonymousGroupInternalId).map {
+                PlaceMapper.entityToDomain(it)
             }
         }
 
-    suspend fun upsertCircle(
+    suspend fun upsertPlace(
         connectionSettingsId: Long,
         anonymousGroup: AnonymousGroup,
-        circle: Circle,
+        place: Place,
     ) =
         withContext(Dispatchers.IO) {
-            val encrypted =
-                payloadCodec.encryptCircle(circle, anonymousGroup.key, anonymousGroup.id)
-            circleRequest(
+            val encrypted = payloadCodec.encryptPlace(place, anonymousGroup.key, anonymousGroup.id)
+            placeRequest(
                 connectionSettingsId = connectionSettingsId,
                 anonymousGroupInternalId = anonymousGroup.internalId,
-                circleId = circle.id,
+                placeId = place.id,
                 method = HttpMethod.Put,
                 body =
-                    CircleUpsertReqDto(
+                    PlaceUpsertReqDto(
                         encryptedCoordinates = EncryptedDataMapper.toDto(encrypted.coordinates),
                         encryptedRadius = EncryptedDataMapper.toDto(encrypted.radius),
                         encryptedName = EncryptedDataMapper.toDto(encrypted.name),
                     ),
             )
-            anonymousGroupDao.upsertCircle(anonymousGroup.internalId, circle)
+            anonymousGroupDao.upsertPlace(anonymousGroup.internalId, place)
             _groupFrames.emit(
                 GroupFrame(
                     anonymousGroup.internalId,
                     anonymousGroup.id,
-                    AGChannelFrame.CircleUpserted(circle),
+                    AGChannelFrame.PlaceUpserted(place),
                 )
             )
         }
 
-    suspend fun deleteCircle(
+    suspend fun deletePlace(
         connectionSettingsId: Long,
         anonymousGroup: AnonymousGroup,
-        circleId: String,
+        placeId: String,
     ) =
         withContext(Dispatchers.IO) {
-            circleRequest(
+            placeRequest(
                 connectionSettingsId = connectionSettingsId,
                 anonymousGroupInternalId = anonymousGroup.internalId,
-                circleId = circleId,
+                placeId = placeId,
                 method = HttpMethod.Delete,
                 body = null,
             )
-            anonymousGroupDao.deleteCircle(circleId, anonymousGroup.internalId)
+            anonymousGroupDao.deletePlace(placeId, anonymousGroup.internalId)
             _groupFrames.emit(
                 GroupFrame(
                     anonymousGroup.internalId,
                     anonymousGroup.id,
-                    AGChannelFrame.CircleDeleted(circleId),
+                    AGChannelFrame.PlaceDeleted(placeId),
                 )
             )
         }
 
     /**
-     * What to notify for a live frame, with the group and the member: a circle event or a member
+     * What to notify for a live frame, with the group and the member: a place event or a member
      * that stopped or started sharing. Both go in the member's one notification.
      */
-    suspend fun describeNotification(groupFrame: GroupFrame): CircleEvents? =
+    suspend fun describeNotification(groupFrame: GroupFrame): PlaceEvents? =
         withContext(Dispatchers.IO) {
             val memberId =
                 when (val frame = groupFrame.frame) {
-                    is AGChannelFrame.CircleEvent -> frame.memberId
+                    is AGChannelFrame.PlaceEvent -> frame.memberId
                     is AGChannelFrame.MemberPresence -> frame.memberId
                     else -> return@withContext null
                 }
@@ -1558,12 +1554,12 @@ class AnonymousGroupService(
             val mutedTargets = listMutedTargets(group.internalId)
             val texts =
                 when (val frame = groupFrame.frame) {
-                    is AGChannelFrame.CircleEvent ->
-                        circleEventTexts(
+                    is AGChannelFrame.PlaceEvent ->
+                        placeEventTexts(
                             memberId = member.id,
                             memberName = member.name,
                             transitions = listOf(frame.transition),
-                            circles = listCircles(group.internalId).associateBy { it.id },
+                            places = listPlaces(group.internalId).associateBy { it.id },
                             mutedTargets = mutedTargets,
                         )
 
@@ -1582,16 +1578,16 @@ class AnonymousGroupService(
 
                     else -> return@withContext null
                 }
-            if (texts.isEmpty()) null else CircleEvents(group.id, group.name, member.id, texts)
+            if (texts.isEmpty()) null else PlaceEvents(group.id, group.name, member.id, texts)
         }
 
     /**
      * A push from a server, `{r, iv, c}`: the frame sealed with the key of the registration [r]
      * names (see `PushRegistrationService`). Applies a removal or a deleted group, and returns what
-     * to notify for a circle event or a sharing change. Null for anything that doesn't open: an
+     * to notify for a place event or a sharing change. Null for anything that doesn't open: an
      * unknown registration (a group we left) or a push that wasn't sealed with our key.
      */
-    suspend fun openPush(data: Map<String, String>): CircleEvents? =
+    suspend fun openPush(data: Map<String, String>): PlaceEvents? =
         withContext(Dispatchers.IO) {
             val r = data["r"] ?: return@withContext null
             val iv = data["iv"] ?: return@withContext null
@@ -1628,19 +1624,17 @@ class AnonymousGroupService(
                         return@withContext null
                     }
 
-                    AGFrameDto.CIRCLE_EVENT ->
-                        AGChannelFrame.CircleEvent(
+                    AGFrameDto.PLACE_EVENT ->
+                        AGChannelFrame.PlaceEvent(
                             memberId = frame.memberId!!,
                             transition =
-                                payloadCodec.decryptCircleEvent(
-                                    EncryptedDataMapper.toDomain(
-                                        frame.circleEvent!!.encryptedEvent
-                                    ),
+                                payloadCodec.decryptPlaceEvent(
+                                    EncryptedDataMapper.toDomain(frame.placeEvent!!.encryptedEvent),
                                     group.key,
                                     group.id,
                                     frame.memberId,
                                 ),
-                            timestamp = frame.circleEvent.timestamp,
+                            timestamp = frame.placeEvent.timestamp,
                         )
 
                     AGFrameDto.MEMBER_PRESENCE ->
@@ -1653,16 +1647,16 @@ class AnonymousGroupService(
                     else -> return@withContext null
                 }
             val known = anonymousGroupDao.listAGMembers(group.internalId).map { it.id }.toSet()
-            val circles = listCircles(group.internalId).map { it.id }.toSet()
-            if (namesUnknown(channelFrame, known, circles)) {
+            val places = listPlaces(group.internalId).map { it.id }.toSet()
+            if (namesUnknown(channelFrame, known, places)) {
                 refreshSnapshot(group)
             }
             describeNotification(GroupFrame(group.internalId, group.id, channelFrame))
         }
 
     /**
-     * Fetches and saves the group's snapshot: for a push naming a member or circle the phone hasn't
-     * saved yet, and when a location post says the circles changed. False if the server couldn't be
+     * Fetches and saves the group's snapshot: for a push naming a member or place the phone hasn't
+     * saved yet, and when a location post says the places changed. False if the server couldn't be
      * reached.
      */
     private suspend fun refreshSnapshot(anonymousGroup: AnonymousGroup): Boolean {
@@ -1695,7 +1689,7 @@ class AnonymousGroupService(
                 return false
             }
         groupLock(anonymousGroup.id).withLock {
-            val snapshot = saveSnapshot(anonymousGroup, dto.members!!, dto.circles!!)
+            val snapshot = saveSnapshot(anonymousGroup, dto.members!!, dto.places!!)
             _groupFrames.emit(GroupFrame(anonymousGroup.internalId, anonymousGroup.id, snapshot))
         }
         return true

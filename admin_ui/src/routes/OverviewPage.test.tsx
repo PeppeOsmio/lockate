@@ -19,7 +19,7 @@ const healthy: Overview = {
     groups: 4,
     members: 9,
     pushRegisteredMembers: 6,
-    circles: 3,
+    places: 3,
     groupsWithoutAdmin: 1,
     inactiveGroups: 2,
     savedLocations: 120,

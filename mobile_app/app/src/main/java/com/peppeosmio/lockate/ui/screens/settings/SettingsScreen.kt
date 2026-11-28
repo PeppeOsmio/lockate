@@ -212,7 +212,7 @@ private val SettingsUrl.explanation: String
             SettingsUrl.LightStyle,
             SettingsUrl.DarkStyle -> "Any MapLibre style URL. Leave it empty for the default."
             SettingsUrl.PlaceSearch ->
-                "A Photon geocoder, used to search places when you add or edit a circle. Leave " +
+                "A Photon geocoder, used to search places when you add or edit a place. Leave " +
                     "it empty for the default."
         }
 
